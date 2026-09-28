@@ -47,6 +47,9 @@ export SCOPE_DATABASE_URL=postgres://scope:secret@db.internal:5432/scope
 scope server --port 4700          # --host defaults to 0.0.0.0
 ```
 
+To keep SCOPE's tables in a dedicated schema of a shared database, create the schema and select
+it in the connection URL: `postgres://…/db?options=-c%20search_path%3Dscope`.
+
 Database migrations run automatically when the server (or any `scope` command) opens the
 database. With `SCOPE_AUTO_MIGRATE=false` nothing is migrated, and `/readyz` reports pending
 migrations until a process with auto-migration has applied them. `scope doctor` checks

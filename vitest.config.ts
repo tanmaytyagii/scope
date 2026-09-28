@@ -9,6 +9,7 @@ export default defineConfig({
       'packages/*/src/**/*.test.ts',
       'apps/server/src/**/*.test.ts',
       'apps/web/src/**/*.test.ts',
+      'integrations/**/*.test.ts',
     ],
     environment: 'node',
     testTimeout: 20_000,

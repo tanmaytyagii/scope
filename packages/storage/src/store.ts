@@ -162,6 +162,8 @@ export class Store {
   readonly dialect: DialectName;
   readonly target: StorageTarget;
   readonly #logger: Logger;
+  /** PostgreSQL schema the connection works in (from search_path); null on SQLite. */
+  #schema: string | null = null;
 
   private constructor(db: Kysely<Database>, target: StorageTarget, logger: Logger) {
     this.db = db;
@@ -178,6 +180,12 @@ export class Store {
     const store = new Store(db, target, logger);
     try {
       await store.ping();
+      if (target.dialect === 'postgres') {
+        const row = await sql<{ schema: string | null }>`select current_schema() as schema`.execute(
+          db,
+        );
+        store.#schema = row.rows[0]?.schema ?? null;
+      }
     } catch (error) {
       await db.destroy().catch(() => {});
       throw error;
@@ -211,6 +219,10 @@ export class Store {
       provider: new ScopeMigrations(this.dialect),
       migrationTableName: 'scope_migrations',
       migrationLockTableName: 'scope_migrations_lock',
+      // Pin the migration tables to the connection's schema. Unpinned, Kysely finds tables of
+      // the same name in any schema (e.g. another deployment in `public`) and skips creating
+      // them, which breaks installs that use a dedicated schema through search_path.
+      ...(this.#schema ? { migrationTableSchema: this.#schema } : {}),
     });
   }
 

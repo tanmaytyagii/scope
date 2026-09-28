@@ -59,12 +59,21 @@ which are always called out).
 - User guides (`docs/guides`): quickstart, workflows, evaluators, configuration, tracing, CI,
   self-hosting, CLI and HTTP API; a README with real screenshots and output.
 
+- CI lints GitHub workflow files with actionlint; the GitHub Action's runner has its own test
+  suite; the API contract tests also run on PostgreSQL.
+
 ### Security
 
 - `scope ui` rejects requests whose Host is not `localhost`, `127.0.0.1` or `::1`, so a web page
   cannot read local traces by rebinding its domain to the loopback address.
 
 ### Fixed
+
+- The GitHub Action reported `result: passed` when a gate failed with `fail-on-gates: false`; the
+  result now comes from the run's gate status, not the exit code.
+- The Action's self-test workflow was invalid YAML and never ran.
+- PostgreSQL installs using a dedicated schema (`search_path`) failed to migrate when another
+  schema in the database already had SCOPE's migration tables.
 
 - Run references containing `%` returned 500 (they were URL-decoded twice); they are now 404.
 - Derived cache prices in the built-in pricing table are rounded (no `0.30000000000000004`).

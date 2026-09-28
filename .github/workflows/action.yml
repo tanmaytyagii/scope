@@ -41,7 +41,9 @@ jobs:
           artifact-name: scope-self-test
 
       - name: Introduce a regression (answers keep one sentence instead of two)
-        run: sed -i 's/^  sentences: 2$/  sentences: 1/' action-demo/workflows/support.yaml
+        run: |
+          sed -i 's/^  sentences: 2$/  sentences: 1/' action-demo/workflows/support.yaml
+          grep -q '^  sentences: 1$' action-demo/workflows/support.yaml
 
       - name: Regressed workflow fails the job
         id: regress

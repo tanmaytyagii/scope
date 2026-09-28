@@ -26,6 +26,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - name: Lint GitHub workflows (actionlint)
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -color
 
   test:
     name: Test (Node ${{ matrix.node }})
@@ -107,7 +109,7 @@ jobs:
         run: |
           docker run --rm scope:ci --version
           docker run -d --name scope-ci -p 4700:4700 scope:ci ui --host 0.0.0.0 --insecure-no-auth
-          for i in $(seq 1 30); do curl -sf http://127.0.0.1:4700/readyz && break; sleep 1; done
+          for _ in $(seq 1 30); do curl -sf http://127.0.0.1:4700/readyz && break; sleep 1; done
           curl -sf http://127.0.0.1:4700/ | grep -q 'id="root"'
           docker rm -f scope-ci
 

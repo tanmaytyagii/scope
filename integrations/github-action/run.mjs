@@ -41,6 +41,12 @@ function listWorkflows() {
   return [...new Set(files)];
 }
 
+/** Run records in a `scope run --report-file` report (one run, or several with variants). */
+function runsOf(report) {
+  if (!report) return [];
+  return Array.isArray(report.runs) ? report.runs.map((r) => r.run) : [report.run].filter(Boolean);
+}
+
 function variantArgs(value) {
   const v = (value ?? 'default').trim();
   if (v === '' || v === 'default') return [];
@@ -99,13 +105,15 @@ for (const [i, workflow] of workflows.entries()) {
       `### ⚠️ SCOPE · \`${workflow}\` could not run (exit ${code})\n\nThe job log has the error and a hint for fixing it.\n\n`,
     );
   }
-  results.push({ workflow, exitCode: code, report });
-  const label = code === 0 ? 'passed' : code === 1 ? 'gates failed' : `error (exit ${code})`;
+  // The exit code is 0 with fail-on-gates: false, so read the gate outcome from the report.
+  const gatesFailed = code === 1 || runsOf(report).some((r) => r.gateStatus === 'failed');
+  results.push({ workflow, exitCode: code, gatesFailed, report });
+  const label = code >= 2 ? `error (exit ${code})` : gatesFailed ? 'gates failed' : 'passed';
   console.log(`SCOPE · ${workflow}: ${label}`);
 }
 
 const errored = results.find((r) => r.exitCode >= 2);
-const failed = results.some((r) => r.exitCode === 1);
+const failed = results.some((r) => r.gatesFailed);
 const result = errored ? 'error' : failed ? 'failed' : 'passed';
 const combined = join(outDir, 'report.json');
 fs.writeFileSync(
@@ -115,4 +123,4 @@ fs.writeFileSync(
 if (env.GITHUB_OUTPUT) {
   fs.appendFileSync(env.GITHUB_OUTPUT, `result=${result}\nreport=${relative('.', combined)}\n`);
 }
-process.exit(errored ? errored.exitCode : failed ? 1 : 0);
+process.exit(errored ? errored.exitCode : results.some((r) => r.exitCode === 1) ? 1 : 0);

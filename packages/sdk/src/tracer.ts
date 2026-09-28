@@ -24,10 +24,12 @@ import {
   rollupSpans,
   type SpanKind,
   type SpanRecord,
+  type SpanStatus,
   silentLogger,
   type TraceBundle,
   type TraceRecord,
   toJsonValue,
+  type Usage,
 } from '@scope-ai/core';
 import { type SpanHandle, SpanRecorder, type SpanSettings } from './span.ts';
 
@@ -73,9 +75,20 @@ export interface SpanOptions {
   attributes?: Record<string, string | number | boolean | string[] | number[] | boolean[]>;
 }
 
+export interface TraceMetrics {
+  /** Root span duration; null while the root span is still running. */
+  durationMs: number | null;
+  usage: Usage;
+  costUsd: number | null;
+}
+
 export interface TraceHandle {
   readonly id: string;
   readonly root: SpanHandle;
+  /** Rollups over the spans finished so far (evaluation spans excluded). */
+  metrics(): TraceMetrics;
+  /** Status of the root span ("error" when the traced function threw). */
+  status(): SpanStatus;
   setInput(value: unknown): void;
   setOutput(value: unknown): void;
   setMetadata(key: string, value: unknown): void;
@@ -97,6 +110,7 @@ interface TraceState {
   evaluations: EvaluationRecord[];
   metadata: JsonObject;
   dropped: number;
+  rootDurationMs: number | null;
   handle: TraceHandle;
 }
 
@@ -159,6 +173,7 @@ export class Tracer {
       evaluations: [],
       metadata: options.metadata ? (toJsonValue(options.metadata) as JsonObject) : {},
       dropped: 0,
+      rootDurationMs: null,
       handle: undefined as unknown as TraceHandle,
     };
     const root = new SpanRecorder({
@@ -174,6 +189,11 @@ export class Tracer {
     state.handle = {
       id: traceId,
       root,
+      status: () => root.status,
+      metrics: () => {
+        const rollup = rollupSpans(state.spans.filter((s) => s.ended).map((s) => s.end()));
+        return { durationMs: state.rootDurationMs, usage: rollup.usage, costUsd: rollup.costUsd };
+      },
       setInput: (v) => root.setInput(v),
       setOutput: (v) => root.setOutput(v),
       setMetadata: (k, v) => {
@@ -202,6 +222,7 @@ export class Tracer {
       root.recordError(error);
     }
     const rootRecord = root.end();
+    state.rootDurationMs = rootRecord.durationMs;
 
     if (options.finalize) {
       try {

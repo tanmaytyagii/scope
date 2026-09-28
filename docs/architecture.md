@@ -308,7 +308,9 @@ Vendor providers wrap the vendors' official SDKs (`openai`, `@anthropic-ai/sdk`)
 API changes, implement retries with `Retry-After`, and expose typed errors that SCOPE maps to its
 own error codes (`provider_auth`, `provider_rate_limited`, `provider_unavailable`, …). SDKs are
 imported lazily, so a run that only uses `local:*` models never loads them. Model references are
-`provider:model`. Provider-specific request fields can be passed through `provider_options`.
+`provider:model`. Provider-specific request fields are passed through `provider_options`, keyed by
+provider name (`provider_options: { anthropic: { output_config: { effort: low } } }`) so that
+variants which switch providers never send one provider's options to another.
 
 SCOPE sends exactly what the workflow asks for and records the serving model
 (`gen_ai.response.model`) on every span. It never enables vendor-side model fallbacks on its

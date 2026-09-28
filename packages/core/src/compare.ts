@@ -53,6 +53,9 @@ const RELATIVE_TOLERANCE_PCT: Partial<Record<MetricDescriptor['unit'], number>> 
   usd: 1,
 };
 
+/** Latency differences below this many milliseconds are timer noise, not change. */
+const LATENCY_NOISE_MS = 5;
+
 export function classifyChange(
   descriptor: MetricDescriptor,
   base: number | null,
@@ -60,6 +63,7 @@ export function classifyChange(
 ): ChangeDirection {
   if (base === null || head === null) return 'n/a';
   const delta = head - base;
+  if (descriptor.unit === 'ms' && Math.abs(delta) < LATENCY_NOISE_MS) return 'unchanged';
   const abs = ABSOLUTE_TOLERANCE[descriptor.unit];
   if (abs !== undefined && Math.abs(delta) < abs) return 'unchanged';
   const rel = RELATIVE_TOLERANCE_PCT[descriptor.unit];
@@ -92,6 +96,40 @@ export function compareSummaries(base: RunSummary, head: RunSummary): MetricDelt
     });
   }
   return out;
+}
+
+/**
+ * The metrics worth showing in a comparison: pass rate, one row per evaluator (pass rate for
+ * deterministic evaluators, whose scores are just pass/fail; mean score otherwise), p95 latency,
+ * tokens and cost.
+ */
+export function headlineMetrics(
+  metrics: readonly MetricDelta[],
+  evaluators: ReadonlyArray<{ name: string; kind: string }>,
+): MetricDelta[] {
+  const kinds = new Map(evaluators.map((e) => [e.name, e.kind]));
+  const fixed = ['pass_rate', 'latency.p95_ms', 'tokens.total', 'cost.total_usd'];
+  const order = [
+    'pass_rate',
+    ...evaluators.map((e) => `evaluator.${e.name}.`),
+    'latency.p95_ms',
+    'tokens.total',
+    'cost.total_usd',
+  ];
+  const keep = metrics.filter((m) => {
+    if (fixed.includes(m.id)) return true;
+    const match = /^evaluator\.(.+)\.(pass_rate|mean_score)$/.exec(m.id);
+    if (!match) return false;
+    const kind = kinds.get(match[1] as string);
+    return kind === 'deterministic' ? match[2] === 'pass_rate' : match[2] === 'mean_score';
+  });
+  const matches = (entry: string, id: string) =>
+    entry.endsWith('.') ? id.startsWith(entry) : id === entry;
+  const rank = (id: string) => {
+    const i = order.findIndex((entry) => matches(entry, id));
+    return i === -1 ? order.length : i;
+  };
+  return keep.sort((a, b) => rank(a.id) - rank(b.id));
 }
 
 export type CaseChangeKind = 'regressed' | 'fixed' | 'changed' | 'unchanged' | 'added' | 'removed';

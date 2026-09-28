@@ -183,10 +183,28 @@ export function validateWorkflow(loaded: LoadedWorkflow, ctx: ValidationContext)
           }
         }
       }
-      if (step.type === 'llm')
+      if (step.type === 'llm') {
         checkModel(['steps', i, 'with', 'model'], staticArgs.model, {
           temperature: staticArgs.temperature,
         });
+        const options = staticArgs.provider_options;
+        if (options && typeof options === 'object' && !Array.isArray(options)) {
+          const providerNames = [...ctx.providers.names(), 'openai-compatible'];
+          for (const key of Object.keys(options)) {
+            if (!providerNames.includes(key)) {
+              const guess = suggest(key, providerNames);
+              err(
+                ['steps', i, 'with', 'provider_options', key],
+                `provider_options keys are provider names; "${key}" is not a provider`,
+                guess
+                  ? `Did you mean "${guess}"?`
+                  : `Nest options under the provider they are for, e.g. provider_options: { openai: { ${key}: … } }.`,
+                true,
+              );
+            }
+          }
+        }
+      }
       if (step.type === 'retrieve') {
         const corpus = staticArgs.corpus;
         const patterns =

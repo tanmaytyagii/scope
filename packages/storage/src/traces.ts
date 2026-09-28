@@ -346,6 +346,7 @@ export async function getTrace(
           .executeTakeFirst()
       : Promise.resolve(undefined),
   ]);
+  const spanStart = new Map(spanRows.map((sp) => [sp.id, sp.start_time]));
   return {
     trace: {
       id: row.id,
@@ -372,7 +373,14 @@ export async function getTrace(
       evalStatus: row.eval_status as TraceSummary['evalStatus'],
     },
     spans: spanRows.map(mapSpan),
-    evaluations: evalRows.map(mapEvaluation),
+    // Evaluations in the order they ran (their spans' start times), i.e. as configured.
+    evaluations: evalRows
+      .map(mapEvaluation)
+      .sort(
+        (a, b) =>
+          (spanStart.get(a.spanId ?? '') ?? a.createdAt) -
+          (spanStart.get(b.spanId ?? '') ?? b.createdAt),
+      ),
     run: run
       ? { id: run.id, number: run.number, workflowName: run.workflow_name, variant: run.variant }
       : null,

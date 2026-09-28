@@ -43,6 +43,23 @@ export function parseModelJson(text: string): JsonValue | null {
   }
 }
 
+/**
+ * `provider_options` is keyed by provider name — `{ anthropic: {...}, openai: {...} }` — so a
+ * workflow whose variants switch providers never sends one provider's options to another.
+ */
+export function optionsFor(
+  providerOptions: Record<string, unknown> | undefined,
+  provider: { name: string; type: string },
+): Record<string, unknown> | undefined {
+  if (!providerOptions) return undefined;
+  const value =
+    providerOptions[provider.name] ??
+    (provider.type !== provider.name ? providerOptions[provider.type] : undefined);
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
 export async function callModel(
   span: SpanHandle,
   providers: ProviderRegistry,
@@ -50,6 +67,7 @@ export async function callModel(
   signal: AbortSignal,
 ): Promise<LlmOutput> {
   const { provider, model } = providers.resolve(call.model);
+  const providerOptions = optionsFor(call.providerOptions, provider);
   const requestInput: Record<string, unknown> = { model: call.model, messages: call.messages };
   if (call.temperature !== undefined) requestInput.temperature = call.temperature;
   if (call.maxTokens !== undefined) requestInput.max_tokens = call.maxTokens;
@@ -68,7 +86,7 @@ export async function callModel(
         ...(call.stop ? { stop: call.stop } : {}),
         ...(call.responseFormat ? { responseFormat: call.responseFormat } : {}),
         ...(call.jsonSchema ? { jsonSchema: call.jsonSchema } : {}),
-        ...(call.providerOptions ? { providerOptions: call.providerOptions } : {}),
+        ...(providerOptions ? { providerOptions } : {}),
       },
       { signal },
     );

@@ -345,7 +345,7 @@ steps:
     with:
       model: local:echo
       prompt: hello
-      provider_options: { delay_ms: 5000 }
+      provider_options: { local: { delay_ms: 5000 } }
 `;
     const { loaded, cases } = load(text);
     const started = Date.now();
@@ -451,6 +451,16 @@ describe('Engine: validation', () => {
     expect(
       diagnostics(RAG.replace('corpus: docs/*.md', 'corpus: documents/*.md'))[0]?.message,
     ).toBe('no files match corpus "documents/*.md"');
+  });
+
+  it('requires provider_options to be keyed by provider name', () => {
+    const text = RAG.replace(
+      '      system: Answer',
+      '      provider_options: { sentences: 1 }\n      system: Answer',
+    );
+    expect(diagnostics(text).find((x) => x.severity === 'error')?.message).toBe(
+      'provider_options keys are provider names; "sentences" is not a provider',
+    );
   });
 
   it('warns about parameters a model does not accept', () => {

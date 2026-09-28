@@ -42,7 +42,8 @@ export interface LlmOptions {
   stop?: string[];
   response_format?: 'text' | 'json';
   json_schema?: Record<string, unknown>;
-  provider_options?: Record<string, unknown>;
+  /** Provider-specific request fields, keyed by provider name: { openai: { seed: 7 } }. */
+  provider_options?: Record<string, Record<string, unknown>>;
   /** Span name (defaults to the model reference). */
   name?: string;
 }

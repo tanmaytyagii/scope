@@ -134,7 +134,11 @@ export function suggest(input: string, candidates: Iterable<string>): string | u
   let best: string | undefined;
   let bestDistance = Number.POSITIVE_INFINITY;
   for (const candidate of candidates) {
-    const d = levenshtein(needle, candidate.toLowerCase());
+    const c = candidate.toLowerCase();
+    // Treat "uppercase" → "upper" and "temp" → "temperature" as near misses.
+    const prefix =
+      Math.min(needle.length, c.length) >= 3 && (needle.startsWith(c) || c.startsWith(needle));
+    const d = prefix ? 1 : levenshtein(needle, c);
     if (d < bestDistance) {
       best = candidate;
       bestDistance = d;

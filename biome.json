@@ -36,7 +36,9 @@
     }
   },
   "css": {
-    "parser": { "tailwindDirectives": true }
+    "parser": {
+      "tailwindDirectives": true
+    }
   },
   "linter": {
     "enabled": true,
@@ -52,13 +54,22 @@
         "noNonNullAssertion": "warn"
       },
       "suspicious": {
-        "noConsole": { "level": "error", "options": { "allow": ["warn", "error"] } }
+        "noConsole": {
+          "level": "error",
+          "options": {
+            "allow": ["warn", "error"]
+          }
+        }
       }
     }
   },
   "assist": {
     "enabled": true,
-    "actions": { "source": { "organizeImports": "on" } }
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
   },
   "overrides": [
     {
@@ -69,7 +80,23 @@
         "**/*.test.ts",
         "**/*.config.ts"
       ],
-      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noTemplateCurlyInString": "off"
+          }
+        }
+      }
     }
   ]
 }

@@ -1,0 +1,25 @@
+name: Good first issue (maintainers)
+description: A well-scoped task for a first-time contributor.
+labels: [good first issue, help wanted]
+body:
+  - type: textarea
+    id: task
+    attributes:
+      label: Task
+      description: What needs to change, in one or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: pointers
+    attributes:
+      label: Where to start
+      description: Files, functions and tests a newcomer should read.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of done
+      description: The tests and documentation that should be part of the pull request.
+    validations:
+      required: true

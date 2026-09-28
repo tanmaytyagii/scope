@@ -1,0 +1,34 @@
+name: Evaluator request
+description: Propose a new built-in evaluator.
+labels: [evaluation, feature, triage]
+body:
+  - type: textarea
+    id: property
+    attributes:
+      label: What should it measure?
+      description: The quality property, and why existing evaluators do not capture it.
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      description: How would it judge? (see docs/decisions/0005-evaluator-taxonomy.md)
+      options: [deterministic (a verifiable rule), heuristic (a deterministic approximation), model (a model's judgment), not sure]
+    validations:
+      required: true
+  - type: textarea
+    id: method
+    attributes:
+      label: Method
+      description: How it would compute a score, and a reference (paper, library) if one exists.
+  - type: textarea
+    id: failure-modes
+    attributes:
+      label: Known failure modes
+      description: When would the score be misleading? Every evaluator documents this.
+  - type: textarea
+    id: examples
+    attributes:
+      label: Examples
+      description: A few input/output pairs with the score you would expect.

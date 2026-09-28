@@ -1,0 +1,34 @@
+name: Labels
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/labels.yml]
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync labels from .github/labels.yml
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const wanted = fs.readFileSync('.github/labels.yml', 'utf8')
+              .split('\n')
+              .map((line) => /name: ([^,]+), color: ([0-9a-f]{6}), description: (.+) \}$/.exec(line))
+              .filter(Boolean)
+              .map(([, name, color, description]) => ({ name: name.trim(), color, description: description.trim() }));
+            const existing = await github.paginate(github.rest.issues.listLabelsForRepo, context.repo);
+            for (const label of wanted) {
+              const current = existing.find((l) => l.name === label.name);
+              if (!current) await github.rest.issues.createLabel({ ...context.repo, ...label });
+              else if (current.color !== label.color || current.description !== label.description) {
+                await github.rest.issues.updateLabel({ ...context.repo, ...label });
+              }
+            }

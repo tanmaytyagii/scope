@@ -1,0 +1,41 @@
+name: Bug report
+description: Something in SCOPE does not work as documented.
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report a bug. Please remove secrets and personal data from anything you paste.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The smallest workflow, command or code that shows the problem.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `scope doctor --json`
+      render: json
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options: [CLI, Workflow engine, Evaluators, SDK, Storage, Server / API, Dashboard, GitHub Action, Documentation]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: SCOPE version
+      placeholder: scope version
+    validations:
+      required: true

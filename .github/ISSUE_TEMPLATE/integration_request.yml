@@ -1,0 +1,23 @@
+name: Integration request
+description: Propose support for a model provider, framework, storage backend or tool.
+labels: [integration, triage]
+body:
+  - type: input
+    id: target
+    attributes:
+      label: What should SCOPE integrate with?
+      placeholder: e.g. Vertex AI, LlamaIndex, OTLP export, Slack
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: What you would do with the integration, and how you work around its absence today.
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Technical details
+      description: APIs, SDKs or formats involved; links to documentation.

@@ -1,0 +1,14 @@
+# Synced to the repository by .github/workflows/labels.yml
+- { name: bug, color: d73a4a, description: Something does not work as documented }
+- { name: feature, color: 0e8a16, description: A new capability }
+- { name: documentation, color: 0075ca, description: Docs and examples }
+- { name: good first issue, color: 7057ff, description: Well-scoped for a first contribution }
+- { name: help wanted, color: 008672, description: Maintainers would welcome a contribution }
+- { name: evaluation, color: fbca04, description: Evaluators and scoring }
+- { name: CLI, color: 5319e7, description: The scope command }
+- { name: dashboard, color: c5def5, description: The web dashboard }
+- { name: API, color: 1d76db, description: HTTP API and SDK protocol }
+- { name: integration, color: bfd4f2, description: Providers, frameworks and tools }
+- { name: performance, color: f9d0c4, description: Speed and resource use }
+- { name: security, color: b60205, description: Security and privacy }
+- { name: triage, color: ededed, description: Needs a maintainer to look at it }

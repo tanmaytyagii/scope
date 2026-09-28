@@ -108,8 +108,8 @@ export async function main(argv: string[], options: MainOptions = {}): Promise<n
 
   program
     .command('run')
-    .argument('<workflow>', 'workflow file, e.g. workflows/support.yaml')
-    .description('run a workflow over its dataset, evaluate every case and apply gates')
+    .argument('[workflows...]', 'workflow files (default: the project’s workflows)')
+    .description('run workflows over their datasets, evaluate every case and apply gates')
     .option(
       '--variant <name>',
       'run a variant (repeat for several; "base" for the defaults)',
@@ -137,7 +137,9 @@ export async function main(argv: string[], options: MainOptions = {}): Promise<n
       ).env('SCOPE_SUMMARY_FILE'),
     )
     .option('--report-file <file>', 'write the JSON report to this file (as --json prints it)')
-    .action(withContext((ctx, workflow: string, opts) => runCommand(ctx, workflow, opts as never)));
+    .action(
+      withContext((ctx, workflows: string[], opts) => runCommand(ctx, workflows, opts as never)),
+    );
 
   program
     .command('validate')
@@ -293,8 +295,9 @@ Logs are JSON lines on stderr (SCOPE_LOG_FORMAT=pretty for text, SCOPE_LOG_LEVEL
   program.helpCommand('help [command]', 'show help for a command');
   program
     .command('doctor')
-    .description('check Node.js, configuration, storage and provider credentials')
-    .action(withContext((ctx) => doctorCommand(ctx)));
+    .description('check Node.js, configuration, datasets, baselines, storage and providers')
+    .option('--network', 'also ask each provider in use for its models (read-only, no tokens)')
+    .action(withContext((ctx, opts: { network?: boolean }) => doctorCommand(ctx, opts)));
   program
     .command('version')
     .description('show version information')

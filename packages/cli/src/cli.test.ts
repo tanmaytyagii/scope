@@ -1,5 +1,14 @@
-import { execFile, spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFile, execFileSync, spawn } from 'node:child_process';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -99,6 +108,66 @@ describe('scope init', () => {
     expect(again.code).toBe(2);
     expect(again.stderr).toContain('scope init would overwrite');
     expect(again.stderr).toContain('--force');
+  });
+
+  it('shows where the project is, and the next commands', async () => {
+    const elsewhere = join(mkdtempSync(join(tmpdir(), 'scope-cli-elsewhere-')), 'bot');
+    const r = await scope(['init', elsewhere], root);
+    expect(r.code).toBe(0);
+    // Outside the current directory, the path is absolute (not ./../../…).
+    expect(r.stdout).toContain(`Created SCOPE project bot in ${elsewhere}`);
+    expect(r.stdout).toContain(`cd ${elsewhere}`);
+    expect(r.stdout).toMatch(/^ {2}scope run {2,}# run and evaluate the workflow/m);
+    expect(r.stdout).toMatch(/^ {2}scope ui --open /m);
+  });
+});
+
+describe('scope run without a path', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'scope-cli-all-'));
+  const multi = join(dir, 'multi');
+
+  beforeAll(async () => {
+    expect((await scope(['init', 'multi'], dir)).code).toBe(0);
+    const source = readFileSync(join(multi, 'workflows', 'support.yaml'), 'utf8');
+    writeFileSync(
+      join(multi, 'workflows', 'triage.yaml'),
+      source.replace(/^name: support$/m, 'name: triage'),
+    );
+  });
+
+  it('runs every workflow of the project and summarizes them', async () => {
+    const r = await scope(['run'], multi);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('SCOPE · support');
+    expect(r.stdout).toContain('SCOPE · triage');
+    expect(r.stdout).toMatch(/Workflows\n.*Workflow.*Run.*Cases.*Pass rate.*Result/);
+    expect(r.stdout).toMatch(/support\s+#1\s+12\s+83\.3%\s+passed/);
+    expect(r.stdout).toMatch(/triage\s+#2\s+12\s+83\.3%\s+passed/);
+  });
+
+  it('reports every run in one JSON document', async () => {
+    const r = await scope(['run', '--json'], multi);
+    expect(r.code).toBe(0);
+    const report = JSON.parse(r.stdout);
+    expect(report.runs.map((x: { run: { workflow: string } }) => x.run.workflow)).toEqual([
+      'support',
+      'triage',
+    ]);
+  });
+
+  it('refuses options that name something inside one workflow', async () => {
+    const r = await scope(['run', '--case', 'refund-timing'], multi);
+    expect(r.code).toBe(2);
+    expect(r.stderr).toContain('--case applies to one workflow, but 2 would run');
+    expect(r.stderr).toContain('scope run workflows/support.yaml --case');
+  });
+
+  it('explains when the project has no workflows', async () => {
+    const empty = mkdtempSync(join(tmpdir(), 'scope-cli-empty-'));
+    const r = await scope(['run'], empty);
+    expect(r.code).toBe(2);
+    expect(r.stderr).toContain('No workflow files found');
+    expect(r.stderr).toContain('scope init');
   });
 });
 
@@ -243,6 +312,162 @@ describe('scope run → inspect → baseline → regression', () => {
     expect(checks.find((c: { area: string }) => c.area === 'Storage')).toMatchObject({
       status: 'pass',
     });
+  });
+});
+
+describe('scope doctor', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'scope-cli-doctor-'));
+  const proj = join(dir, 'doc');
+  interface CheckRow {
+    area: string;
+    status: string;
+    message: string;
+    hint?: string;
+  }
+  async function doctor(cwd = proj, args: string[] = [], env: Record<string, string> = {}) {
+    const r = await scope(['doctor', '--json', ...args], cwd, env);
+    return { code: r.code, stdout: r.stdout, checks: JSON.parse(r.stdout).checks as CheckRow[] };
+  }
+  const check = (area: string, status: string, message: string | RegExp) =>
+    expect.objectContaining({
+      area,
+      status,
+      message: typeof message === 'string' ? message : expect.stringMatching(message),
+    });
+
+  beforeAll(async () => {
+    expect((await scope(['init', 'doc'], dir)).code).toBe(0);
+  });
+
+  it('checks the datasets and baselines the workflows use', async () => {
+    let { checks } = await doctor();
+    expect(checks).toContainEqual(
+      check('Datasets', 'pass', 'support: datasets/support.jsonl · 12 cases'),
+    );
+    expect(checks).toContainEqual(
+      check('Baselines', 'warn', 'support: no baseline, so its regression gates are skipped'),
+    );
+
+    expect((await scope(['run'], proj)).code).toBe(0);
+    expect((await scope(['baseline', 'save'], proj)).code).toBe(0);
+    ({ checks } = await doctor());
+    expect(checks).toContainEqual(
+      check('Baselines', 'pass', /^baselines\/support\.json — run #1, saved /),
+    );
+
+    copyFileSync(join(proj, 'baselines', 'support.json'), join(proj, 'baselines', 'retired.json'));
+    const data = join(proj, 'datasets', 'support.jsonl');
+    writeFileSync(data, readFileSync(data, 'utf8').split('\n').slice(1).join('\n'));
+    ({ checks } = await doctor());
+    expect(checks).toContainEqual(
+      check(
+        'Baselines',
+        'warn',
+        'baselines/support.json: the dataset changed since it was saved (12 → 11 cases)',
+      ),
+    );
+    expect(checks).toContainEqual(
+      check('Baselines', 'warn', 'baselines/retired.json belongs to no workflow or variant'),
+    );
+
+    writeFileSync(data, `${readFileSync(data, 'utf8')}{"id":"broken"\n`);
+    const broken = await doctor();
+    expect(broken.code).toBe(1);
+    expect(broken.checks).toContainEqual(
+      check('Datasets', 'fail', /^support: datasets\/support\.jsonl: invalid JSON on line 12/),
+    );
+  });
+
+  it('warns when git would commit the local database', async () => {
+    const git = (...args: string[]) =>
+      execFileSync('git', ['-c', 'user.email=t@example.com', '-c', 'user.name=t', ...args], {
+        cwd: proj,
+        stdio: 'ignore',
+      });
+    git('init', '-q');
+    git('commit', '-q', '--allow-empty', '-m', 'init');
+    const ignored = await doctor();
+    expect(ignored.checks.filter((c) => c.area === 'Git')).toHaveLength(1);
+    writeFileSync(join(proj, '.gitignore'), 'node_modules/\n');
+    const exposed = await doctor();
+    expect(exposed.checks).toContainEqual(
+      check('Git', 'warn', 'the local database .scope/scope.db is not ignored by git'),
+    );
+  });
+
+  it('asks the providers in use for their models with --network', async () => {
+    const hits: string[] = [];
+    const api = createServer((req, res) => {
+      hits.push(`${req.method} ${req.url}`);
+      const ok = req.headers.authorization === 'Bearer sk-good';
+      res.writeHead(ok ? 200 : 401, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify(
+          ok
+            ? {
+                object: 'list',
+                data: [{ id: 'gpt-5', object: 'model', created: 1, owned_by: 'x' }],
+              }
+            : { error: { message: 'Incorrect API key provided' } },
+        ),
+      );
+    });
+    await new Promise<void>((done) => api.listen(0, '127.0.0.1', done));
+    try {
+      const remote = mkdtempSync(join(tmpdir(), 'scope-cli-remote-'));
+      const url = `http://127.0.0.1:${(api.address() as AddressInfo).port}/v1`;
+      writeFileSync(
+        join(remote, 'scope.yaml'),
+        `version: 1\nproject: remote\nproviders:\n  openai:\n    base_url: ${url}\n    max_retries: 0\n`,
+      );
+      mkdirSync(join(remote, 'workflows'));
+      writeFileSync(
+        join(remote, 'workflows', 'remote.yaml'),
+        [
+          'version: 1',
+          'name: remote',
+          'steps:',
+          '  - id: draft',
+          '    type: llm',
+          '    with: { model: openai:gpt-5, prompt: hi }',
+          '  - id: polish',
+          '    type: llm',
+          '    with: { model: openai:gpt-9, prompt: hi }',
+        ].join('\n'),
+      );
+
+      const offline = await doctor(remote, [], { OPENAI_API_KEY: 'sk-good' });
+      expect(hits).toEqual([]);
+      expect(offline.checks).toContainEqual(
+        check('Providers', 'info', /^credentials were not tried; scope doctor --network/),
+      );
+
+      const good = await doctor(remote, ['--network'], { OPENAI_API_KEY: 'sk-good' });
+      expect(hits).toEqual(['GET /v1/models']);
+      expect(good.checks).toContainEqual(
+        check('Providers', 'pass', /^openai: reachable, credentials accepted \(1 model, \d+ ms\)$/),
+      );
+      expect(good.checks).toContainEqual(
+        check(
+          'Providers',
+          'warn',
+          'openai: gpt-9 is not among the models these credentials can use',
+        ),
+      );
+      expect(good.stdout).not.toContain('sk-good');
+
+      const bad = await doctor(remote, ['--network'], { OPENAI_API_KEY: 'sk-bad' });
+      expect(bad.code).toBe(1);
+      expect(bad.checks).toContainEqual(
+        check(
+          'Providers',
+          'fail',
+          'openai rejected the credentials (401): Incorrect API key provided',
+        ),
+      );
+    } finally {
+      api.close();
+    }
   });
 });
 

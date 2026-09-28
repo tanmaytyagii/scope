@@ -9,6 +9,7 @@ import {
   type Dataset,
   type DatasetCase,
   datasetFromInputs,
+  type LoadedWorkflow,
   loadDataset,
   loadWorkflow,
   prepareCases,
@@ -49,6 +50,7 @@ import {
 } from '../report.ts';
 import { Progress } from '../ui/progress.ts';
 import { renderTable } from '../ui/table.ts';
+import { discoverWorkflows } from './validate.ts';
 
 export interface RunCommandOptions {
   variant?: string[];
@@ -95,7 +97,11 @@ function parseInputs(pairs: string[] | undefined, json: string | undefined): Jso
   return inputs;
 }
 
-function selectCases(cases: DatasetCase[], options: RunCommandOptions): DatasetCase[] {
+function selectCases(
+  cases: DatasetCase[],
+  options: RunCommandOptions,
+  workflow: string,
+): DatasetCase[] {
   let selected = cases;
   if (options.case?.length) {
     const wanted = new Set(options.case);
@@ -125,7 +131,7 @@ function selectCases(cases: DatasetCase[], options: RunCommandOptions): DatasetC
     selected = selected.slice(0, n);
   }
   if (selected.length === 0)
-    throw new ScopeError(ErrorCodes.usage, 'No cases selected', {
+    throw new ScopeError(ErrorCodes.usage, `No cases of ${workflow} selected`, {
       hint: 'Check --case, --tag and --limit.',
     });
   return selected;
@@ -137,19 +143,49 @@ interface VariantResult {
   exitCode: ExitCodeValue;
 }
 
+/** A workflow ready to run: loaded, every requested variant prepared, cases selected. */
+interface WorkflowPlan {
+  loaded: LoadedWorkflow;
+  prepared: PreparedWorkflow[];
+  dataset: Dataset;
+  cases: DatasetCase[];
+  subset: boolean;
+}
+
+/** Options that name things inside one workflow (its variants, cases, inputs, baseline file). */
+function singleWorkflowOptions(options: RunCommandOptions): string[] {
+  const flags: Array<[string, unknown]> = [
+    ['--variant', options.variant?.length],
+    ['--dataset', options.dataset],
+    ['--input', options.input?.length],
+    ['--input-json', options.inputJson],
+    ['--case', options.case?.length],
+    ['--baseline', typeof options.baseline === 'string'],
+  ];
+  return flags.filter(([, set]) => set).map(([flag]) => flag);
+}
+
 export async function runCommand(
   ctx: CommandContext,
-  workflowPath: string,
+  workflowPaths: string[],
   options: RunCommandOptions,
 ): Promise<void> {
   const project = ctx.project();
   ctx.writeSchemas();
-  const loaded = loadWorkflow(workflowPath, { root: ctx.cwd, env: ctx.env });
-  const variants: Array<string | null> = options.allVariants
-    ? [null, ...Object.keys(loaded.definition.variants ?? {})]
-    : options.variant?.length
-      ? options.variant.map((v) => (v === 'base' || v === 'default' ? null : v))
-      : [null];
+  const paths = workflowPaths.length ? workflowPaths : discoverWorkflows(ctx);
+  if (paths.length === 0) {
+    throw new ScopeError(ErrorCodes.usage, 'No workflow files found', {
+      hint: `Looked for ${project.workflowGlobs.join(', ')} under ${relative(ctx.cwd, project.root) || '.'}. Pass a workflow file, or create a project with \`scope init\`.`,
+    });
+  }
+  const single = singleWorkflowOptions(options);
+  if (paths.length > 1 && single.length) {
+    throw new ScopeError(
+      ErrorCodes.usage,
+      `${single.join(', ')} ${single.length === 1 ? 'applies' : 'apply'} to one workflow, but ${paths.length} would run`,
+      { hint: `Name the workflow, e.g. scope run ${paths[0]} ${single[0]} …` },
+    );
+  }
 
   const store = await ctx.store();
   const projectRow = await ctx.projectRow();
@@ -160,7 +196,112 @@ export async function runCommand(
     env: ctx.env,
   });
 
-  // Validate every requested variant before running any of them.
+  // Load every workflow, variant and dataset before running any of them.
+  const plans: WorkflowPlan[] = [];
+  for (const path of paths) plans.push(await planWorkflow(ctx, engine, path, options));
+  const git = collectGitInfo(project.root, ctx.env);
+  const trigger = detectTrigger(ctx.env);
+
+  const controller = new AbortController();
+  let interrupts = 0;
+  const onSigint = () => {
+    interrupts++;
+    if (interrupts === 1) {
+      ctx.out.info(
+        `\n${ctx.out.errStyle.yellow('Stopping')} — finishing in-flight cases. Press Ctrl-C again to exit immediately.`,
+      );
+      controller.abort(new ScopeError(ErrorCodes.cancelled, 'Run cancelled by user'));
+    } else process.exit(ExitCode.interrupted);
+  };
+  process.on('SIGINT', onSigint);
+
+  const results: VariantResult[] = [];
+  const reports: unknown[] = [];
+  const markdown: string[] = [];
+  try {
+    for (const plan of plans) {
+      if (controller.signal.aborted) break;
+      const { loaded, dataset, cases, subset } = plan;
+      const workflowVersion = await store.registerWorkflowVersion(projectRow.id, {
+        name: loaded.definition.name,
+        description: loaded.definition.description ?? null,
+        hash: loaded.hash,
+        definition: loaded.definition,
+        source: loaded.text,
+        path: relative(project.root, loaded.path),
+      });
+      const variantResults: VariantResult[] = [];
+      for (const prep of plan.prepared) {
+        if (controller.signal.aborted) break;
+        const baseline = resolveBaseline(ctx, options, prep, project.baselinesDir);
+        if (baseline && !subset) checkBaselineCompatibility(ctx, baseline, prep, dataset);
+        const result = await executeVariant(ctx, {
+          engine,
+          prepared: prep,
+          cases,
+          dataset,
+          workflowId: workflowVersion.workflowId,
+          workflowVersionId: workflowVersion.versionId,
+          projectId: projectRow.id,
+          git,
+          trigger,
+          baseline: subset ? null : baseline,
+          baselinePath: baseline
+            ? options.baseline
+              ? String(options.baseline)
+              : relative(
+                  project.root,
+                  join(project.baselinesDir, baselineFileName(prep.name, prep.variant)),
+                )
+            : null,
+          signal: controller.signal,
+          concurrency: options.concurrency ? Number(options.concurrency) : undefined,
+          bail: options.bail ?? false,
+          failOnGates: options.fail !== false,
+        });
+        variantResults.push(result.variant);
+        reports.push(result.report);
+        markdown.push(result.markdown);
+      }
+      if (variantResults.length > 1) printVariantComparison(ctx, variantResults);
+      results.push(...variantResults);
+    }
+  } finally {
+    process.off('SIGINT', onSigint);
+  }
+
+  if (plans.length > 1) printWorkflowSummary(ctx, results);
+  if (options.summaryFile) {
+    const { appendFileSync } = await import('node:fs');
+    appendFileSync(options.summaryFile, `${markdown.join('\n')}\n`);
+  }
+  const report = results.length === 1 ? reports[0] : { runs: reports };
+  if (options.reportFile) {
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(resolve(ctx.cwd, options.reportFile), `${JSON.stringify(report, null, 2)}\n`);
+  }
+  ctx.out.emitJson(report);
+  const exitCode = results.reduce<ExitCodeValue>(
+    (worst, r) => (r.exitCode > worst ? r.exitCode : worst),
+    ExitCode.ok,
+  );
+  if (exitCode !== ExitCode.ok) throw new ExitError(exitCode);
+}
+
+async function planWorkflow(
+  ctx: CommandContext,
+  engine: Engine,
+  workflowPath: string,
+  options: RunCommandOptions,
+): Promise<WorkflowPlan> {
+  const project = ctx.project();
+  const loaded = loadWorkflow(workflowPath, { root: ctx.cwd, env: ctx.env });
+  const variants: Array<string | null> = options.allVariants
+    ? [null, ...Object.keys(loaded.definition.variants ?? {})]
+    : options.variant?.length
+      ? options.variant.map((v) => (v === 'base' || v === 'default' ? null : v))
+      : [null];
+
   const prepared: PreparedWorkflow[] = [];
   for (const variant of variants) prepared.push(await engine.prepare(loaded, { variant }));
   for (const w of prepared[0]?.warnings ?? []) {
@@ -191,89 +332,8 @@ export async function runCommand(
   }
   const { cases: allCases, warnings } = prepareCases(dataset, loaded.definition.inputs);
   for (const w of warnings) ctx.out.warn(w.message);
-  const cases = selectCases(allCases, options);
-  const subset = cases.length !== allCases.length;
-
-  const workflowVersion = await store.registerWorkflowVersion(projectRow.id, {
-    name: loaded.definition.name,
-    description: loaded.definition.description ?? null,
-    hash: loaded.hash,
-    definition: loaded.definition,
-    source: loaded.text,
-    path: relative(project.root, loaded.path),
-  });
-  const git = collectGitInfo(project.root, ctx.env);
-  const trigger = detectTrigger(ctx.env);
-
-  const controller = new AbortController();
-  let interrupts = 0;
-  const onSigint = () => {
-    interrupts++;
-    if (interrupts === 1) {
-      ctx.out.info(
-        `\n${ctx.out.errStyle.yellow('Stopping')} — finishing in-flight cases. Press Ctrl-C again to exit immediately.`,
-      );
-      controller.abort(new ScopeError(ErrorCodes.cancelled, 'Run cancelled by user'));
-    } else process.exit(ExitCode.interrupted);
-  };
-  process.on('SIGINT', onSigint);
-
-  const results: VariantResult[] = [];
-  const reports: unknown[] = [];
-  const markdown: string[] = [];
-  try {
-    for (const prep of prepared) {
-      if (controller.signal.aborted) break;
-      const baseline = resolveBaseline(ctx, options, prep, project.baselinesDir);
-      if (baseline && !subset) checkBaselineCompatibility(ctx, baseline, prep, dataset);
-      const result = await executeVariant(ctx, {
-        engine,
-        prepared: prep,
-        cases,
-        dataset,
-        workflowId: workflowVersion.workflowId,
-        workflowVersionId: workflowVersion.versionId,
-        projectId: projectRow.id,
-        git,
-        trigger,
-        baseline: subset ? null : baseline,
-        baselinePath: baseline
-          ? options.baseline
-            ? String(options.baseline)
-            : relative(
-                project.root,
-                join(project.baselinesDir, baselineFileName(prep.name, prep.variant)),
-              )
-          : null,
-        signal: controller.signal,
-        concurrency: options.concurrency ? Number(options.concurrency) : undefined,
-        bail: options.bail ?? false,
-        failOnGates: options.fail !== false,
-      });
-      results.push(result.variant);
-      reports.push(result.report);
-      markdown.push(result.markdown);
-    }
-  } finally {
-    process.off('SIGINT', onSigint);
-  }
-
-  if (results.length > 1) printVariantComparison(ctx, results);
-  if (options.summaryFile) {
-    const { appendFileSync } = await import('node:fs');
-    appendFileSync(options.summaryFile, `${markdown.join('\n')}\n`);
-  }
-  const report = results.length === 1 ? reports[0] : { runs: reports };
-  if (options.reportFile) {
-    const { writeFileSync } = await import('node:fs');
-    writeFileSync(resolve(ctx.cwd, options.reportFile), `${JSON.stringify(report, null, 2)}\n`);
-  }
-  ctx.out.emitJson(report);
-  const exitCode = results.reduce<ExitCodeValue>(
-    (worst, r) => (r.exitCode > worst ? r.exitCode : worst),
-    ExitCode.ok,
-  );
-  if (exitCode !== ExitCode.ok) throw new ExitError(exitCode);
+  const cases = selectCases(allCases, options, loaded.displayPath);
+  return { loaded, prepared, dataset, cases, subset: cases.length !== allCases.length };
 }
 
 function resolveBaseline(
@@ -574,6 +634,42 @@ function printVariantComparison(ctx: CommandContext, results: VariantResult[]): 
   );
   out.print(
     `  ${s.dim(`Compare in detail: scope compare ${results[0]?.run.number} ${results[1]?.run.number}`)}`,
+  );
+  out.print('');
+}
+
+/** After several workflows ran: one line per run, so the outcome of all of them is in one place. */
+function printWorkflowSummary(ctx: CommandContext, results: VariantResult[]): void {
+  const out = ctx.out;
+  const s = out.style;
+  out.print(s.bold('Workflows'));
+  out.print(
+    renderTable(
+      results,
+      [
+        {
+          header: 'Workflow',
+          value: (r) =>
+            `${s.bold(r.run.workflowName)}${r.run.variant ? s.dim(` · ${r.run.variant}`) : ''}`,
+        },
+        { header: 'Run', value: (r) => `#${r.run.number}` },
+        { header: 'Cases', value: (r) => String(r.summary.cases.total), align: 'right' },
+        { header: 'Pass rate', value: (r) => formatPercent(r.summary.passRate), align: 'right' },
+        {
+          header: 'Result',
+          value: (r) => {
+            const label = resultLabel(r.run);
+            const text = label.toLowerCase();
+            return label === 'PASSED' || label === 'COMPLETED'
+              ? s.green(text)
+              : label.startsWith('PASSED')
+                ? s.yellow(text)
+                : s.red(text);
+          },
+        },
+      ],
+      s.dim,
+    ),
   );
   out.print('');
 }

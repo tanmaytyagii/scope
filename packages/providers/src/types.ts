@@ -66,4 +66,9 @@ export interface ModelProvider {
   embed?(request: EmbeddingRequest, options?: CallOptions): Promise<EmbeddingResponse>;
   /** Request parameters this provider would omit for a model (for validation warnings). */
   unsupportedParams?(model: string): string[];
+  /**
+   * The models the credentials can use, from the provider's model list. A read-only request that
+   * costs no tokens; `scope doctor --network` uses it to check reachability and credentials.
+   */
+  listModels?(options?: CallOptions): Promise<string[]>;
 }

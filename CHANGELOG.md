@@ -67,6 +67,14 @@ which are always called out).
   GHCR and a GitHub release with the CHANGELOG section; a manual run is a dry run. Package
   manifests and tarball contents are verified in CI, and the install test now installs
   `scope-ai` and `@scope-ai/sdk` the way users will.
+- `scope run` without a path runs every workflow of the project (checked before any runs), with
+  a summary table; options that name something inside one workflow require a single workflow.
+- `scope validate` checks datasets too (JSON errors with a code frame, missing and mistyped
+  inputs, with a "did you mean" for misspelled input names).
+- `scope doctor` checks datasets, baselines (missing — noting when regression gates are skipped —
+  stale after dataset changes, or belonging to no workflow) and whether git ignores the local
+  database. `scope doctor --network` asks each provider in use for its model list (read-only, no
+  tokens) to confirm reachability, credentials and model names.
 - The GitHub Action's `install` input: `auto` installs `scope-ai` from npm at the action's version
   when it is published and builds from source otherwise.
 
@@ -82,6 +90,9 @@ which are always called out).
 - The Action's self-test workflow was invalid YAML and never ran.
 - PostgreSQL installs using a dedicated schema (`search_path`) failed to migrate when another
   schema in the database already had SCOPE's migration tables.
+- `scope init <dir>` outside the current directory printed paths like `./../x`; it now prints the
+  absolute path.
+- Package tarballs included TypeScript's `dist/.tsbuildinfo`.
 
 - Run references containing `%` returned 500 (they were URL-decoded twice); they are now 404.
 - Derived cache prices in the built-in pricing table are rounded (no `0.30000000000000004`).

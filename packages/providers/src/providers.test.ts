@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAnthropicProvider } from './anthropic.ts';
 import { createLocalProvider, extractiveAnswer, findQuestion, NO_ANSWER } from './local.ts';
 import { createOpenAIProvider } from './openai.ts';
-import { ProviderRegistry, parseModelRef } from './registry.ts';
+import { isModelListed, ProviderRegistry, parseModelRef } from './registry.ts';
 
 interface Recorded {
   method: string;
@@ -397,6 +397,81 @@ describe('anthropic provider', () => {
         messages: [{ role: 'assistant', content: 'hi' }],
       }),
     ).rejects.toThrow(/first non-system message/);
+  });
+});
+
+describe('model lists (scope doctor --network)', () => {
+  it('lists OpenAI models with the key', async () => {
+    const provider = createOpenAIProvider({
+      name: 'openai',
+      type: 'openai',
+      apiKey: 'sk-test',
+      baseUrl: `${baseUrl}/v1`,
+      maxRetries: 0,
+    });
+    nextResponse = {
+      status: 200,
+      body: {
+        object: 'list',
+        data: [
+          { id: 'gpt-5', object: 'model', created: 1, owned_by: 'openai' },
+          { id: 'gpt-5-mini-2026-08-07', object: 'model', created: 1, owned_by: 'openai' },
+        ],
+      },
+    };
+    requests.length = 0;
+    expect(await provider.listModels?.()).toEqual(['gpt-5', 'gpt-5-mini-2026-08-07']);
+    expect(requests[0]).toMatchObject({ method: 'GET', url: '/v1/models' });
+    expect(requests[0]?.headers.authorization).toBe('Bearer sk-test');
+  });
+
+  it('lists Anthropic models across pages', async () => {
+    const provider = createAnthropicProvider({ name: 'anthropic', apiKey: 'k', baseUrl });
+    nextResponse = {
+      status: 200,
+      body: {
+        data: [{ id: 'claude-sonnet-5', type: 'model', display_name: 'x', created_at: '2026' }],
+        has_more: false,
+        first_id: 'claude-sonnet-5',
+        last_id: 'claude-sonnet-5',
+      },
+    };
+    requests.length = 0;
+    expect(await provider.listModels?.()).toEqual(['claude-sonnet-5']);
+    expect(requests[0]?.url).toMatch(/^\/v1\/models\?/);
+    expect(requests[0]?.headers['x-api-key']).toBe('k');
+  });
+
+  it('explains rejected keys and endpoints without a model list', async () => {
+    const provider = createOpenAIProvider({
+      name: 'openai',
+      type: 'openai',
+      apiKey: 'sk-bad',
+      baseUrl: `${baseUrl}/v1`,
+      maxRetries: 0,
+    });
+    nextResponse = { status: 401, body: { error: { message: 'Incorrect API key provided' } } };
+    const auth = await provider.listModels?.().catch((e) => e);
+    expect((auth as ScopeError).message).toBe(
+      'openai rejected the credentials (401): Incorrect API key provided',
+    );
+    nextResponse = { status: 404, body: { error: { message: 'Not found' } } };
+    const missing = await provider.listModels?.().catch((e) => e);
+    expect((missing as ScopeError).message).toBe(
+      'openai could not list its models (404): Not found',
+    );
+    expect((missing as ScopeError).hint).toContain('may not implement GET /models');
+  });
+
+  it('matches aliases to dated snapshots and Ollama tags', () => {
+    const listed = ['claude-haiku-4-5-20251001', 'gpt-4o-2024-08-06', 'llama3.1:latest', 'gpt-5'];
+    expect(isModelListed('gpt-5', listed)).toBe(true);
+    expect(isModelListed('claude-haiku-4-5', listed)).toBe(true);
+    expect(isModelListed('gpt-4o', listed)).toBe(true);
+    expect(isModelListed('llama3.1', listed)).toBe(true);
+    expect(isModelListed('gpt-5-mini', listed)).toBe(false);
+    expect(isModelListed('gpt-4', listed)).toBe(false);
+    expect(isModelListed('claude-opus-5', listed)).toBe(false);
   });
 });
 

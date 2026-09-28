@@ -31,6 +31,29 @@ export function isAbortError(error: unknown): boolean {
   return names.some((n) => n === 'AbortError' || n === 'APIUserAbortError' || n === 'TimeoutError');
 }
 
+/** Errors of the model list request, which is about the provider rather than one model. */
+export function toListModelsError(error: unknown, ctx: Omit<ErrorContext, 'model'>): unknown {
+  if (error instanceof ScopeError || isAbortError(error)) return error;
+  const status = (error as { status?: unknown })?.status;
+  if (typeof status === 'number' && status !== 401) {
+    return new ScopeError(
+      status === 403 ? ErrorCodes.providerAuth : ErrorCodes.providerUnavailable,
+      `${ctx.provider} could not list its models (${status}): ${apiMessage(error)}`,
+      {
+        hint:
+          status === 404
+            ? 'The endpoint may not implement GET /models; running workflows can still work.'
+            : status === 403
+              ? 'The key is valid but may not list models. Check its permissions.'
+              : 'Check the provider status and base_url, then try again.',
+        details: { provider: ctx.provider, status },
+        cause: error,
+      },
+    );
+  }
+  return toProviderError(error, { ...ctx, model: '' });
+}
+
 export function toProviderError(error: unknown, ctx: ErrorContext): unknown {
   if (error instanceof ScopeError || isAbortError(error)) return error;
   const status = (error as { status?: unknown })?.status;

@@ -15,6 +15,7 @@ import {
   type JsonObject,
   type JsonValue,
   stableStringify,
+  suggest,
 } from '@scope-ai/core';
 import { parse as parseYamlText } from 'yaml';
 import { ConfigError, type Diagnostic } from './diagnostics.ts';
@@ -292,10 +293,15 @@ export function prepareCases(
       const value = values[name];
       if (value === undefined) {
         if (spec.required !== false) {
+          const typo = suggest(
+            name,
+            Object.keys(values).filter((k) => !(k in inputs)),
+          );
           problems.push({
             severity: 'error',
             message: `case "${c.id}" is missing required input "${name}"`,
             ...(dataset.source ? { file: dataset.source } : {}),
+            ...(typo ? { hint: `The case has "${typo}" — did you mean "${name}"?` } : {}),
           });
         }
         continue;

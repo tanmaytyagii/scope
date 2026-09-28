@@ -1,19 +1,27 @@
 /**
  * scope doctor — diagnose the environment, configuration, storage and providers.
  */
+import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
-import { relative } from 'node:path';
+import { basename, dirname, relative } from 'node:path';
 import {
   ConfigError,
   isTemplate,
+  type LoadedWorkflow,
   loadWorkflow,
   renderTemplate,
   resolveParams,
 } from '@scope-ai/config';
 import { errorMessage, isScopeError, SCOPE_VERSION } from '@scope-ai/core';
 import { Engine } from '@scope-ai/engine';
-import { parseModelRef } from '@scope-ai/providers';
+import {
+  isAbortError,
+  isModelListed,
+  type ProviderRegistry,
+  parseModelRef,
+} from '@scope-ai/providers';
 import { findWebRoot } from '@scope-ai/server';
+import { checkBaselines, checkDataset, type Finding, unusedBaselines } from '../checks.ts';
 import type { CommandContext } from '../context.ts';
 import { ExitCode, ExitError } from '../errors.ts';
 import { collectGitInfo } from '../git.ts';
@@ -29,6 +37,19 @@ interface Check {
 }
 
 const MIN_NODE = [22, 16] as const;
+const NETWORK_TIMEOUT_MS = 10_000;
+
+const plural = (n: number, noun: string) => `${n} ${n === 1 ? noun : `${noun}s`}`;
+
+/** Whether git ignores a path: null when the path is not inside a git work tree. */
+function gitIgnores(path: string): boolean | null {
+  const r = spawnSync('git', ['check-ignore', '-q', '--', basename(path)], {
+    cwd: dirname(path),
+    stdio: 'ignore',
+    timeout: 3000,
+  });
+  return r.status === 0 ? true : r.status === 1 ? false : null;
+}
 
 function portFree(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -60,7 +81,65 @@ function modelRefs(definition: import('@scope-ai/config').WorkflowFile): string[
   return [...refs];
 }
 
-export async function doctorCommand(ctx: CommandContext): Promise<void> {
+/**
+ * Asks a provider for its model list (read-only, no tokens): proves that it is reachable and
+ * accepts the credentials, and that the models the workflows use exist for them.
+ */
+async function probeProvider(
+  registry: ProviderRegistry,
+  name: string,
+  refs: string[],
+): Promise<Check[]> {
+  const provider = registry.get(name);
+  if (!provider.listModels)
+    return [{ area: 'Providers', status: 'info', message: `${name}: cannot be probed` }];
+  const started = performance.now();
+  try {
+    const listed = await provider.listModels({ signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS) });
+    const ms = Math.round(performance.now() - started);
+    const checks: Check[] = [
+      {
+        area: 'Providers',
+        status: 'pass',
+        message: `${name}: reachable, credentials accepted (${plural(listed.length, 'model')}, ${ms} ms)`,
+      },
+    ];
+    for (const ref of refs) {
+      const { model } = parseModelRef(ref);
+      if (!isModelListed(model, listed))
+        checks.push({
+          area: 'Providers',
+          status: 'warn',
+          message: `${name}: ${model} is not among the models these credentials can use`,
+          hint: 'Check the model name and your account’s access to it.',
+        });
+    }
+    return checks;
+  } catch (error) {
+    const timedOut = (error as { name?: string })?.name === 'TimeoutError' || isAbortError(error);
+    return [
+      {
+        area: 'Providers',
+        status: 'fail',
+        // Provider errors name the provider already.
+        message: timedOut
+          ? `${name}: no answer within ${NETWORK_TIMEOUT_MS / 1000} s`
+          : errorMessage(error),
+        ...(isScopeError(error) && error.hint ? { hint: error.hint } : {}),
+      },
+    ];
+  }
+}
+
+export interface DoctorOptions {
+  /** Contact each provider in use (read-only model list requests). */
+  network?: boolean;
+}
+
+export async function doctorCommand(
+  ctx: CommandContext,
+  options: DoctorOptions = {},
+): Promise<void> {
   const checks: Check[] = [];
   const add = (c: Check) => checks.push(c);
 
@@ -83,6 +162,7 @@ export async function doctorCommand(ctx: CommandContext): Promise<void> {
 
   let projectOk = false;
   let modelsInUse: string[] = [];
+  let sqlitePath: string | null = null;
   try {
     const project = ctx.project();
     projectOk = true;
@@ -114,6 +194,7 @@ export async function doctorCommand(ctx: CommandContext): Promise<void> {
       });
     const engine = new Engine({ project, exporter: { export: () => {} }, env: ctx.env });
     let valid = 0;
+    const workflows: LoadedWorkflow[] = [];
     for (const file of files) {
       try {
         const loaded = loadWorkflow(file, { root: ctx.cwd, env: ctx.env });
@@ -126,7 +207,10 @@ export async function doctorCommand(ctx: CommandContext): Promise<void> {
             message: `${file}: ${errors[0]?.message}`,
             hint: 'Run `scope validate` for details.',
           });
-        else valid++;
+        else {
+          valid++;
+          workflows.push(loaded);
+        }
         modelsInUse.push(...modelRefs(loaded.definition));
       } catch (error) {
         add({
@@ -145,11 +229,57 @@ export async function doctorCommand(ctx: CommandContext): Promise<void> {
       });
     modelsInUse = [...new Set(modelsInUse)];
 
+    const baselineFindings: Finding[] = [];
+    const baselinePaths = new Set<string>();
+    for (const loaded of workflows) {
+      const name = loaded.definition.name;
+      const data = checkDataset(loaded, project);
+      if (!data) {
+        add({
+          area: 'Datasets',
+          status: 'info',
+          message: `${name}: no dataset — runs need --dataset or --input`,
+        });
+      } else {
+        const error = data.diagnostics.find((d) => d.severity === 'error');
+        const warning = data.diagnostics.find((d) => d.severity === 'warning');
+        const where = data.dataset?.source ?? 'inline';
+        if (error || !data.dataset)
+          add({
+            area: 'Datasets',
+            status: 'fail',
+            message: `${name}: ${error?.file ? `${error.file}: ` : ''}${error?.message ?? 'the dataset cannot be read'}`,
+            hint: error?.hint ?? 'Run `scope validate` for details.',
+          });
+        else
+          add({
+            area: 'Datasets',
+            status: warning ? 'warn' : 'pass',
+            message: `${name}: ${where} · ${data.dataset.cases.length} cases${warning ? ` · ${warning.message}` : ''}`,
+          });
+      }
+      const baselines = checkBaselines(loaded, data?.dataset ?? null, project, ctx.cwd);
+      baselineFindings.push(...baselines.findings);
+      for (const path of baselines.paths) baselinePaths.add(path);
+    }
+    for (const f of baselineFindings) add({ area: 'Baselines', ...f });
+    // Only when every workflow loaded: otherwise their baselines would look unused.
+    if (workflows.length === files.length) {
+      for (const path of unusedBaselines(project, baselinePaths))
+        add({
+          area: 'Baselines',
+          status: 'warn',
+          message: `${relative(ctx.cwd, path) || path} belongs to no workflow or variant`,
+          hint: 'Baselines are named <workflow>.json or <workflow>.<variant>.json. Rename or delete it.',
+        });
+    }
+
     try {
       const store = await ctx.store();
       const state = await store.migrationState();
       const row = await ctx.projectRow();
       const stats = await store.projectStats(row.id);
+      if (store.dialect === 'sqlite') sqlitePath = store.target.location;
       add({
         area: 'Storage',
         status: 'pass',
@@ -165,7 +295,11 @@ export async function doctorCommand(ctx: CommandContext): Promise<void> {
       add({
         area: 'Storage',
         status: 'info',
-        message: `${stats.runs} runs · ${stats.traces} traces · ${stats.evaluations} evaluations`,
+        message: [
+          plural(stats.runs, 'run'),
+          plural(stats.traces, 'trace'),
+          plural(stats.evaluations, 'evaluation'),
+        ].join(' · '),
       });
     } catch (error) {
       add({
@@ -206,8 +340,16 @@ export async function doctorCommand(ctx: CommandContext): Promise<void> {
           status: used ? 'pass' : 'info',
           message: `${name}: ${source}${d.baseUrl ? ` · ${d.baseUrl}` : ''}${usage}`,
         });
+        if (options.network && used && d.type !== 'local')
+          for (const c of await probeProvider(registry, name, models)) add(c);
       }
     }
+    if (!options.network && [...providersInUse].some((p) => registry.typeOf(p) !== 'local'))
+      add({
+        area: 'Providers',
+        status: 'info',
+        message: 'credentials were not tried; scope doctor --network asks each provider in use',
+      });
   } catch (error) {
     if (!projectOk)
       add({
@@ -227,6 +369,15 @@ export async function doctorCommand(ctx: CommandContext): Promise<void> {
       ? `${git.branch ?? 'detached'} @ ${git.commit?.slice(0, 7)}${git.dirty ? ' (uncommitted changes)' : ''}`
       : 'not a git repository — runs will not record commits',
   });
+  if (git && sqlitePath && gitIgnores(sqlitePath) === false) {
+    const display = relative(ctx.cwd, sqlitePath) || sqlitePath;
+    add({
+      area: 'Git',
+      status: 'warn',
+      message: `the local database ${display} is not ignored by git`,
+      hint: 'It holds prompts and outputs of every run. Add `.scope/` to .gitignore (scope init does).',
+    });
+  }
   const webRoot = findWebRoot();
   add({
     area: 'Dashboard',

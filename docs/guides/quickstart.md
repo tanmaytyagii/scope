@@ -36,10 +36,11 @@ enough to exercise every part of SCOPE.
 ## 3. Run it
 
 ```bash
-scope run workflows/support.yaml
+scope run
 ```
 
-Every case runs, every step is traced, every evaluator scores the output, and the gates decide
+`scope run` runs every workflow in the project — here, `workflows/support.yaml`; name one to run
+only that (`scope run workflows/support.yaml`). Every case runs, every step is traced, every evaluator scores the output, and the gates decide
 the exit code (0 passed, 1 gates failed). The summary shows pass rate, latency, tokens,
 estimated cost and each evaluator's results; failing cases are listed with the reason.
 

@@ -4,7 +4,7 @@
  */
 import type { Usage } from '@scope-ai/core';
 import type OpenAI from 'openai';
-import { toProviderError } from './errors.ts';
+import { toListModelsError, toProviderError } from './errors.ts';
 import type {
   CallOptions,
   CompletionRequest,
@@ -135,6 +135,18 @@ export function createOpenAIProvider(options: OpenAIProviderOptions): ModelProvi
         ignoredParams,
         requestId: (response as { _request_id?: string | null })._request_id ?? null,
       };
+    },
+    async listModels(call: CallOptions = {}): Promise<string[]> {
+      try {
+        const openai = await getClient();
+        const ids: string[] = [];
+        for await (const model of openai.models.list({ signal: call.signal ?? null }))
+          ids.push(model.id);
+        return ids;
+      } catch (error) {
+        const { model: _, ...rest } = ctx('');
+        throw toListModelsError(error, rest);
+      }
     },
     async embed(request: EmbeddingRequest, call: CallOptions = {}): Promise<EmbeddingResponse> {
       try {

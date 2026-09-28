@@ -30,8 +30,8 @@
 | Command | Does |
 | --- | --- |
 | `scope init [dir]` | Create a project with a workflow that runs offline. `--name`, `--force` |
-| `scope validate [workflows…]` | Check configuration without running anything (default: the project's workflows) |
-| `scope run <workflow>` | Run a workflow over its dataset, evaluate every case, apply gates, store everything |
+| `scope validate [workflows…]` | Check workflows and their datasets without running anything (default: the project's workflows) |
+| `scope run [workflows…]` | Run workflows over their datasets, evaluate every case, apply gates, store everything (default: the project's workflows) |
 
 `scope run` options:
 
@@ -48,6 +48,11 @@
 | `--no-fail` | Exit 0 even when gates fail |
 | `--summary-file <file>` | Append the Markdown report (e.g. `$GITHUB_STEP_SUMMARY`; also `SCOPE_SUMMARY_FILE`) |
 | `--report-file <file>` | Write the JSON report |
+
+With several workflows, every workflow is loaded and checked before any of them runs, a table
+at the end shows each run's result, and `--json` / `--report-file` produce `{ "runs": [...] }`.
+`--variant`, `--dataset`, `--input`, `--input-json`, `--case` and `--baseline <file>` name things
+inside one workflow, so they need exactly one. The exit code is the worst of all runs.
 
 On GitHub Actions (`GITHUB_ACTIONS=true`), failed gates are also printed as error annotations.
 
@@ -84,7 +89,8 @@ Runs are referenced by number (`12` or `#12`) or id; traces by id or a unique pr
 
 | Command | Does |
 | --- | --- |
-| `scope doctor` | Check Node.js, configuration, storage and migrations, provider credentials, git and the dashboard port |
+| `scope doctor` | Check Node.js, configuration, workflows, datasets, baselines (missing, stale, unused), storage and migrations, provider credentials, whether git ignores the local database, and the dashboard port |
+| `scope doctor --network` | Also ask each provider the workflows use for its model list — a read-only request that costs no tokens — to confirm it is reachable, accepts the credentials and offers the models |
 | `scope version` | Print versions (`--json` for machine-readable) |
 
 ## Environment

@@ -72,11 +72,13 @@ export async function initCommand(
     `${JSON.stringify(projectJsonSchema(), null, 2)}\n`,
   );
 
-  const where = relative(ctx.cwd, root) || '.';
+  // Below the current directory: a relative path; anywhere else: the absolute one.
+  const inside = relative(ctx.cwd, root);
+  const where = inside === '' ? '.' : inside.startsWith('..') ? root : `./${inside}`;
   out.emitJson({ root, project: name, files: files.map((f) => f.path) });
   out.print('');
   out.print(
-    `${s.green(out.sym.pass)} Created SCOPE project ${s.bold(name)} in ${s.bold(where === '.' ? 'the current directory' : `./${where}`)}`,
+    `${s.green(out.sym.pass)} Created SCOPE project ${s.bold(name)} in ${s.bold(where === '.' ? 'the current directory' : where)}`,
   );
   out.print('');
   for (const [path, description] of Object.entries(DESCRIPTIONS)) {
@@ -84,13 +86,11 @@ export async function initCommand(
   }
   out.print('');
   out.print(s.bold('Next'));
-  if (where !== '.') out.print(`  cd ${where}`);
+  if (where !== '.') out.print(`  cd ${/\s/.test(where) ? JSON.stringify(where) : where}`);
   out.print(
-    `  scope run workflows/support.yaml       ${s.dim('# runs offline — no API key needed')}`,
+    `  scope run         ${s.dim('# run and evaluate the workflow — offline, no API key')}`,
   );
-  out.print(
-    `  scope ui                               ${s.dim('# explore traces and evaluations')}`,
-  );
+  out.print(`  scope ui --open   ${s.dim('# explore its traces and evaluations')}`);
   out.print('');
   out.print(
     s.dim(

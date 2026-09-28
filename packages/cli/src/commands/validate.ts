@@ -2,10 +2,11 @@
  * scope validate [workflows...] — check configuration without executing anything.
  */
 import { readFileSync } from 'node:fs';
-import { relative } from 'node:path';
+import { relative, resolve } from 'node:path';
 import { ConfigError, type Diagnostic, loadWorkflow, renderDiagnostic } from '@scope-ai/config';
 import { ErrorCodes, ScopeError } from '@scope-ai/core';
 import { Engine, expandGlob } from '@scope-ai/engine';
+import { checkDataset } from '../checks.ts';
 import type { CommandContext } from '../context.ts';
 import { ExitCode, ExitError } from '../errors.ts';
 
@@ -45,18 +46,27 @@ export async function validateCommand(ctx: CommandContext, files: string[]): Pro
     let name: string | null = null;
     let details: string | null = null;
     let sourceText: string | undefined;
+    let sourceFile: string | undefined;
     try {
       const loaded = loadWorkflow(file, { root: ctx.cwd, env: ctx.env });
       sourceText = loaded.text;
+      sourceFile = loaded.displayPath;
       name = loaded.definition.name;
       diagnostics = [...loaded.diagnostics, ...engine.validate(loaded)];
+      // The dataset is part of what `scope run` needs; check it once the workflow itself is valid.
+      const data = diagnostics.some((d) => d.severity === 'error')
+        ? null
+        : checkDataset(loaded, project);
+      if (data) diagnostics.push(...data.diagnostics);
       const wf = loaded.definition;
       const variants = Object.keys(wf.variants ?? {}).length;
+      const cases = data?.dataset?.cases.length;
       details = [
         `${wf.steps.length} ${wf.steps.length === 1 ? 'step' : 'steps'}`,
         `${wf.evaluators?.length ?? 0} evaluators`,
         `${wf.gates?.length ?? 0} gates`,
         variants ? `${variants} ${variants === 1 ? 'variant' : 'variants'}` : null,
+        cases !== undefined ? `${cases} ${cases === 1 ? 'case' : 'cases'}` : null,
       ]
         .filter(Boolean)
         .join(' · ');
@@ -72,10 +82,12 @@ export async function validateCommand(ctx: CommandContext, files: string[]): Pro
         `${valid ? s.green(out.sym.pass) : s.red(out.sym.fail)} ${s.bold(file)}${name ? s.dim(`  ${name}`) : ''}${details ? s.dim(` · ${details}`) : ''}\n`,
       );
       for (const d of diagnostics) {
-        let text = sourceText;
+        // Diagnostics of the dataset are shown with its source; its paths are project-relative.
+        const other = Boolean(d.file && sourceFile && d.file !== sourceFile);
+        let text = other ? undefined : sourceText;
         if (!text && d.file) {
           try {
-            text = readFileSync(d.file, 'utf8');
+            text = readFileSync(resolve(other ? project.root : ctx.cwd, d.file), 'utf8');
           } catch {
             text = undefined;
           }

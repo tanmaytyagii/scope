@@ -269,6 +269,22 @@ describe('datasets', () => {
     );
     expect(ok.cases[0]?.inputs).toEqual({ question: 'hi', tone: 'friendly' });
   });
+
+  it('points at a misspelled input when a required one is missing', () => {
+    const ds = loadDataset(
+      { cases: [{ id: 'typo', inputs: { questoin: 'hi' } }] },
+      { baseDir: dir, root: dir, workflowName: 'wf' },
+    );
+    try {
+      prepareCases(ds, { question: { type: 'string' } });
+      expect.unreachable();
+    } catch (error) {
+      expect((error as ConfigError).diagnostics[0]).toMatchObject({
+        message: 'case "typo" is missing required input "question"',
+        hint: 'The case has "questoin" — did you mean "question"?',
+      });
+    }
+  });
 });
 
 describe('loadProject', () => {

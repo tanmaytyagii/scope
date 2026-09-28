@@ -9,7 +9,7 @@
  */
 import type Anthropic from '@anthropic-ai/sdk';
 import { ErrorCodes, ScopeError, type Usage } from '@scope-ai/core';
-import { toProviderError } from './errors.ts';
+import { toListModelsError, toProviderError } from './errors.ts';
 import type {
   CallOptions,
   CompletionRequest,
@@ -71,6 +71,24 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): Mode
     name: options.name,
     type: 'anthropic',
     unsupportedParams,
+    async listModels(call: CallOptions = {}): Promise<string[]> {
+      try {
+        const anthropic = await getClient();
+        const ids: string[] = [];
+        for await (const model of anthropic.models.list(
+          { limit: 1000 },
+          { signal: call.signal ?? null },
+        ))
+          ids.push(model.id);
+        return ids;
+      } catch (error) {
+        throw toListModelsError(error, {
+          provider: options.name,
+          credentialEnv: 'ANTHROPIC_API_KEY',
+          ...(options.baseUrl ? { baseUrl: options.baseUrl } : {}),
+        });
+      }
+    },
     async complete(
       request: CompletionRequest,
       call: CallOptions = {},

@@ -38,6 +38,17 @@ export function parseModelRef(ref: string): ModelRef {
   return { provider: ref.slice(0, colon), model: ref.slice(colon + 1) };
 }
 
+/**
+ * Whether a model appears in a provider's model list. Aliases match their dated snapshots
+ * (`claude-x` → `claude-x-20250929`, `gpt-x` → `gpt-x-2025-08-07`), and Ollama lists `name:latest`.
+ */
+export function isModelListed(model: string, listed: readonly string[]): boolean {
+  if (listed.includes(model) || listed.includes(`${model}:latest`)) return true;
+  const escaped = model.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const dated = new RegExp(`^${escaped}-\\d{4}-?\\d{2}-?\\d{2}$`);
+  return listed.some((id) => dated.test(id));
+}
+
 export interface ProviderDescription {
   name: string;
   type: string;

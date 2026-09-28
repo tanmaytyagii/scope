@@ -46,7 +46,7 @@ Create a project and run it — no API key needed; the starter uses a determinis
 
 ```bash
 scope init support-bot && cd support-bot
-scope run workflows/support.yaml    # run, trace and evaluate 12 cases
+scope run                           # run, trace and evaluate its 12 cases
 scope baseline save                 # make this run the reference for regressions
 scope ui --open                     # explore it at http://127.0.0.1:4700
 ```

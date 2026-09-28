@@ -1,0 +1,29 @@
+{
+  "name": "@scope-ai/core",
+  "version": "0.1.0",
+  "description": "SCOPE domain model and pure logic: traces, evaluations, run summaries, gates and comparisons.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tanmaytyagii/scope.git",
+    "directory": "packages/core"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json"
+  }
+}

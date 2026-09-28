@@ -112,8 +112,9 @@ export function WorkflowDetail() {
                   <li key={v} className="flex items-center justify-between px-4 py-2 text-sm">
                     <span className="text-fg">{v}</span>
                     <Link
-                      to={`/runs?workflow=${encodeURIComponent(w.name)}`}
+                      to={`/runs?workflow=${encodeURIComponent(w.name)}&variant=${encodeURIComponent(v)}`}
                       className="text-xs text-accent-fg hover:underline"
+                      aria-label={`Runs of variant ${v}`}
                     >
                       Runs
                     </Link>

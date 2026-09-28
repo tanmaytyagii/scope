@@ -21,7 +21,7 @@ export function runLabel(run: Pick<Run, 'number' | 'variant'>): string {
 export function Runs() {
   useTitle('Runs');
   const navigate = useNavigate();
-  const [filters, setFilters] = useUrlState(['workflow', 'gateStatus'] as const);
+  const [filters, setFilters] = useUrlState(['workflow', 'variant', 'gateStatus'] as const);
   const runs = useRuns(filters);
   const workflows = useWorkflows();
   const [selected, setSelected] = useState<string[]>([]);
@@ -75,6 +75,16 @@ export function Runs() {
             { value: 'none', label: 'No gates' },
           ]}
         />
+        {filters.variant && (
+          <button
+            type="button"
+            onClick={() => setFilters({ variant: null })}
+            className="inline-flex h-8 items-center gap-1 rounded-md border border-line-strong bg-raised px-2.5 text-xs text-fg"
+          >
+            Variant: {filters.variant} <span aria-hidden>×</span>
+            <span className="sr-only">Remove variant filter</span>
+          </button>
+        )}
       </div>
       <Panel className={runs.isPlaceholderData ? 'opacity-60 transition-opacity' : undefined}>
         {runs.isPending ? (
@@ -82,7 +92,7 @@ export function Runs() {
         ) : runs.isError ? (
           <ErrorState error={runs.error} onRetry={() => void runs.refetch()} />
         ) : items.length === 0 ? (
-          filters.workflow || filters.gateStatus ? (
+          filters.workflow || filters.variant || filters.gateStatus ? (
             <EmptyState title="No runs match these filters" />
           ) : (
             <EmptyState title="No runs yet" command="scope run workflows/support.yaml">

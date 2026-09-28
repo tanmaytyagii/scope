@@ -7,8 +7,11 @@ import { type FormEvent, type ReactNode, useEffect, useId, useState } from 'reac
 import { ApiError, apiGet, getApiKey, setApiKey, UNAUTHORIZED_EVENT } from '../api/client.ts';
 import { useServerInfo } from '../api/queries.ts';
 import { Button } from '../ui/Button.tsx';
+import { CopyButton } from '../ui/Copy.tsx';
 import { Reticle } from '../ui/icons.tsx';
 import { ErrorState, Loading } from '../ui/States.tsx';
+
+const CREATE_KEY = 'scope keys create --project <project> --name dashboard --scope read';
 
 function SignIn({ onSignedIn, rejected }: { onSignedIn: () => void; rejected: boolean }) {
   const [key, setKey] = useState('');
@@ -48,12 +51,15 @@ function SignIn({ onSignedIn, rejected }: { onSignedIn: () => void; rejected: bo
         </div>
         <h1 className="text-lg font-semibold text-fg">This server requires an API key</h1>
         <p className="mt-1 text-sm text-fg-2">
-          Use a key with the <code className="text-xs">read</code> scope. Create one where the
-          server runs:
+          Use a key with the <code className="text-xs">read</code> scope for the project you want to
+          see. Create one where the server runs:
         </p>
-        <pre className="mt-2 overflow-x-auto rounded-md bg-sunken px-3 py-2 text-xs text-fg">
-          scope keys create --name dashboard --scope read
-        </pre>
+        <div className="mt-2 flex items-start gap-1 rounded-md bg-sunken py-1.5 pr-1 pl-3">
+          <code className="flex-1 py-0.5 text-xs break-all whitespace-pre-wrap text-fg">
+            {CREATE_KEY}
+          </code>
+          <CopyButton text={CREATE_KEY} label="Copy command" />
+        </div>
         <label htmlFor={keyId} className="mt-5 block text-xs font-medium text-fg-2">
           API key
         </label>

@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -61,6 +61,7 @@ describe('scope (no project needed)', () => {
       'Get started:',
       'Inspect results:',
       'CI and regressions:',
+      'Dashboard and server:',
       'Diagnostics:',
     ])
       expect(r.stdout).toContain(heading);
@@ -223,6 +224,103 @@ describe('scope run → inspect → baseline → regression', () => {
     expect(checks.find((c: { area: string }) => c.area === 'Storage')).toMatchObject({
       status: 'pass',
     });
+  });
+});
+
+interface Served {
+  info: { url: string } & Record<string, unknown>;
+  stop(): Promise<{ code: number | null; stderr: string }>;
+}
+
+/** Starts a long-running command and waits for the JSON document it prints once listening. */
+function serve(args: string[], cwd: string, env: Record<string, string> = {}): Promise<Served> {
+  return new Promise((ready, fail) => {
+    const child = spawn(process.execPath, ['--conditions=source', BIN, ...args, '--json'], {
+      cwd,
+      env: { ...process.env, NO_COLOR: '1', SCOPE_DATABASE_URL: '', ...env },
+    });
+    let stdout = '';
+    let stderr = '';
+    const exited = new Promise<number | null>((done) => child.on('exit', (code) => done(code)));
+    child.stderr.on('data', (d) => {
+      stderr += d;
+    });
+    child.stdout.on('data', (d) => {
+      stdout += d;
+      try {
+        const info = JSON.parse(stdout);
+        ready({
+          info,
+          stop: async () => {
+            child.kill('SIGINT');
+            return { code: await exited, stderr };
+          },
+        });
+      } catch {
+        // wait for the complete document
+      }
+    });
+    void exited.then((code) => fail(new Error(`exited with ${code} before listening:\n${stderr}`)));
+  });
+}
+
+describe('scope ui, server and keys', () => {
+  it('serves the project’s runs to the dashboard API and stops cleanly', async () => {
+    const ui = await serve(['ui', '--port', '0'], project);
+    try {
+      expect(ui.info).toMatchObject({ project: 'demo', auth: 'none' });
+      expect(ui.info.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+      const res = await fetch(`${ui.info.url}/api/v1/runs?limit=1`);
+      const runs = (await res.json()) as { items: unknown[] };
+      expect(runs.items[0]).toMatchObject({ workflow: 'support' });
+    } finally {
+      const { code } = await ui.stop();
+      expect(code).toBe(0);
+    }
+  });
+
+  it('refuses to expose the unauthenticated dashboard beyond this machine', async () => {
+    const r = await scope(['ui', '--host', '0.0.0.0'], project);
+    expect(r.code).toBe(2);
+    expect(r.stderr).toContain('only listens on this machine');
+    expect(r.stderr).toContain('scope server');
+  });
+
+  it('creates, lists and revokes API keys that a server accepts', async () => {
+    const created = JSON.parse(
+      (await scope(['keys', 'create', '--name', 'ci', '--scope', 'read', '--json'], project))
+        .stdout,
+    );
+    expect(created).toMatchObject({ name: 'ci', project: 'demo', scopes: ['read'] });
+    expect(created.secret).toMatch(/^scope_[A-Za-z0-9]{32}$/);
+
+    const listed = await scope(['keys', 'list', '--json'], project);
+    expect(listed.stdout).not.toContain(created.secret);
+    expect(JSON.parse(listed.stdout).keys[0]).toMatchObject({ id: created.id, revokedAt: null });
+
+    const server = await serve(['server', '--host', '127.0.0.1', '--port', '0'], project);
+    try {
+      const url = `${server.info.url}/api/v1/runs`;
+      expect((await fetch(url)).status).toBe(401);
+      const ok = await fetch(url, { headers: { authorization: `Bearer ${created.secret}` } });
+      expect(ok.status).toBe(200);
+      const revoked = await scope(['keys', 'revoke', created.id], project);
+      expect(revoked.code).toBe(0);
+      const after = await fetch(url, { headers: { authorization: `Bearer ${created.secret}` } });
+      expect(after.status).toBe(401);
+    } finally {
+      const { code, stderr } = await server.stop();
+      expect(code).toBe(0);
+      // Server logs are JSON lines; the key never appears in them.
+      expect(stderr).toContain('"msg":"SCOPE server listening"');
+      expect(stderr).not.toContain(created.secret);
+    }
+  });
+
+  it('rejects unknown key scopes', async () => {
+    const r = await scope(['keys', 'create', '--scope', 'admin'], project);
+    expect(r.code).toBe(2);
+    expect(r.stderr).toContain('Unknown scope "admin"');
   });
 });
 

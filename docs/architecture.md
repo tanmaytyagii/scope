@@ -72,8 +72,12 @@ cli ──▶ engine ──▶ evaluators ──▶ core
  │        └──────▶ config ──────▶ core
  ├──▶ storage ──▶ core
  └──▶ server ──▶ storage, protocol ──▶ core
-web ──▶ protocol (types only)
+web ──▶ protocol (types only), core (pure formatting and span-tree helpers)
 ```
+
+`core` has no I/O and no Node-only APIs, so the dashboard uses its formatters
+(`formatDuration`, `formatUsd`, …) and `buildSpanTree` directly: the CLI and the dashboard show
+identical numbers.
 
 Boundary rules, enforced by review and by package `exports`:
 
@@ -436,42 +440,68 @@ columns, never by loading rows into memory. List endpoints use keyset pagination
 ## 10. HTTP API (`@scope-ai/server`, `@scope-ai/protocol`)
 
 Hono on Node. Base path `/api/v1`. All request and response bodies are defined as Zod schemas
-in `@scope-ai/protocol`, which also generates the OpenAPI document served at
-`/api/v1/openapi.json`.
+in `@scope-ai/protocol`, together with a route table (`ROUTES`) from which the OpenAPI 3.1
+document served at `/api/v1/openapi.json` is generated. The server's contract test requests
+every route in the table and validates the response against its schema, with strict objects, so
+an unmapped field fails the test.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/api/v1/overview?window=7d` | KPIs and time series for the dashboard home |
-| GET | `/api/v1/runs` | List runs (filter: workflow, variant, status; keyset pagination) |
-| GET | `/api/v1/runs/{id}` | Run detail with summary, gates and evaluator breakdown |
-| GET | `/api/v1/runs/{id}/cases` | Per-case results for a run |
-| GET | `/api/v1/comparisons?base={id}&head={id}` | Compare two runs |
-| GET | `/api/v1/traces` | List traces (filter: status, name, run, model, `q`; sort; pagination) |
-| GET | `/api/v1/traces/{id}` | Trace with span tree and evaluations |
-| GET | `/api/v1/evaluators` | Per-evaluator health across recent runs |
-| GET | `/api/v1/evaluations` | Evaluation results (filter: evaluator, status, run) |
-| GET | `/api/v1/workflows`, `/api/v1/workflows/{name}` | Workflows with run history and definition |
-| GET | `/api/v1/models` | Usage, latency, errors and cost per model |
-| GET | `/api/v1/project` | Project, storage, privacy and pricing information |
-| POST | `/api/v1/ingest` | Batched traces, spans and evaluations from the SDK |
-| GET | `/healthz`, `/readyz`, `/metrics` | Liveness, readiness (database ping), Prometheus metrics |
+| GET | `/api/v1/info` | Version, protocol and auth mode (public: the dashboard reads it before signing in) |
+| GET | `/api/v1/overview?window=7d` | KPIs and time series for the dashboard home (`24h`, `7d`, `30d`, `90d`) |
+| GET | `/api/v1/runs` | List runs (filter: workflow, variant, status, gateStatus; keyset pagination) |
+| GET | `/api/v1/runs/{run}` | Run detail with summary, gates and evaluator breakdown (`{run}`: id or number) |
+| GET | `/api/v1/runs/{run}/cases` | Per-case results (filter: outcome, failing evaluator, `q`) |
+| GET | `/api/v1/comparisons?base=&head=` | Compare two runs; unchanged cases only with `includeUnchanged=true` |
+| GET | `/api/v1/traces` | List traces (filter: run, name, status, eval, model, case, `q`, time; sort; pagination) |
+| GET | `/api/v1/traces/{trace}` | Trace with spans (with `offsetMs` from trace start) and evaluations |
+| GET | `/api/v1/evaluators` | Per-evaluator health and per-run trend |
+| GET | `/api/v1/evaluations` | Evaluation results (filter: evaluator, status, kind, run) |
+| GET | `/api/v1/workflows`, `/api/v1/workflows/{name}` | Workflows, latest definition, versions and variants |
+| GET | `/api/v1/models` | Calls, tokens, latency, errors and estimated cost per model, with the price used |
+| GET | `/api/v1/project` | Project, storage, privacy policy, pricing table and row counts |
+| GET | `/api/v1/api-keys` | Key metadata (name, prefix, scopes, last use); never secrets or hashes |
+| POST | `/api/v1/ingest` | Batched traces, spans and evaluations from SDKs |
+| GET | `/healthz`, `/readyz`, `/metrics` | Liveness, readiness (database ping + migrations), Prometheus metrics |
 
 Conventions:
 
 - Errors: `{ "error": { "code": "not_found", "message": "…", "hint": "…", "requestId": "…" } }`
-  with an accurate HTTP status. Validation errors include the failing fields.
+  with an accurate HTTP status. Validation errors list the failing fields in `details.issues`.
 - Pagination: `?limit=` (default 50, max 200) and opaque `?cursor=`; responses include
   `nextCursor`.
+- Timestamps in responses are ISO-8601 strings; durations and span offsets are milliseconds.
 - Versioning: the `/v1` contract only changes additively. Removing or changing a field
-  requires `/v2`.
+  requires `/v2`. The published OpenAPI document omits `additionalProperties: false` so
+  generated clients tolerate new fields.
 - Response DTOs are explicit mappings from domain records; database rows are never serialized
   directly.
+
+### Ingestion
+
+`POST /api/v1/ingest` accepts the SDK's wire format (header `scope-protocol: 1`):
+`{ project?, traces, spans, evaluations }` with epoch-millisecond times. The batch is validated
+as a whole; every span and evaluation must belong to a trace in the same request, and `runId`s
+must name runs of the project. Before storage the server applies its own privacy policy again
+(redaction of content, attributes, messages and evidence; content dropped when
+`capture_content` is off), keeps at most `SCOPE_MAX_SPANS_PER_TRACE` spans per trace (roots
+first; the count of dropped spans is recorded in trace metadata), and recomputes token, cost and
+count rollups from the spans. Re-sent traces are ignored (idempotent per id); trace ids owned by
+another project are never overwritten and are reported as `rejectedTraces`.
+
+### Metrics
+
+`/metrics` exposes `scope_http_requests_total{method,route,status}`,
+`scope_http_request_duration_seconds{method,route}`, `scope_ingested_{traces,spans,evaluations}_total`,
+`scope_ingest_rejected_total{reason}`, `scope_ingest_dropped_spans_total`,
+`scope_unexpected_errors_total`, `scope_build_info` and `scope_process_start_time_seconds`.
+Route labels are route patterns (`/api/v1/runs/:run`), never raw paths.
 
 ### Authentication
 
 | Mode | When | Behaviour |
 | --- | --- | --- |
-| `none` | `scope ui` (binds to 127.0.0.1) | No authentication. The server refuses to bind a non-loopback address in this mode unless `--insecure-no-auth` is passed explicitly. |
+| `none` | `scope ui` (binds to 127.0.0.1) | No authentication. The server refuses to bind a non-loopback address in this mode unless `--insecure-no-auth` is passed explicitly. Requests act on the current project, or on the project named by the `x-scope-project` header (reads) or the ingest body's `project` (created on first use). |
 | `api-key` | self-hosted server | `Authorization: Bearer scope_…`. Keys are stored as SHA-256 hashes, shown once at creation, carry scopes (`ingest`, `read`) and belong to exactly one project, which bounds every query. The dashboard asks for a read-scoped key. |
 
 User accounts, SSO and RBAC are roadmap items; the project-scoped key is the authorization
@@ -515,8 +545,9 @@ scope traces [id]                 List traces or show one as a tree
 scope compare <base> <head>       Compare two runs (IDs, #numbers or a baseline file)
 scope report [run]                Render a report (text, markdown, json)
 scope baseline save [run]         Write a baseline file for CI
-scope ui                          Start the local dashboard
-scope server                      Start a server for shared deployments
+scope ui [--port] [--open]        Start the local dashboard (127.0.0.1, no authentication)
+scope server [--host] [--port]    Start a server for shared deployments (API keys required)
+scope keys create|list|revoke     Manage project API keys for `scope server`
 scope doctor                      Diagnose configuration, storage and providers
 scope version
 ```

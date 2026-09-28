@@ -23,3 +23,13 @@ which are always called out).
 - SQLite (default) and PostgreSQL storage with shared migrations.
 - `scope` CLI: `init`, `validate`, `run`, `runs`, `traces`, `compare`, `report`,
   `baseline save`, `evaluate`, `doctor`, `version`.
+- HTTP API `/api/v1` (`@scope-ai/server`): runs, per-case results, comparisons, traces with
+  span offsets, evaluator health, evaluation results, workflows, model usage with the price
+  used, project settings and API key metadata; keyset pagination, one error envelope with
+  request ids, and an OpenAPI 3.1 document generated from the contract (`@scope-ai/protocol`).
+- Trace ingestion (`POST /api/v1/ingest`) for SDKs, with server-side redaction, per-trace span
+  limits, rollups recomputed from spans, and idempotent writes.
+- `scope ui` (local dashboard server, loopback only, no authentication), `scope server`
+  (API-key authentication, JSON logs) and `scope keys create|list|revoke`.
+- `/healthz`, `/readyz` and Prometheus `/metrics`; security headers and a strict
+  Content-Security-Policy.

@@ -37,6 +37,7 @@ export const ErrorCodes = {
   forbidden: 'forbidden',
   badRequest: 'bad_request',
   payloadTooLarge: 'payload_too_large',
+  unsupportedMediaType: 'unsupported_media_type',
   internal: 'internal',
 } as const;
 

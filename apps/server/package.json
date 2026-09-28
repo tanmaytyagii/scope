@@ -1,12 +1,12 @@
 {
-  "name": "@scope-ai/cli",
+  "name": "@scope-ai/server",
   "version": "0.1.0",
-  "description": "The scope command-line tool: run, evaluate, compare and inspect AI workflows.",
+  "description": "SCOPE server: the HTTP API, trace ingestion and dashboard hosting.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tanmaytyagii/scope.git",
-    "directory": "packages/cli"
+    "directory": "apps/server"
   },
   "type": "module",
   "sideEffects": false,
@@ -28,16 +28,15 @@
   },
   "dependencies": {
     "@scope-ai/core": "0.1.0",
-    "@scope-ai/config": "0.1.0",
-    "@scope-ai/providers": "0.1.0",
-    "@scope-ai/evaluators": "0.1.0",
-    "@scope-ai/sdk": "0.1.0",
-    "@scope-ai/engine": "0.1.0",
+    "@scope-ai/protocol": "0.1.0",
     "@scope-ai/storage": "0.1.0",
-    "commander": "^15.0.0",
-    "@scope-ai/server": "0.1.0"
+    "@hono/node-server": "^2.1.1",
+    "hono": "^4.13.10",
+    "zod": "^4.6.5"
   },
-  "bin": {
-    "scope": "./dist/bin.js"
+  "devDependencies": {
+    "@scope-ai/config": "0.1.0",
+    "@scope-ai/engine": "0.1.0",
+    "@scope-ai/sdk": "0.1.0"
   }
 }

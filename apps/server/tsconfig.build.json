@@ -13,25 +13,10 @@
       "path": "../../packages/core/tsconfig.build.json"
     },
     {
-      "path": "../../packages/config/tsconfig.build.json"
-    },
-    {
-      "path": "../../packages/providers/tsconfig.build.json"
-    },
-    {
-      "path": "../../packages/evaluators/tsconfig.build.json"
-    },
-    {
-      "path": "../../packages/sdk/tsconfig.build.json"
-    },
-    {
-      "path": "../../packages/engine/tsconfig.build.json"
-    },
-    {
       "path": "../../packages/storage/tsconfig.build.json"
     },
     {
-      "path": "../../apps/server/tsconfig.build.json"
+      "path": "../../packages/protocol/tsconfig.build.json"
     }
   ]
 }

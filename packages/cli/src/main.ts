@@ -8,17 +8,18 @@ import { compareCommand } from './commands/compare.ts';
 import { doctorCommand } from './commands/doctor.ts';
 import { evaluateCommand } from './commands/evaluate.ts';
 import { initCommand } from './commands/init.ts';
+import { keysCreateCommand, keysListCommand, keysRevokeCommand } from './commands/keys.ts';
 import { reportCommand } from './commands/report.ts';
 import { runCommand } from './commands/run.ts';
 import { runsCommand } from './commands/runs.ts';
+import { DEFAULT_PORT, serverCommand, uiCommand } from './commands/serve.ts';
 import { tracesCommand } from './commands/traces.ts';
 import { validateCommand } from './commands/validate.ts';
 import { CommandContext, type GlobalOptions } from './context.ts';
 import { ExitCode, exitCodeFor, renderError } from './errors.ts';
 import { Output } from './ui/output.ts';
 
-export type ServerCommands = (program: Command, withContext: ContextRunner) => void;
-export type ContextRunner = <A extends unknown[]>(
+type ContextRunner = <A extends unknown[]>(
   fn: (ctx: CommandContext, ...args: A) => Promise<void>,
 ) => (...args: unknown[]) => Promise<void>;
 
@@ -32,6 +33,7 @@ Examples:
   $ scope traces --run 12 --eval failed        Find failing traces in run #12
   $ scope compare 11 12                        Compare two runs case by case
   $ scope baseline save 12                     Make run #12 the regression reference
+  $ scope ui --open                            Explore runs and traces in the dashboard
 
 Exit codes:
   0 success · 1 gates failed · 2 usage or configuration error · 3 execution error · 130 interrupted
@@ -40,8 +42,6 @@ Docs: https://github.com/tanmaytyagii/scope/tree/main/docs`;
 
 export interface MainOptions {
   env?: NodeJS.ProcessEnv;
-  /** Registers `scope ui` / `scope server` (provided by @scope-ai/server). */
-  serverCommands?: ServerCommands;
 }
 
 export async function main(argv: string[], options: MainOptions = {}): Promise<number> {
@@ -221,10 +221,72 @@ export async function main(argv: string[], options: MainOptions = {}): Promise<n
     .option('--no-fail', 'exit 0 even when gates fail')
     .action(withContext((ctx, ref: string, opts) => evaluateCommand(ctx, ref, opts as never)));
 
-  if (options.serverCommands) {
-    program.commandsGroup('Dashboard and server:');
-    options.serverCommands(program, withContext);
-  }
+  program.commandsGroup('Dashboard and server:');
+  program
+    .command('ui')
+    .description(
+      'start the local dashboard for this project (no authentication, this machine only)',
+    )
+    .addOption(
+      new Option('-p, --port <port>', `port to listen on (default: ${DEFAULT_PORT})`).env(
+        'SCOPE_PORT',
+      ),
+    )
+    .option('--host <host>', 'address to listen on (default: 127.0.0.1)')
+    .option('--open', 'open the dashboard in a browser')
+    .option(
+      '--insecure-no-auth',
+      'allow a non-loopback --host without authentication (anyone who can reach it can read every trace)',
+    )
+    .addHelpText(
+      'after',
+      '\nInstrumented apps send traces here with SCOPE_URL=http://127.0.0.1:4700 (the SDK default).',
+    )
+    .action(withContext((ctx, opts) => uiCommand(ctx, opts as never)));
+
+  program
+    .command('server')
+    .description('start a shared server with API-key authentication, for teams and deployments')
+    .addOption(
+      new Option('-p, --port <port>', `port to listen on (default: ${DEFAULT_PORT})`).env(
+        'SCOPE_PORT',
+      ),
+    )
+    .addOption(
+      new Option('--host <host>', 'address to listen on (default: 0.0.0.0)').env('SCOPE_HOST'),
+    )
+    .addHelpText(
+      'after',
+      `
+Storage comes from SCOPE_DATABASE_URL (e.g. postgres://…) or scope.yaml. Every /api/v1 request
+except /api/v1/info needs an API key: create one with \`scope keys create\`.
+Logs are JSON lines on stderr (SCOPE_LOG_FORMAT=pretty for text, SCOPE_LOG_LEVEL to filter).`,
+    )
+    .action(withContext((ctx, opts) => serverCommand(ctx, opts as never)));
+
+  const keys = program.command('keys').description('manage API keys for `scope server`');
+  keys
+    .command('create')
+    .description('create an API key and print it once')
+    .option('--name <name>', 'label for the key, e.g. "ci" or "dashboard"')
+    .option(
+      '--scope <scope>',
+      'ingest (send traces) or read (dashboard, API); repeat for both (default: both)',
+      collect,
+    )
+    .option('--project <name>', 'project the key belongs to (default: this project)')
+    .action(withContext((ctx, opts) => keysCreateCommand(ctx, opts as never)));
+  keys
+    .command('list')
+    .description('list the project’s API keys (never their secrets)')
+    .option('--project <name>', 'project (default: this project)')
+    .action(withContext((ctx, opts) => keysListCommand(ctx, opts as never)));
+  keys
+    .command('revoke')
+    .argument('<key>', 'key id (or a unique prefix of it) from `scope keys list`')
+    .description('revoke an API key; requests using it fail from then on')
+    .option('--project <name>', 'project (default: this project)')
+    .action(withContext((ctx, ref: string, opts) => keysRevokeCommand(ctx, ref, opts as never)));
 
   program.commandsGroup('Diagnostics:');
   program.helpCommand('help [command]', 'show help for a command');

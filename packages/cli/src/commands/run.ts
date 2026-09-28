@@ -24,6 +24,7 @@ import {
   formatRelativeTime,
   formatScore,
   formatUsd,
+  type GateResult,
   gateStatus,
   type JsonObject,
   type RunSummary,
@@ -63,6 +64,7 @@ export interface RunCommandOptions {
   baseline?: string | false;
   fail?: boolean;
   summaryFile?: string;
+  reportFile?: string;
 }
 
 function parseInputs(pairs: string[] | undefined, json: string | undefined): JsonObject | null {
@@ -261,7 +263,12 @@ export async function runCommand(
     const { appendFileSync } = await import('node:fs');
     appendFileSync(options.summaryFile, `${markdown.join('\n')}\n`);
   }
-  ctx.out.emitJson(results.length === 1 ? reports[0] : { runs: reports });
+  const report = results.length === 1 ? reports[0] : { runs: reports };
+  if (options.reportFile) {
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(resolve(ctx.cwd, options.reportFile), `${JSON.stringify(report, null, 2)}\n`);
+  }
+  ctx.out.emitJson(report);
   const exitCode = results.reduce<ExitCodeValue>(
     (worst, r) => (r.exitCode > worst ? r.exitCode : worst),
     ExitCode.ok,
@@ -483,6 +490,7 @@ async function executeVariant(
   );
   const failedGates = gates.filter((g) => g.status === 'failed' && g.severity === 'fail');
   for (const g of failedGates) out.result(`  ${s.red(out.sym.fail)} ${g.message}`);
+  if (ctx.env.GITHUB_ACTIONS === 'true') annotateGates(ctx, run, gates);
   out.print(`  ${s.dim('Inspect')}  scope runs ${run.number}   ${s.dim('·')}   scope ui`);
   if (!p.baseline && !cancelled && status !== 'failed')
     out.print(
@@ -568,6 +576,31 @@ function printVariantComparison(ctx: CommandContext, results: VariantResult[]): 
     `  ${s.dim(`Compare in detail: scope compare ${results[0]?.run.number} ${results[1]?.run.number}`)}`,
   );
   out.print('');
+}
+
+/** Escapes a GitHub Actions workflow-command value (https://github.com/actions/toolkit). */
+function commandValue(text: string, property = false): string {
+  const escaped = text.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+  return property ? escaped.replace(/:/g, '%3A').replace(/,/g, '%2C') : escaped;
+}
+
+/**
+ * On GitHub Actions, failed gates become error annotations (warn-severity gates become
+ * warnings), so they appear on the workflow run and the pull request's checks.
+ */
+function annotateGates(ctx: CommandContext, run: Run, gates: readonly GateResult[]): void {
+  if (ctx.out.json) return; // stdout must stay a single JSON document
+  const title = commandValue(
+    `SCOPE · ${run.workflowName}${run.variant ? ` · ${run.variant}` : ''} · run #${run.number}`,
+    true,
+  );
+  for (const g of gates) {
+    if (g.status !== 'failed') continue;
+    const level = g.severity === 'fail' ? 'error' : 'warning';
+    ctx.out.stdout.write(
+      `::${level} title=${title}::${commandValue(`${g.label}: ${g.message}`)}\n`,
+    );
+  }
 }
 
 /** Exported for tests. */

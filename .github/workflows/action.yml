@@ -1,0 +1,59 @@
+name: GitHub Action
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - integrations/github-action/**
+      - packages/**
+      - .github/workflows/action.yml
+
+permissions:
+  contents: read
+
+jobs:
+  self-test:
+    name: Action self-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Create a project with a committed baseline
+        run: |
+          npm ci --no-audit --no-fund
+          npx tsc -b tsconfig.build.json
+          node packages/cli/dist/bin.js init action-demo
+          cd action-demo
+          node ../packages/cli/dist/bin.js run workflows/support.yaml --quiet
+          node ../packages/cli/dist/bin.js baseline save 1
+
+      - name: Unchanged workflow passes
+        id: pass
+        uses: ./integrations/github-action
+        with:
+          working-directory: action-demo
+          artifact-name: scope-self-test
+
+      - name: Introduce a regression (answers keep one sentence instead of two)
+        run: sed -i 's/^  sentences: 2$/  sentences: 1/' action-demo/workflows/support.yaml
+
+      - name: Regressed workflow fails the job
+        id: regress
+        continue-on-error: true
+        uses: ./integrations/github-action
+        with:
+          working-directory: action-demo
+          upload-artifact: 'false'
+
+      - name: Check both outcomes
+        run: |
+          test "${{ steps.pass.outputs.result }}" = passed
+          test "${{ steps.regress.outcome }}" = failure
+          test "${{ steps.regress.outputs.result }}" = failed
+          echo "The action passed an unchanged workflow and failed a regression."

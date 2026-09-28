@@ -6,6 +6,9 @@ shown in the product until it exists.
 
 ## v0.1 — Foundation (current)
 
+Status: M1–M5 are done; M6 (distribution) is next. Details in
+[DEVELOPMENT_STATUS.md](./DEVELOPMENT_STATUS.md).
+
 | Milestone | Delivers | Exit criteria |
 | --- | --- | --- |
 | **M1 Foundation** | Monorepo, tooling (TypeScript 7, Biome, Vitest), CI, contributor docs | `npm ci && npm run check` passes locally and in CI |

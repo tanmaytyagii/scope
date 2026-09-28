@@ -195,6 +195,24 @@ describe('scope run → inspect → baseline → regression', () => {
     expect(allowed.code).toBe(0);
   });
 
+  it('annotates failed gates on GitHub Actions and writes a JSON report file', async () => {
+    const r = await scope(
+      ['run', 'workflows/support.yaml', '--report-file', 'scope-report.json', '--no-fail'],
+      project,
+      { GITHUB_ACTIONS: 'true', GITHUB_SHA: 'abc1234def', GITHUB_REF: 'refs/pull/7/merge' },
+    );
+    expect(r.code).toBe(0);
+    expect(r.stdout).toMatch(
+      /^::error title=SCOPE · support · run #\d+::Pass rate: .*dropped more than/m,
+    );
+    const report = JSON.parse(readFileSync(join(project, 'scope-report.json'), 'utf8'));
+    expect(report).toMatchObject({
+      schema: 'scope.report/v1',
+      run: { workflow: 'support', git: { commit: 'abc1234def', pullRequest: 7 } },
+    });
+    expect(report.gates.some((g: { status: string }) => g.status === 'failed')).toBe(true);
+  });
+
   it('compares runs and renders a markdown report', async () => {
     const compare = await scope(['compare', 'baselines/support.json', '4', '--json'], project);
     expect(compare.code).toBe(0);

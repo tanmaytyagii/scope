@@ -136,6 +136,7 @@ export async function main(argv: string[], options: MainOptions = {}): Promise<n
         'append a Markdown report to this file (e.g. $GITHUB_STEP_SUMMARY)',
       ).env('SCOPE_SUMMARY_FILE'),
     )
+    .option('--report-file <file>', 'write the JSON report to this file (as --json prints it)')
     .action(withContext((ctx, workflow: string, opts) => runCommand(ctx, workflow, opts as never)));
 
   program

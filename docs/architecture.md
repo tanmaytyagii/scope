@@ -574,12 +574,22 @@ storage error.
 
 ## 13. GitHub integration
 
-A composite action (`integrations/github-action`) that:
+A composite action (`integrations/github-action`, documented in its README) that:
 
-1. runs `scope run` for each configured workflow with `--baseline`,
-2. writes the markdown report to the job summary (and optionally a pull-request comment),
-3. uploads the SQLite database and JSON report as an artifact for inspection,
-4. fails the job when a `fail`-severity gate is violated.
+1. builds the SCOPE CLI from the action's own commit (until the packages are published to npm),
+2. runs `scope run` for each workflow (from the `workflows` input, or the project's workflows
+   via `scope validate --json`) — regression gates use `baselines/<workflow>[.<variant>].json`
+   when it exists,
+3. appends each run's Markdown report to the job summary and emits an error annotation per
+   failed gate (warning for `severity: warn`) — `scope run` does both when `GITHUB_ACTIONS` is
+   set,
+4. uploads the SQLite database and JSON reports as an artifact, and sets the outputs `result`
+   and `report`,
+5. fails the job when a `fail`-severity gate fails (exit 1) or a workflow cannot run (2 or 3).
+
+Every workflow runs even if an earlier one fails. The repository's own CI runs the action
+against a starter project twice — unchanged (must pass) and with an injected regression (must
+fail). Pull-request comments are a roadmap item.
 
 Baselines are committed JSON files (`scope baseline save`), so a pull request that changes
 quality shows the baseline diff for review. See

@@ -77,6 +77,8 @@
         "packages/cli/**",
         "scripts/**",
         "examples/**",
+        "integrations/**",
+        "tests/e2e/**",
         "**/*.test.ts",
         "**/*.config.ts"
       ],

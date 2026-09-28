@@ -45,6 +45,11 @@ which are always called out).
 - Command palette (⌘K), keyboard shortcuts, light and dark themes, API-key sign-in for shared
   servers, and a table view for every chart.
 - Playwright end-to-end tests with axe accessibility scans, run in CI against real runs.
+- GitHub Action (`integrations/github-action`): runs workflows against committed baselines,
+  writes the job summary, annotates failed gates, uploads results, and fails the job on
+  regressions; self-tested in CI.
+- `scope run --report-file <file>` writes the JSON report while keeping human output; on
+  GitHub Actions, failed gates are emitted as error/warning annotations.
 
 ### Fixed
 

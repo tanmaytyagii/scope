@@ -16,8 +16,10 @@ source (Apache-2.0).
   docs, issue/PR templates, ADRs 0001–0011.
 - **M2 Core loop** — `core`, `config`, `providers`, `sdk`, `evaluators`, `engine`, `storage`;
   CLI `init`, `validate`, `run`, `runs`, `traces`, `report`, `doctor`, `version`.
-- **M3 Comparison & CI (CLI side)** — variants, `compare`, `baseline save`, regression gates,
-  markdown reports (`--summary-file`), `evaluate` (re-score).
+- **M3 Comparison & CI** — variants, `compare`, `baseline save`, regression gates, markdown
+  reports (`--summary-file`), JSON reports (`--report-file`), gate annotations on GitHub,
+  `evaluate` (re-score), and the composite GitHub Action (`integrations/github-action`,
+  self-tested by `.github/workflows/action.yml`).
 - **M4 Server & API** — `@scope-ai/protocol` (Zod contract, route table, generated OpenAPI
   3.1), `@scope-ai/server` (Hono: read API, ingestion with server-side privacy, API-key auth,
   health/readiness/metrics, CSP, dashboard hosting), CLI `scope ui`, `scope server`,
@@ -30,11 +32,10 @@ source (Apache-2.0).
 
 ## In Progress
 
-- Nothing half-done. Next up is the GitHub Action.
+- **M6 Distribution** — README, user guides, examples, Docker.
 
 ## Not Started
 
-- **M3 remainder** — composite GitHub Action (`integrations/github-action`).
 - **M6 Distribution** — Dockerfile, `docker compose up` demo, `examples/`, user guides
   (`docs/guides/*.md` are linked from `scope init` output and CONTRIBUTING but do not exist).
 - **M7 Review & polish**.
@@ -46,12 +47,12 @@ See [architecture.md](./architecture.md). All packages and apps are implemented 
 
 ## Current Milestone
 
-M3 remainder (GitHub Action), then M6 (distribution, docs, examples, README).
+M6 Distribution: README, `docs/guides/`, `examples/`, Dockerfile and `docker compose up` demo.
 
 ## Working Commands
 
 ```bash
-npm ci && npm run check          # lint, typecheck (incl. dashboard + e2e), 243 tests
+npm ci && npm run check          # lint, typecheck (incl. dashboard + e2e), 244 tests
 npm run build                    # packages (tsc -b) + dashboard (vite)
 npm run smoke                    # pack all packages, install in a temp dir: init, run, ui
 npx playwright install chromium  # once
@@ -76,4 +77,4 @@ npm run dev:web                  # dashboard dev server, proxies /api to scope u
 
 ## Next Milestone
 
-GitHub Action (composite, `integrations/github-action`), then M6 Distribution.
+M7 Review & polish (after M6).

@@ -1,0 +1,92 @@
+name: SCOPE evaluation
+description: Run SCOPE workflows, compare them with committed baselines, and fail the job when quality regresses.
+author: SCOPE contributors
+branding:
+  icon: crosshair
+  color: blue
+
+inputs:
+  workflows:
+    description: >
+      Workflow files to run, separated by spaces or newlines (globs allowed). Default: the
+      workflows listed in scope.yaml.
+    required: false
+    default: ''
+  working-directory:
+    description: Directory of the SCOPE project (where scope.yaml is).
+    required: false
+    default: '.'
+  variants:
+    description: >
+      Which parameters to run: "default" (the workflow's defaults), "all" (defaults and every
+      variant), or a comma-separated list of variant names.
+    required: false
+    default: default
+  baseline:
+    description: >
+      "auto" compares with baselines/<workflow>[.<variant>].json when it exists; "none" disables
+      regression gates; any other value is a baseline file path.
+    required: false
+    default: auto
+  fail-on-gates:
+    description: Fail the job when a gate with severity "fail" fails. Set to "false" to only report.
+    required: false
+    default: 'true'
+  node-version:
+    description: Node.js version used to run SCOPE (22.16 or newer).
+    required: false
+    default: '24'
+  upload-artifact:
+    description: Upload the SQLite database and JSON report as a workflow artifact.
+    required: false
+    default: 'true'
+  artifact-name:
+    description: Name of the uploaded artifact.
+    required: false
+    default: scope-results
+
+outputs:
+  result:
+    description: '"passed", "failed" (a gate failed) or "error" (a workflow could not run).'
+    value: ${{ steps.run.outputs.result }}
+  report:
+    description: Path of the combined JSON report, relative to the working directory.
+    value: ${{ steps.run.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    # SCOPE runs from the same commit as this action (pin the action to a tag or SHA).
+    - name: Build SCOPE
+      shell: bash
+      working-directory: ${{ github.action_path }}/../..
+      run: |
+        npm ci --no-audit --no-fund --ignore-scripts --loglevel=error
+        npx tsc -b tsconfig.build.json
+
+    - name: Run SCOPE
+      id: run
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        SCOPE_CLI: ${{ github.action_path }}/../../packages/cli/dist/bin.js
+        SCOPE_ACTION_WORKFLOWS: ${{ inputs.workflows }}
+        SCOPE_ACTION_VARIANTS: ${{ inputs.variants }}
+        SCOPE_ACTION_BASELINE: ${{ inputs.baseline }}
+        SCOPE_ACTION_FAIL_ON_GATES: ${{ inputs.fail-on-gates }}
+      run: node "${{ github.action_path }}/run.mjs"
+
+    - name: Upload results
+      if: always() && inputs.upload-artifact == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: |
+          ${{ inputs.working-directory }}/.scope/scope.db
+          ${{ inputs.working-directory }}/.scope/action/
+        if-no-files-found: ignore
+        retention-days: 14

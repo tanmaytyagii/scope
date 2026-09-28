@@ -44,9 +44,14 @@ npm run typecheck              # tsc -b tsconfig.json (source condition, no emit
 npm test                       # vitest run (unit + integration + CLI)
 npm run build                  # tsc -b tsconfig.build.json + dashboard build
 npm run scope -- <args>        # run the CLI from TypeScript sources (no build needed)
-npm run smoke                  # pack every package, install into a temp dir, run the CLI
+npm run smoke                  # pack every package, install into a temp dir: init, run, ui
+npm run test:e2e               # Playwright + axe against CLI-seeded data (build web first)
+npm run dev:web                # dashboard dev server, proxies /api to a running scope ui
 SCOPE_TEST_DATABASE_URL=postgres://… npm test   # also run storage/server tests on PostgreSQL
 ```
+
+To look at the dashboard: `npm run build -w @scope-ai/web`, then `npm run scope -- ui` in a
+project (e.g. one made with `scope init`). Screenshot pages with Playwright to review design.
 
 Sources run directly on Node (`--conditions=source`, erasable TS only). Tests live next to
 code as `*.test.ts` under `packages/*/src` and `apps/server/src`.
@@ -67,6 +72,10 @@ code as `*.test.ts` under `packages/*/src` and `apps/server/src`.
 - Ingestion (`POST /api/v1/ingest`, header `scope-protocol: 1`) accepts the SDK wire format:
   `{ project?, traces: TraceRecord[], spans: SpanRecord[], evaluations: EvaluationRecord[] }`
   with epoch-millisecond numbers.
+- Dashboard (`apps/web`): tokens in `src/styles.css` (light-dark(), no raw hex in components),
+  primitives in `src/ui/`, charts in `src/charts/` (every chart has a table twin), filters in
+  the URL (`useUrlState`), types only from `@scope-ai/protocol`, formatting from
+  `@scope-ai/core`. Rules: `docs/design-system.md`.
 - Conventional commits with package scopes (`feat(server): …`). No AI co-author trailers.
 
 ## Product rules (non-negotiable)

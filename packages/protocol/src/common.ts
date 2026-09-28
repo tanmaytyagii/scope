@@ -22,7 +22,10 @@ export const JsonValue = z.json().register(components, {
   description: 'Any JSON value.',
 });
 
+export type JsonValue = z.output<typeof JsonValue>;
+
 export const JsonObject = z.record(z.string(), JsonValue);
+export type JsonObject = z.output<typeof JsonObject>;
 
 export const ErrorBody = z
   .strictObject({

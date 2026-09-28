@@ -5,7 +5,11 @@ export default defineConfig({
   resolve: { conditions: ['source'] },
   ssr: { resolve: { conditions: ['source'] } },
   test: {
-    include: ['packages/*/src/**/*.test.ts', 'apps/server/src/**/*.test.ts'],
+    include: [
+      'packages/*/src/**/*.test.ts',
+      'apps/server/src/**/*.test.ts',
+      'apps/web/src/**/*.test.ts',
+    ],
     environment: 'node',
     testTimeout: 20_000,
     // Tests create temporary directories and databases; keep output quiet unless debugging.

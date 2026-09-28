@@ -33,3 +33,19 @@ which are always called out).
   (API-key authentication, JSON logs) and `scope keys create|list|revoke`.
 - `/healthz`, `/readyz` and Prometheus `/metrics`; security headers and a strict
   Content-Security-Policy.
+- Dashboard (`@scope-ai/web`, served by `scope ui` and `scope server`): Overview (KPIs, traces
+  and errors, latency, pass rate by run, recent failures, failing evaluators), Runs with
+  two-run selection, Run detail (gates, evaluator breakdown, filterable cases), Compare
+  (direction-aware metric deltas and per-case changes), Traces (search, filters, sorting),
+  Trace explorer (keyboard-navigable span tree with timing, model calls shown as prompt and
+  response, retrievals as ranked documents, evaluations with evidence), Evaluations (evaluator
+  health, per-run trends, failing results), Workflows (history, variants, versions, source),
+  Models (calls, latency, errors, estimated cost and the price used) and Settings (storage,
+  privacy policy, pricing table, API keys, theme).
+- Command palette (⌘K), keyboard shortcuts, light and dark themes, API-key sign-in for shared
+  servers, and a table view for every chart.
+- Playwright end-to-end tests with axe accessibility scans, run in CI against real runs.
+
+### Fixed
+
+- Derived cache prices in the built-in pricing table are rounded (no `0.30000000000000004`).

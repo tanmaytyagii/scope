@@ -32,7 +32,8 @@
     "@scope-ai/storage": "0.1.0",
     "@hono/node-server": "^2.1.1",
     "hono": "^4.13.10",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "@scope-ai/web": "0.1.0"
   },
   "devDependencies": {
     "@scope-ai/config": "0.1.0",

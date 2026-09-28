@@ -23,3 +23,6 @@ blob-report/
 .DS_Store
 .idea/
 *.swp
+
+# e2e fixture state
+tests/e2e/.state.json

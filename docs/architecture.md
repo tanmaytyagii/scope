@@ -530,6 +530,21 @@ Routes:
 /settings               Project, storage, privacy, pricing, API keys, appearance, shortcuts
 ```
 
+Every page except the Overview is loaded on first visit (route-level code splitting). The
+dashboard is a static bundle: `@scope-ai/server` depends on `@scope-ai/web` and serves its
+`dist/` (`findWebRoot()`), with hashed assets cached immutably and `index.html` for any other
+path. Under `scope server` the dashboard first reads `/api/v1/info`; when the server uses API
+keys it asks for a read-scoped key, kept in session storage (or local storage if the user asks
+to be remembered) and sent as a bearer token.
+
+The command palette (⌘K / Ctrl+K) jumps to pages, runs by number, traces by id prefix, and trace
+search; `g` + a letter navigates, `/` focuses the page's search, `?` lists shortcuts.
+
+Development: `npm run dev:web` starts Vite with `/api` proxied to a running `scope ui`
+(`SCOPE_API_URL` to change it). Pure logic (span layout, axis math, payload shapes) is unit
+tested with Vitest; journeys, keyboard use and axe accessibility scans run in Playwright
+against a project seeded by the CLI (`tests/e2e`).
+
 The design system (tokens, primitives, patterns) is documented in
 [design-system.md](./design-system.md).
 

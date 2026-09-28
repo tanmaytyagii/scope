@@ -18,8 +18,10 @@ covers everything you need to make a change and get it merged.
 
 ## Development setup
 
-Requirements: **Node.js 22.18+** (24 recommended; see `.nvmrc`) and npm. Docker is optional
-(for PostgreSQL tests and the demo).
+Requirements: **Node.js 22.18+** (24 recommended; see `.nvmrc`) and npm. Contributors need 22.18
+because the CLI and tests run TypeScript sources directly (Node's type stripping); installed
+packages run compiled JavaScript and work from 22.16. Docker is optional (for PostgreSQL tests
+and the demo).
 
 ```bash
 git clone https://github.com/tanmaytyagii/scope.git
@@ -47,8 +49,9 @@ are picked up immediately by the CLI, the server and the tests.
 | `npm run typecheck` | Type-check every package from source |
 | `npm test` | Unit, integration and CLI tests |
 | `npm run build` | Emit `dist/` for every package and build the dashboard |
-| `npm run dev -w @scope-ai/web` | Dashboard dev server (proxies the API to `scope ui`) |
-| `npm run test:e2e` | Playwright tests for the dashboard |
+| `npm run dev:web` | Dashboard dev server with hot reload (proxies `/api` to a running `scope ui`) |
+| `npm run test:e2e` | Playwright tests for the dashboard (build it first: `npm run build -w @scope-ai/web`; one-time: `npx playwright install chromium`) |
+| `npm run clean` | Remove build output |
 
 ### Testing against PostgreSQL
 

@@ -27,12 +27,15 @@ const ANTHROPIC_AS_OF = '2026-06-24';
 const OPENAI_SOURCE = 'https://openai.com/api/pricing';
 const OPENAI_AS_OF = '2025-08-07';
 
+/** Derived prices are rounded so they read as the published figures (3 × 0.1 is not 0.30000000000000004). */
+const perMillion = (usd: number) => Math.round(usd * 1e6) / 1e6;
+
 function anthropic(input: number, output: number, cacheRead?: number): ModelPrice {
   return {
     input,
     output,
-    cacheRead: cacheRead ?? input * 0.1,
-    cacheWrite: input * 1.25,
+    cacheRead: cacheRead ?? perMillion(input * 0.1),
+    cacheWrite: perMillion(input * 1.25),
     asOf: ANTHROPIC_AS_OF,
     source: ANTHROPIC_SOURCE,
   };

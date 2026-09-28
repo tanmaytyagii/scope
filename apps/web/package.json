@@ -1,0 +1,43 @@
+{
+  "name": "@scope-ai/web",
+  "version": "0.1.0",
+  "description": "The SCOPE dashboard: a static single-page app served by @scope-ai/server.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tanmaytyagii/scope.git",
+    "directory": "apps/web"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "@scope-ai/core": "0.1.0",
+    "@scope-ai/protocol": "0.1.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-query": "^5.104.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "cmdk": "^1.1.1",
+    "radix-ui": "^1.6.7",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router": "^8.4.0",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.1"
+  }
+}

@@ -1,0 +1,191 @@
+/*
+ * SCOPE design tokens and base styles. See docs/design-system.md.
+ *
+ * Every color token is declared once with light-dark(): the active scheme comes from the OS
+ * (color-scheme: light dark) unless the user picks one, which sets data-theme on <html>.
+ * Text tokens clear WCAG AA (≥ 4.5:1) on the panel surface in both themes. Chart colors come
+ * from the validated data-viz palette; status colors are reserved for good/bad meaning and
+ * always ship with an icon and a label.
+ */
+@import "tailwindcss";
+
+@import "@fontsource/ibm-plex-sans/latin-400.css";
+@import "@fontsource/ibm-plex-sans/latin-500.css";
+@import "@fontsource/ibm-plex-sans/latin-600.css";
+@import "@fontsource/ibm-plex-sans/latin-ext-400.css";
+@import "@fontsource/ibm-plex-sans/latin-ext-500.css";
+@import "@fontsource/ibm-plex-sans/latin-ext-600.css";
+@import "@fontsource/ibm-plex-mono/latin-400.css";
+@import "@fontsource/ibm-plex-mono/latin-500.css";
+
+:root {
+  color-scheme: light dark;
+
+  /* surfaces */
+  --bg: light-dark(#f6f6f4, #111110);
+  --panel: light-dark(#fcfcfb, #1a1a19);
+  --raised: light-dark(#ffffff, #222221);
+  --sunken: light-dark(#f1f0ec, #141413);
+  --hover: light-dark(rgb(11 11 11 / 0.045), rgb(255 255 255 / 0.05));
+  --selected: light-dark(#e6eefa, #1b2a3d);
+  --border: light-dark(rgb(11 11 11 / 0.1), rgb(255 255 255 / 0.1));
+  --border-strong: light-dark(rgb(11 11 11 / 0.2), rgb(255 255 255 / 0.2));
+
+  /* ink */
+  --text: light-dark(#1b1b19, #f2f2f0);
+  --text-2: light-dark(#52514e, #c3c2b7);
+  --text-3: light-dark(#6f6e69, #9a9990);
+
+  /* accent: links, focus, selection, and chart slot 1 */
+  --accent: light-dark(#2a78d6, #3987e5);
+  --accent-text: light-dark(#1f63b8, #6aa6ee);
+  /* filled controls: white text on it clears 5.4:1 in both themes */
+  --accent-solid: light-dark(#1f63b8, #256abf);
+
+  /* status: marks use the fixed status steps; text uses AA-contrast steps of the same hue */
+  --good: #0ca30c;
+  --good-text: light-dark(#006300, #3fbf3f);
+  --good-wash: light-dark(#e8f4e7, #132519);
+  --warn: #fab219;
+  --warn-text: light-dark(#8a5300, #f0b43c);
+  --warn-wash: light-dark(#fcf2dc, #2a2211);
+  --serious: #ec835a;
+  --bad: #d03b3b;
+  --bad-text: light-dark(#b42323, #f07474);
+  --bad-wash: light-dark(#fbeaea, #2d1717);
+
+  /* chart chrome and series */
+  --grid: light-dark(#e1e0d9, #2c2c2a);
+  --axis: light-dark(#c3c2b7, #383835);
+  --series-1: light-dark(#2a78d6, #3987e5);
+  --series-2: light-dark(#eb6834, #d95926);
+  --series-3: light-dark(#1baf7a, #199e70);
+  --neutral-mark: light-dark(#bcbab1, #4d4c48);
+  --meter-track: light-dark(#cde2fb, #0d366b);
+
+  /* light-dark() accepts colors only, so shadows are built from a color token */
+  --shadow-color: light-dark(rgb(11 11 11 / 0.1), rgb(0 0 0 / 0.55));
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-raised: var(--raised);
+  --color-sunken: var(--sunken);
+  --color-hover: var(--hover);
+  --color-selected: var(--selected);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-fg: var(--text);
+  --color-fg-2: var(--text-2);
+  --color-fg-3: var(--text-3);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-text);
+  --color-accent-solid: var(--accent-solid);
+  --color-good: var(--good);
+  --color-good-fg: var(--good-text);
+  --color-good-wash: var(--good-wash);
+  --color-warn: var(--warn);
+  --color-warn-fg: var(--warn-text);
+  --color-warn-wash: var(--warn-wash);
+  --color-bad: var(--bad);
+  --color-bad-fg: var(--bad-text);
+  --color-bad-wash: var(--bad-wash);
+  --color-grid: var(--grid);
+  --color-axis: var(--axis);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-neutral-mark: var(--neutral-mark);
+  --color-meter-track: var(--meter-track);
+
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+
+  --text-2xs: 11px;
+  --text-2xs--line-height: 16px;
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 20px;
+  --text-base: 14px;
+  --text-base--line-height: 22px;
+
+  --shadow-pop: 0 1px 2px var(--shadow-color), 0 8px 28px var(--shadow-color);
+}
+
+@layer base {
+  html {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono);
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* Numbers in tables and axes line up; standalone figures keep proportional digits. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must win over every component */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must win over every component */
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .forced-border {
+    border: 1px solid CanvasText;
+  }
+}

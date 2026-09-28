@@ -55,10 +55,12 @@ scope/
 │   └── cli/              @scope-ai/cli      The `scope` binary
 ├── integrations/
 │   └── github-action/    Composite GitHub Action
-├── examples/             Runnable example projects (each works offline unless stated)
-├── docs/                 Product, architecture, ADRs, user guides
+├── examples/             Runnable example projects (all work offline): rag, triage, sdk-tracing
+├── docs/                 Product, architecture, ADRs, design system, user guides (docs/guides)
 ├── tests/e2e/            Playwright tests for the dashboard
-└── docker/               Container image and compose files
+├── docker/               Demo seed script
+├── Dockerfile            Server image (installs the packed packages)
+└── compose.yaml          `docker compose up` demo: PostgreSQL + seeded runs + dashboard
 ```
 
 ### Dependency graph
@@ -291,7 +293,8 @@ interface StepType<Args> {
 
 ### Reliability
 
-- Per-step `timeout_ms` (default 60 s for `llm`, 10 s otherwise), enforced with `AbortSignal`.
+- Per-step `timeout_ms` (defaults: `llm` and `function` 300 s, `retrieve` 30 s, `transform` 10 s;
+  `defaults.timeout_ms` in scope.yaml overrides them), enforced with `AbortSignal`.
 - Retries for retryable provider errors (HTTP 408, 409, 429, 5xx, connection errors), honouring
   `Retry-After`, delegated to the vendor SDK. Default 2 retries, configurable per project.
 - A failing case never aborts the run; it becomes a trace with `status: error`. `--bail` stops
@@ -385,7 +388,11 @@ await tracer.trace('answer-question', { input: { question } }, async () => {
   const docs = await tracer.span('retrieve', { kind: 'retrieval' }, () => search(question));
   return tracer.span('generate', { kind: 'llm' }, async (span) => {
     const res = await openai.chat.completions.create({ ... });
-    span.recordModelCall({ provider: 'openai', model: res.model, usage: res.usage, output: ... });
+    span.recordModelCall({
+      provider: 'openai',
+      model: res.model,
+      usage: { inputTokens: res.usage.prompt_tokens, outputTokens: res.usage.completion_tokens },
+    });
     return res.choices[0].message.content;
   });
 });

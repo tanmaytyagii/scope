@@ -220,7 +220,11 @@ describe('HttpExporter shutdown', () => {
         ['--conditions=source', '--input-type=module', '-e', script],
         { timeout: 20_000 },
         (error, stdout, stderr) =>
-          done({ code: error ? Number((error as { code?: number }).code ?? 1) : 0, stdout, stderr }),
+          done({
+            code: error ? Number((error as { code?: number }).code ?? 1) : 0,
+            stdout,
+            stderr,
+          }),
       );
     });
     expect(result.stderr).not.toContain('unsettled top-level await');

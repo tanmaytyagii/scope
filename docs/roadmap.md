@@ -6,7 +6,7 @@ shown in the product until it exists.
 
 ## v0.1 — Foundation (current)
 
-Status: M1–M5 are done; M6 (distribution) is next. Details in
+Status: M1–M6 are done; M7 (review and polish) is next. Details in
 [DEVELOPMENT_STATUS.md](./DEVELOPMENT_STATUS.md).
 
 | Milestone | Delivers | Exit criteria |

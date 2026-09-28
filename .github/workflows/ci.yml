@@ -96,6 +96,21 @@ jobs:
           path: playwright-report
           retention-days: 7
 
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t scope:ci .
+      - name: The image runs the CLI and the server answers health checks
+        run: |
+          docker run --rm scope:ci --version
+          docker run -d --name scope-ci -p 4700:4700 scope:ci ui --host 0.0.0.0 --insecure-no-auth
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:4700/readyz && break; sleep 1; done
+          curl -sf http://127.0.0.1:4700/ | grep -q 'id="root"'
+          docker rm -f scope-ci
+
   security:
     name: Dependency audit
     runs-on: ubuntu-latest

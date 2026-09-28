@@ -1,0 +1,100 @@
+# CLI reference
+
+`scope --help` and `scope <command> --help` describe every option; this page is the overview.
+
+## Global options
+
+| Option | Effect |
+| --- | --- |
+| `--json` | Print one JSON document on stdout (diagnostics stay on stderr) |
+| `-q, --quiet` | Print only results and errors |
+| `--verbose` | Print debug information, including stack traces for unexpected errors |
+| `--no-color` | Disable colors (also `NO_COLOR`) |
+| `--cwd <dir>` | Run as if started in `<dir>` |
+| `-c, --config <file>` | Use this `scope.yaml` instead of discovering one |
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Success |
+| 1 | Gates failed (the run completed; quality thresholds were not met) — or `scope doctor` found a problem |
+| 2 | Usage or configuration error — nothing was executed |
+| 3 | Execution, provider or storage error |
+| 130 | Interrupted |
+
+## Commands
+
+### Get started
+
+| Command | Does |
+| --- | --- |
+| `scope init [dir]` | Create a project with a workflow that runs offline. `--name`, `--force` |
+| `scope validate [workflows…]` | Check configuration without running anything (default: the project's workflows) |
+| `scope run <workflow>` | Run a workflow over its dataset, evaluate every case, apply gates, store everything |
+
+`scope run` options:
+
+| Option | Effect |
+| --- | --- |
+| `--variant <name>` | Run a variant (repeatable; `base` for the defaults) |
+| `--all-variants` | Run the defaults and every variant, then compare them |
+| `--dataset <file>` | Use another dataset |
+| `-i, --input <key=value>`, `--input-json <json>` | Run one ad-hoc case |
+| `--case <id>`, `--tag <tag>`, `--limit <n>` | Run a subset |
+| `--concurrency <n>` | Cases in parallel (default 4) |
+| `--bail` | Stop at the first case that does not pass |
+| `--baseline <file>`, `--no-baseline` | Choose or ignore the baseline for regression gates |
+| `--no-fail` | Exit 0 even when gates fail |
+| `--summary-file <file>` | Append the Markdown report (e.g. `$GITHUB_STEP_SUMMARY`; also `SCOPE_SUMMARY_FILE`) |
+| `--report-file <file>` | Write the JSON report |
+
+On GitHub Actions (`GITHUB_ACTIONS=true`), failed gates are also printed as error annotations.
+
+### Inspect results
+
+| Command | Does |
+| --- | --- |
+| `scope runs [run]` | List recent runs (`--workflow`, `--limit`), or show one: summary, gates, evaluators |
+| `scope traces [trace]` | List traces (`--run`, `--workflow`, `--status`, `--eval`, `--search`, `--model`, `--limit`), or show one as a span tree with evaluations (`--full` for complete inputs and outputs) |
+| `scope compare <base> <head>` | Compare two runs (numbers or ids) or baseline files, metric by metric and case by case |
+| `scope report [run]` | Render a run as `text`, `markdown` or `json` (`--format`, `--baseline`, `-o`, `--dashboard-url`) |
+
+Runs are referenced by number (`12` or `#12`) or id; traces by id or a unique prefix of at least
+4 characters.
+
+### CI and regressions
+
+| Command | Does |
+| --- | --- |
+| `scope baseline save [run]` | Write the run (default: latest) as `baselines/<workflow>[.<variant>].json`. Refuses failed or partial runs unless `--force`. `-o` for another path |
+| `scope evaluate <run>` | Re-score a stored run with the workflow's current evaluators, without re-running it (`--workflow`, `--no-fail`) |
+
+### Dashboard and server
+
+| Command | Does |
+| --- | --- |
+| `scope ui` | Serve the dashboard and API for this project on 127.0.0.1 (`--port`, `--open`; `--host` other than loopback requires `--insecure-no-auth`) |
+| `scope server` | Serve every project with API-key authentication (`--host`, `--port`; JSON logs) |
+| `scope keys create` | Create a key (`--project`, `--name`, `--scope ingest|read`, repeatable); printed once |
+| `scope keys list` | List a project's keys, never their secrets |
+| `scope keys revoke <key>` | Revoke a key by id (or unique id prefix) |
+
+### Diagnostics
+
+| Command | Does |
+| --- | --- |
+| `scope doctor` | Check Node.js, configuration, storage and migrations, provider credentials, git and the dashboard port |
+| `scope version` | Print versions (`--json` for machine-readable) |
+
+## Environment
+
+| Variable | Used by |
+| --- | --- |
+| `SCOPE_DATABASE_URL` | Every command that reads or writes runs (overrides `storage.url`) |
+| `SCOPE_CAPTURE_CONTENT` | `false` to store no inputs or outputs |
+| `SCOPE_PORT`, `SCOPE_HOST` | `scope ui`, `scope server` |
+| `SCOPE_SUMMARY_FILE` | `scope run --summary-file` |
+| `SCOPE_DASHBOARD_URL` | `scope report --dashboard-url` (links failing cases to the dashboard) |
+| `SCOPE_AUTO_MIGRATE` | `false` to never migrate the database automatically |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | Hosted model providers |

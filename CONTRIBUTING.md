@@ -34,7 +34,7 @@ Run the CLI from source — no build step needed:
 
 ```bash
 npm run scope -- --help
-npm run scope -- run examples/rag/workflows/support.yaml --cwd examples/rag
+npm run scope -- run workflows/support.yaml --cwd examples/rag
 ```
 
 Packages resolve to their TypeScript sources through the `source` export condition, so edits

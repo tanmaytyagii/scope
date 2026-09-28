@@ -1,0 +1,49 @@
+# The SCOPE demo: PostgreSQL, real runs of examples/rag, and the dashboard.
+#
+#   docker compose up
+#   open http://127.0.0.1:4700
+#
+# The dashboard runs `scope ui` without authentication, published on 127.0.0.1 only. For a
+# shared deployment use `scope server` with API keys — see docs/guides/self-hosting.md.
+name: scope-demo
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: scope
+      POSTGRES_PASSWORD: scope
+      POSTGRES_DB: scope
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scope -d scope"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - postgres:/var/lib/postgresql/data
+
+  seed:
+    image: scope:local
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SCOPE_DATABASE_URL: postgres://scope:scope@postgres:5432/scope
+    entrypoint: ["/opt/scope/seed-demo.sh"]
+    restart: "no"
+
+  dashboard:
+    image: scope:local
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    environment:
+      SCOPE_DATABASE_URL: postgres://scope:scope@postgres:5432/scope
+    working_dir: /opt/scope/examples/rag
+    command: ["ui", "--host", "0.0.0.0", "--insecure-no-auth"]
+    ports:
+      - "127.0.0.1:4700:4700"
+
+volumes:
+  postgres:

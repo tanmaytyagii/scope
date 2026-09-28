@@ -51,6 +51,17 @@ which are always called out).
 - `scope run --report-file <file>` writes the JSON report while keeping human output; on
   GitHub Actions, failed gates are emitted as error/warning annotations.
 
+- Docker image (`scope server` by default) and a `docker compose up` demo: PostgreSQL, real runs
+  of the RAG example, and the dashboard.
+- Runnable examples: `examples/rag`, `examples/triage` (function steps, tool calls, structured
+  output) and `examples/sdk-tracing`.
+- User guides (`docs/guides`): quickstart, workflows, evaluators, configuration, tracing, CI,
+  self-hosting, CLI and HTTP API; a README with real screenshots and output.
+
 ### Fixed
 
 - Derived cache prices in the built-in pricing table are rounded (no `0.30000000000000004`).
+- Evaluator templates referring to a declared output by name (`{{ outputs.ticket.intent }}`) failed
+  at evaluation time for workflows with a single output, although validation required that form.
+- `await tracer.shutdown()` could let the process exit mid-retry when the server was unreachable
+  (unsettled top-level await); an awaited flush now keeps the process alive until it finishes.

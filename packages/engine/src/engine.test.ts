@@ -270,12 +270,15 @@ describe('Engine: retrieval-augmented workflow', () => {
   it('lets evaluator templates select fields of a declared output, live and on re-scoring', async () => {
     // One declared output is judged directly, but `{{ outputs.<name> }}` still names it — the
     // same path the validator checks.
-    const text = RAG.replace('outputs:\n  answer: "{{ steps.answer.output.text }}"', [
-      'outputs:',
-      '  result:',
-      '    answer: "{{ steps.answer.output.text }}"',
-      '    sources: "{{ steps.retrieve.output.documents | length }}"',
-    ].join('\n')).replace(
+    const text = RAG.replace(
+      'outputs:\n  answer: "{{ steps.answer.output.text }}"',
+      [
+        'outputs:',
+        '  result:',
+        '    answer: "{{ steps.answer.output.text }}"',
+        '    sources: "{{ steps.retrieve.output.documents | length }}"',
+      ].join('\n'),
+    ).replace(
       /evaluators:[\s\S]*?gates:/,
       [
         'evaluators:',

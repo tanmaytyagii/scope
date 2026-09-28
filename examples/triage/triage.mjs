@@ -19,14 +19,16 @@ export async function triage(_args, ctx) {
   const message = String(ctx.inputs.message);
   const text = message.toLowerCase();
   const intent =
-    Object.entries(INTENTS).find(([, words]) => words.some((w) => text.includes(w)))?.[0] ?? 'other';
+    Object.entries(INTENTS).find(([, words]) => words.some((w) => text.includes(w)))?.[0] ??
+    'other';
 
   const order = ctx.inputs.order_id
-    ? await ctx.tool('orders.lookup', { id: ctx.inputs.order_id }, () => lookupOrder(ctx.inputs.order_id))
+    ? await ctx.tool('orders.lookup', { id: ctx.inputs.order_id }, () =>
+        lookupOrder(ctx.inputs.order_id),
+      )
     : null;
 
-  const urgent =
-    ctx.params.urgent_words.some((w) => text.includes(w)) || order?.status === 'lost';
+  const urgent = ctx.params.urgent_words.some((w) => text.includes(w)) || order?.status === 'lost';
 
   const policy = await ctx.retrieve({ query: message, corpus: '../policies/*.md', top_k: 2 });
   const reply = await ctx.llm({

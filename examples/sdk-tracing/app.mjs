@@ -21,8 +21,14 @@ const tracer = createTracer({ exporter });
 
 const ARTICLES = [
   { id: 'refunds', text: 'Refunds reach the original payment method within 5 to 7 business days.' },
-  { id: 'shipping', text: 'Standard shipping takes 3 to 5 business days; orders over $50 ship free.' },
-  { id: 'password', text: 'Reset your password with the Forgot password link on the sign-in page.' },
+  {
+    id: 'shipping',
+    text: 'Standard shipping takes 3 to 5 business days; orders over $50 ship free.',
+  },
+  {
+    id: 'password',
+    text: 'Reset your password with the Forgot password link on the sign-in page.',
+  },
 ];
 
 function search(question) {
@@ -53,7 +59,8 @@ async function generate(question, context) {
         ],
       }),
     });
-    if (!response.ok) throw new Error(`OpenAI returned ${response.status}: ${await response.text()}`);
+    if (!response.ok)
+      throw new Error(`OpenAI returned ${response.status}: ${await response.text()}`);
     const body = await response.json();
     // SCOPE's usage fields, mapped from the provider's names.
     span.recordModelCall({
@@ -78,8 +85,10 @@ async function ask(question) {
     const context = hits.map((h) => h.text).join('\n');
     const answer = process.env.OPENAI_API_KEY
       ? await generate(question, context)
-      : await tracer.span('best-article', { kind: 'function' }, () =>
-          hits[0]?.text ?? 'I could not find an answer to that.',
+      : await tracer.span(
+          'best-article',
+          { kind: 'function' },
+          () => hits[0]?.text ?? 'I could not find an answer to that.',
         );
 
     // Applications can record their own checks; they appear with the trace in SCOPE.

@@ -29,17 +29,19 @@ source (Apache-2.0).
   API-key sign-in, hand-written charts with table twins. Design system in
   [design-system.md](./design-system.md). Playwright E2E (journeys, keyboard, axe WCAG A/AA in
   both themes) against CLI-seeded data; CI job `e2e`.
+- **M6 Distribution** — README with real screenshots, `docs/guides/` (quickstart, workflows,
+  evaluators, configuration, tracing, CI, self-hosting, CLI, API — every example validated or
+  run), runnable `examples/` (rag, triage, sdk-tracing), Dockerfile (installs packed packages)
+  and `compose.yaml` demo on PostgreSQL; CI job `docker`.
 
 ## In Progress
 
-- **M6 Distribution** — README, user guides, examples, Docker.
+- Nothing half-done.
 
 ## Not Started
 
-- **M6 Distribution** — Dockerfile, `docker compose up` demo, `examples/`, user guides
-  (`docs/guides/*.md` are linked from `scope init` output and CONTRIBUTING but do not exist).
-- **M7 Review & polish**.
-- README.md (missing).
+- **M7 Review & polish** — product, security, accessibility and performance review.
+- Post-v0.1 roadmap items (npm publishing first).
 
 ## Current Architecture
 
@@ -47,7 +49,7 @@ See [architecture.md](./architecture.md). All packages and apps are implemented 
 
 ## Current Milestone
 
-M6 Distribution: README, `docs/guides/`, `examples/`, Dockerfile and `docker compose up` demo.
+M7 Review & polish.
 
 ## Working Commands
 
@@ -59,6 +61,8 @@ npx playwright install chromium  # once
 npm run test:e2e                 # dashboard E2E (needs the dashboard built)
 npm run scope -- ui              # local dashboard on 127.0.0.1:4700 (from sources)
 npm run dev:web                  # dashboard dev server, proxies /api to scope ui
+docker compose up                # demo: PostgreSQL + seeded runs + dashboard on 127.0.0.1:4700
+SCOPE_TEST_DATABASE_URL=postgres://scope:scope@127.0.0.1:55432/scope_test npm test  # + PostgreSQL suite
 ```
 
 ## Known Issues
@@ -67,7 +71,6 @@ npm run dev:web                  # dashboard dev server, proxies /api to scope u
   storage tests (`SCOPE_TEST_DATABASE_URL`).
 - Overview time buckets are aligned to UTC, so in non-whole-hour time zones (e.g. UTC+5:30)
   bucket boundaries fall at :30 local time. Correct, but slightly odd-looking.
-- `scope init` output links to `docs/guides/*.md` (M6).
 
 ## Technical Debt
 
@@ -77,4 +80,4 @@ npm run dev:web                  # dashboard dev server, proxies /api to scope u
 
 ## Next Milestone
 
-M7 Review & polish (after M6).
+After M7: publish `@scope-ai/*` to npm and tag action releases (roadmap item 1 after v0.1).

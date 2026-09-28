@@ -6,7 +6,7 @@ shown in the product until it exists.
 
 ## v0.1 — Foundation (current)
 
-Status: M1–M6 are done; M7 (review and polish) is next. Details in
+Status: M1–M7 are done. Next are the post-v0.1 items below, starting with npm publishing. Details in
 [DEVELOPMENT_STATUS.md](./DEVELOPMENT_STATUS.md).
 
 | Milestone | Delivers | Exit criteria |

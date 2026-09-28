@@ -34,14 +34,21 @@ source (Apache-2.0).
   run), runnable `examples/` (rag, triage, sdk-tracing), Dockerfile (installs packed packages)
   and `compose.yaml` demo on PostgreSQL; CI job `docker`.
 
+- **M7 Review & polish** — security (DNS-rebinding defense for `scope ui`, CSRF analysis of
+  ingestion), correctness (double URL-decoding of run references), performance (20k traces:
+  ingestion ~10k traces/s, slowest endpoint ~60 ms on SQLite), accessibility (axe clean in both
+  themes), docs/examples verified against the running product, DX (`scope doctor` reports the
+  dashboard build).
+
 ## In Progress
 
 - Nothing half-done.
 
 ## Not Started
 
-- **M7 Review & polish** — product, security, accessibility and performance review.
-- Post-v0.1 roadmap items (npm publishing first).
+- Post-v0.1 roadmap items, in order: npm publishing and tagged action releases, Python SDK,
+  OpenAI/Anthropic client auto-instrumentation, OTLP ingestion, server-side baselines,
+  pull-request comments, retention (`scope prune`), dataset tooling, more evaluators, accounts.
 
 ## Current Architecture
 
@@ -49,12 +56,13 @@ See [architecture.md](./architecture.md). All packages and apps are implemented 
 
 ## Current Milestone
 
-M7 Review & polish.
+v0.1 milestones are complete. Next: publish `@scope-ai/*` to npm (a release workflow with
+provenance) and tag the GitHub Action, so the quickstart becomes `npx @scope-ai/cli init`.
 
 ## Working Commands
 
 ```bash
-npm ci && npm run check          # lint, typecheck (incl. dashboard + e2e), 244 tests
+npm ci && npm run check          # lint, typecheck (incl. dashboard + e2e), 248 tests
 npm run build                    # packages (tsc -b) + dashboard (vite)
 npm run smoke                    # pack all packages, install in a temp dir: init, run, ui
 npx playwright install chromium  # once
@@ -80,4 +88,4 @@ SCOPE_TEST_DATABASE_URL=postgres://scope:scope@127.0.0.1:55432/scope_test npm te
 
 ## Next Milestone
 
-After M7: publish `@scope-ai/*` to npm and tag action releases (roadmap item 1 after v0.1).
+Python SDK speaking the ingestion protocol (docs/guides/api.md#ingestion).

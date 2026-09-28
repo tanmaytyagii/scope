@@ -534,7 +534,7 @@ Routes:
 /evaluations            Evaluator health and failing results
 /workflows, /workflows/:name   Definitions and run history
 /models                 Usage and cost per model
-/settings               Project, storage, privacy, pricing, API keys, appearance, shortcuts
+/settings               Project, storage, privacy, pricing, API keys, appearance
 ```
 
 Every page except the Overview is loaded on first visit (route-level code splitting). The

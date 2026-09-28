@@ -625,6 +625,9 @@ quality shows the baseline diff for review. See
   required), compared in constant time, scoped to one project.
 - Input validation on every API boundary with explicit body-size limits (ingest: 5 MiB).
 - Security headers and a strict Content-Security-Policy for the dashboard.
+- `scope ui` (no authentication) answers only requests addressed to `localhost`, `127.0.0.1` or
+  `::1` — a DNS-rebinding defense — and ingestion requires `application/json`, which a
+  cross-site page cannot send without a CORS preflight (the server sends no CORS headers).
 - `function` steps and custom evaluators execute user code from the project directory with
   the CLI's privileges — the same trust model as a test runner. This is documented, and
   SCOPE never loads code from datasets or remote sources.

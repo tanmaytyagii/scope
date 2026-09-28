@@ -13,6 +13,7 @@ import {
 import { errorMessage, isScopeError, SCOPE_VERSION } from '@scope-ai/core';
 import { Engine } from '@scope-ai/engine';
 import { parseModelRef } from '@scope-ai/providers';
+import { findWebRoot } from '@scope-ai/server';
 import type { CommandContext } from '../context.ts';
 import { ExitCode, ExitError } from '../errors.ts';
 import { collectGitInfo } from '../git.ts';
@@ -225,6 +226,17 @@ export async function doctorCommand(ctx: CommandContext): Promise<void> {
     message: git
       ? `${git.branch ?? 'detached'} @ ${git.commit?.slice(0, 7)}${git.dirty ? ' (uncommitted changes)' : ''}`
       : 'not a git repository — runs will not record commits',
+  });
+  const webRoot = findWebRoot();
+  add({
+    area: 'Dashboard',
+    status: webRoot ? 'pass' : 'warn',
+    message: webRoot ? 'dashboard assets are built' : 'dashboard assets are not built',
+    ...(webRoot
+      ? {}
+      : {
+          hint: 'scope ui will serve the API only. In a source checkout, run npm run build -w @scope-ai/web.',
+        }),
   });
   const port = Number(ctx.env.SCOPE_PORT ?? 4700);
   const free = await portFree(port);

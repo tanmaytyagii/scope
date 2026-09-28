@@ -6,7 +6,6 @@
  *   });
  */
 export { createApp, type ScopeApp } from './app.ts';
-export { prepareBatch } from './ingest.ts';
 export { ServerMetrics } from './metrics.ts';
 export {
   isLoopbackHost,

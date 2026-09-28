@@ -29,6 +29,11 @@ export interface AppOptions {
   maxSpansPerTrace?: number;
   /** Called with unexpected errors, e.g. to report them to an error tracker. */
   onError?: (error: unknown, context: { requestId: string; route: string }) => void;
+  /**
+   * Hostnames requests may be addressed to (the Host header). Everything else gets 403 — the
+   * DNS-rebinding defense for servers without authentication. Unset: any host.
+   */
+  allowedHosts?: readonly string[] | null;
   /** Clock, for tests. */
   now?: () => number;
 }

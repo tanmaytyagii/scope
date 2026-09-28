@@ -8,6 +8,8 @@
 - { name: CLI, color: 5319e7, description: The scope command }
 - { name: dashboard, color: c5def5, description: The web dashboard }
 - { name: API, color: 1d76db, description: HTTP API and SDK protocol }
+- { name: CI, color: 0052cc, description: GitHub Action, baselines and gates in CI }
+- { name: self-hosting, color: 5319e7, description: scope server, Docker and PostgreSQL }
 - { name: integration, color: bfd4f2, description: Providers, frameworks and tools }
 - { name: performance, color: f9d0c4, description: Speed and resource use }
 - { name: security, color: b60205, description: Security and privacy }

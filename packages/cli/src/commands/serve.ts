@@ -74,7 +74,13 @@ function untilStopped(): Promise<string> {
 
 async function serve(
   ctx: CommandContext,
-  settings: { auth: AuthConfig; host: string; port: number; logger: Logger },
+  settings: {
+    auth: AuthConfig;
+    host: string;
+    port: number;
+    logger: Logger;
+    allowedHosts?: readonly string[] | null;
+  },
 ): Promise<RunningServer> {
   const project = ctx.project();
   const store = await ctx.store();
@@ -86,6 +92,7 @@ async function serve(
     privacy: createPrivacyPolicy(project.privacy),
     pricing: project.pricing,
     logger: settings.logger,
+    allowedHosts: settings.allowedHosts ?? null,
     webRoot: findWebRoot(),
     ...(ctx.env.SCOPE_MAX_INGEST_BYTES
       ? { maxIngestBytes: Number(ctx.env.SCOPE_MAX_INGEST_BYTES) }
@@ -126,6 +133,10 @@ export async function uiCommand(ctx: CommandContext, options: ServeOptions): Pro
     host,
     port,
     logger,
+    // Without authentication, only answer requests addressed to this machine by name, so a web
+    // page cannot reach the API by rebinding its own domain to 127.0.0.1. (Skipped with
+    // --insecure-no-auth, where the server is deliberately reachable under other names.)
+    allowedHosts: isLoopbackHost(host) ? ['localhost', '127.0.0.1', '::1', host] : null,
   });
   const store = await ctx.store();
   const stats = await store.projectStats(projectRow.id);

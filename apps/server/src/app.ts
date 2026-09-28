@@ -40,6 +40,14 @@ const CONTENT_SECURITY_POLICY = {
   frameAncestors: ["'none'"],
 };
 
+/** Lowercase hostname without IPv6 brackets. */
+function normalizeHost(host: string): string {
+  return host
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '');
+}
+
 export function createApp(options: AppOptions): ScopeApp {
   const metrics = new ServerMetrics();
   const deps: Deps = {
@@ -86,6 +94,28 @@ export function createApp(options: AppOptions): ScopeApp {
       crossOriginEmbedderPolicy: false,
     }),
   );
+
+  // DNS-rebinding protection for servers without authentication: a page on another site can
+  // point its own hostname at 127.0.0.1, but it cannot make the browser send a loopback Host.
+  if (options.allowedHosts) {
+    const allowed = new Set(options.allowedHosts.map(normalizeHost));
+    app.use(async (c, next) => {
+      const host = normalizeHost(new URL(c.req.url).hostname);
+      if (allowed.has(host)) return next();
+      metrics.httpRequests.inc({ method: c.req.method, route: 'blocked-host', status: '403' });
+      return c.json(
+        errorBody(
+          c.get('requestId'),
+          ErrorCodes.forbidden,
+          `Requests addressed to "${host}" are not accepted`,
+          {
+            hint: `This server has no authentication and only answers requests to ${[...allowed].join(', ')}. Open it at http://localhost:<port>.`,
+          },
+        ),
+        403,
+      );
+    });
+  }
 
   app.use(
     '/api/v1/ingest',

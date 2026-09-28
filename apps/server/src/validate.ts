@@ -1,5 +1,4 @@
 /** Request parsing with the protocol's schemas; failures become 400s naming each field. */
-import { ErrorCodes, ScopeError } from '@scope-ai/core';
 import type { z } from 'zod';
 import { notFound, validationError } from './errors.ts';
 import type { AppContext, Deps } from './types.ts';
@@ -17,7 +16,8 @@ export function isoToMs(value: string | undefined): number | undefined {
 /** Resolves a run id or number to a run of the request's project, or throws 404. */
 export async function resolveRun(c: AppContext, deps: Deps, ref: string) {
   const project = c.get('project');
-  const run = await deps.store.getRun(project.id, decodeURIComponent(ref));
+  // Path and query parameters arrive decoded; decoding again would corrupt or reject them.
+  const run = await deps.store.getRun(project.id, ref);
   if (!run) {
     throw notFound(
       /^#?\d+$/.test(ref) ? `Run #${ref.replace('#', '')}` : `Run "${ref}"`,
@@ -25,12 +25,4 @@ export async function resolveRun(c: AppContext, deps: Deps, ref: string) {
     );
   }
   return run;
-}
-
-/** Rejects references that can never be valid before touching the database. */
-export function checkRef(value: string, what: string): string {
-  if (value.length === 0 || value.length > 128) {
-    throw new ScopeError(ErrorCodes.badRequest, `Invalid ${what} reference`);
-  }
-  return value;
 }

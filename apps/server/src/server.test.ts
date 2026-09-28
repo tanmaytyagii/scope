@@ -157,6 +157,14 @@ describe('runs', () => {
     }
   });
 
+  it('treats odd run references as not found, never as server errors', async () => {
+    for (const path of ['/runs/%25', '/runs/%2525', '/traces?run=%25', '/runs/%E2%9C%93/cases']) {
+      const { status, body } = await get(`${API_BASE}${path}`);
+      expect(status, path).toBe(404);
+      expect((body.error as { code: string }).code, path).toBe('not_found');
+    }
+  });
+
   it('returns 404 with a hint for unknown runs', async () => {
     const { status, body } = await get(`${API_BASE}/runs/99`);
     expect(status).toBe(404);
@@ -626,6 +634,20 @@ describe('operations', () => {
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
     const replaced = await app.request('/api/v1/info', { headers: { 'x-request-id': 'bad id!' } });
     expect(replaced.headers.get('x-request-id')).toMatch(/^req_/);
+  });
+
+  it('rejects requests addressed to other hosts when allowed hosts are set (DNS rebinding)', async () => {
+    const { app: local } = createApp({
+      store,
+      auth: { mode: 'none', defaultProject: project },
+      allowedHosts: ['localhost', '127.0.0.1', '::1'],
+    });
+    const rebound = await local.request('http://attacker.example:4700/api/v1/runs');
+    expect(rebound.status).toBe(403);
+    expect(ErrorBody.parse(await rebound.json()).error.message).toContain('"attacker.example"');
+    for (const origin of ['http://localhost:4700', 'http://127.0.0.1:4700', 'http://[::1]:4700']) {
+      expect((await local.request(`${origin}/api/v1/info`)).status, origin).toBe(200);
+    }
   });
 
   it('reports a port that is already in use', async () => {

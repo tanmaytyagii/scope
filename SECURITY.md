@@ -33,6 +33,9 @@ the issue is resolved. We will credit you in the release notes unless you prefer
   (for example, a project API key reading another project's data).
 - Leaks of provider credentials or SCOPE API keys into logs, traces, reports or the database.
 - Authentication or authorization bypass on `scope server`.
+- A web page reading from or writing to a local `scope ui` (it rejects requests not addressed to
+  `localhost`/`127.0.0.1` to defeat DNS rebinding, and accepts ingestion only as
+  `application/json`, which browsers cannot send cross-site without a CORS preflight).
 - Injection (SQL, script injection in the dashboard) through ingested trace data.
 - Redaction failures for the built-in secret patterns documented in
   [ADR 0010](docs/decisions/0010-privacy-defaults.md).

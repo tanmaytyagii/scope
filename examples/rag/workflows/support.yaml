@@ -1,0 +1,87 @@
+# yaml-language-server: $schema=../.scope/schemas/workflow.schema.json
+# A retrieval-augmented support assistant, evaluated on every run.
+# Docs: https://github.com/tanmaytyagii/scope/blob/main/docs/guides/workflows.md
+version: 1
+name: support
+description: Answers customer questions from the help center in docs/.
+
+inputs:
+  question:
+    type: string
+    description: The customer's question.
+
+params:
+  # local:extractive is an offline, deterministic stand-in (not a language model): it answers
+  # with the context sentences that best match the question. To use a real model, set e.g.
+  #   model: anthropic:claude-opus-5   (needs ANTHROPIC_API_KEY)
+  #   model: openai:gpt-5              (needs OPENAI_API_KEY)
+  model: local:extractive
+  top_k: 3
+  # Only used by local:extractive: how many context sentences it answers with.
+  sentences: 2
+
+# Named parameter overrides. Run one with --variant terse, or all with --all-variants.
+variants:
+  terse:
+    sentences: 1
+  narrow:
+    top_k: 1
+
+steps:
+  - id: retrieve
+    type: retrieve
+    with:
+      query: "{{ inputs.question }}"
+      corpus: ../docs/*.md
+      top_k: "{{ params.top_k }}"
+
+  - id: answer
+    type: llm
+    with:
+      model: "{{ params.model }}"
+      system: |
+        You are a support assistant. Answer using only the context.
+        If the context does not contain the answer, say you could not find it.
+      prompt: |
+        Context:
+        {{ steps.retrieve.output.text }}
+
+        Question: {{ inputs.question }}
+      max_tokens: 400
+      # Options for one provider only; ignored when another provider serves the call.
+      provider_options:
+        local:
+          sentences: "{{ params.sentences }}"
+
+outputs:
+  answer: "{{ steps.answer.output.text }}"
+
+dataset: ../datasets/support.jsonl
+
+evaluators:
+  # heuristic: share of answer sentences supported by the retrieved context
+  - name: grounded
+    type: groundedness
+  # heuristic: numbers and names in the answer that never appear in the context
+  - name: no_invented_facts
+    type: unsupported_claims
+  # deterministic: the answer contains the key facts listed as "expected" in the dataset
+  - name: key_facts
+    type: contains
+  # deterministic: the workflow finished within budget
+  - name: fast
+    type: latency
+    with:
+      max_ms: 2000
+
+gates:
+  - metric: pass_rate
+    min: 0.6
+  - metric: evaluator.grounded.mean_score
+    min: 0.8
+  # Regression gates compare against a baseline (scope baseline save). Skipped without one.
+  - metric: pass_rate
+    max_decrease: 0.05
+  - metric: latency.p95_ms
+    max_increase_pct: 50
+    severity: warn

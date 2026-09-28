@@ -1,5 +1,7 @@
+import { execFile } from 'node:child_process';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { fileURLToPath } from 'node:url';
 import type { TraceBundle } from '@scope-ai/core';
 import { describe, expect, it } from 'vitest';
 import { HttpExporter, MemoryExporter } from './exporters.ts';
@@ -196,6 +198,34 @@ describe('Tracer', () => {
       },
     });
     await expect(tracer.trace('wf', {}, () => 'fine')).resolves.toBe('fine');
+  });
+});
+
+describe('HttpExporter shutdown', () => {
+  it('keeps the process alive until an awaited shutdown finishes, even when retries fail', async () => {
+    // Background exports must never hold a process open, but `await tracer.shutdown()` must
+    // complete (and count dropped traces) rather than the process exiting mid-retry.
+    const sdk = fileURLToPath(new URL('./index.ts', import.meta.url));
+    const script = `
+      import { HttpExporter, Tracer } from ${JSON.stringify(sdk)};
+      const exporter = new HttpExporter({ url: 'http://127.0.0.1:9', maxRetries: 2, timeoutMs: 500 });
+      const tracer = new Tracer({ exporter });
+      await tracer.trace('job', {}, () => 'done');
+      await tracer.shutdown();
+      process.stdout.write(JSON.stringify(exporter.stats));
+    `;
+    const result = await new Promise<{ code: number; stdout: string; stderr: string }>((done) => {
+      execFile(
+        process.execPath,
+        ['--conditions=source', '--input-type=module', '-e', script],
+        { timeout: 20_000 },
+        (error, stdout, stderr) =>
+          done({ code: error ? Number((error as { code?: number }).code ?? 1) : 0, stdout, stderr }),
+      );
+    });
+    expect(result.stderr).not.toContain('unsettled top-level await');
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ exportedTraces: 0, droppedTraces: 1 });
   });
 });
 

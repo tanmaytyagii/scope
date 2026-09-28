@@ -266,6 +266,57 @@ describe('Engine: retrieval-augmented workflow', () => {
     ]);
     expect(exporter.bundles).toHaveLength(1);
   });
+
+  it('lets evaluator templates select fields of a declared output, live and on re-scoring', async () => {
+    // One declared output is judged directly, but `{{ outputs.<name> }}` still names it — the
+    // same path the validator checks.
+    const text = RAG.replace('outputs:\n  answer: "{{ steps.answer.output.text }}"', [
+      'outputs:',
+      '  result:',
+      '    answer: "{{ steps.answer.output.text }}"',
+      '    sources: "{{ steps.retrieve.output.documents | length }}"',
+    ].join('\n')).replace(
+      /evaluators:[\s\S]*?gates:/,
+      [
+        'evaluators:',
+        '  - name: facts',
+        '    type: contains',
+        '    with:',
+        '      output: "{{ outputs.result.answer }}"',
+        '  - name: cited',
+        '    type: exact_match',
+        '    with:',
+        '      output: "{{ outputs.result.sources }}"',
+        '      expected: 2',
+        'gates:',
+      ].join('\n'),
+    );
+    const { exporter, engine } = setup();
+    const { loaded, cases } = load(text);
+    const prepared = await engine.prepare(loaded);
+    const result = await engine.run(prepared, cases.slice(0, 1), { runId: null });
+    const live = result.executions[0]?.evaluations.map((e) => [e.evaluator, e.status, e.reason]);
+    expect(live).toEqual([
+      ['facts', 'passed', expect.any(String)],
+      ['cited', 'passed', expect.any(String)],
+    ]);
+    const { trace } = exporter.bundles[0] as TraceBundle;
+    const rescored = await engine.evaluateStored(prepared, {
+      traceId: trace.id,
+      runId: null,
+      input: trace.input,
+      output: trace.output,
+      expected: cases[0]?.expected ?? null,
+      context: null,
+      durationMs: trace.durationMs,
+      usage: trace.usage,
+      costUsd: trace.costUsd,
+    });
+    expect(rescored.map((r) => [r.evaluator, r.status])).toEqual([
+      ['facts', 'passed'],
+      ['cited', 'passed'],
+    ]);
+  });
 });
 
 describe('Engine: failures, functions and limits', () => {

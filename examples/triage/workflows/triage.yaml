@@ -1,0 +1,79 @@
+# yaml-language-server: $schema=../.scope/schemas/workflow.schema.json
+# Support-ticket triage written as a function step: SCOPE traces the tool call, the retrieval
+# and the model call made inside it, and judges the structured result field by field.
+version: 1
+name: triage
+description: Classifies a support ticket, looks up the order, and drafts a policy-grounded reply.
+
+inputs:
+  message:
+    type: string
+    description: The customer's message.
+  order_id:
+    type: string
+    required: false
+
+params:
+  # local:extractive is an offline, deterministic stand-in (not a language model). Set a real
+  # model here, e.g. anthropic:claude-sonnet-5 or openai:gpt-5, to draft replies with it.
+  model: local:extractive
+  # Words that make a ticket high priority.
+  urgent_words: [urgent, asap, immediately, charged twice, lost]
+
+variants:
+  # Only the word "urgent" raises priority: compare with `scope compare` to see what it misses.
+  narrow_urgency:
+    urgent_words: [urgent]
+
+steps:
+  - id: triage
+    type: function
+    with:
+      module: ../triage.mjs
+      export: triage
+
+outputs:
+  ticket: "{{ steps.triage.output }}"
+
+dataset: ../datasets/tickets.jsonl
+
+evaluators:
+  # deterministic: the result has the shape downstream systems expect
+  - name: schema
+    type: json
+    with:
+      schema:
+        type: object
+        required: [intent, priority, reply]
+        properties:
+          intent: { enum: [refund, shipping, account, other] }
+          priority: { enum: [high, normal] }
+          order_status: { type: [string, "null"] }
+          reply: { type: string, minLength: 1 }
+  # deterministic: each field against the labelled answer in the dataset
+  - name: intent
+    type: exact_match
+    with:
+      output: "{{ outputs.ticket.intent }}"
+      expected: "{{ expected.intent }}"
+  - name: priority
+    type: exact_match
+    with:
+      output: "{{ outputs.ticket.priority }}"
+      expected: "{{ expected.priority }}"
+  # heuristic: the drafted reply is supported by the retrieved policy
+  - name: grounded_reply
+    type: groundedness
+    with:
+      output: "{{ outputs.ticket.reply }}"
+
+gates:
+  - metric: evaluator.schema.pass_rate
+    min: 1
+  - metric: evaluator.intent.pass_rate
+    min: 0.9
+  - metric: evaluator.priority.pass_rate
+    min: 0.8
+  # Regression gate against baselines/triage.json (skipped without a baseline).
+  - metric: evaluator.priority.pass_rate
+    max_decrease: 0

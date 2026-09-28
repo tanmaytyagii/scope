@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=.scope/schemas/project.schema.json
+# SCOPE project configuration. Docs: https://github.com/tanmaytyagii/scope/blob/main/docs/guides/configuration.md
+version: 1
+project: rag
+
+# Where runs, traces and evaluations are stored. Defaults to a local SQLite file.
+# Override with SCOPE_DATABASE_URL (e.g. postgres://… for a shared server).
+storage:
+  url: sqlite:.scope/scope.db
+
+# Provider credentials come from OPENAI_API_KEY / ANTHROPIC_API_KEY by default.
+# Add OpenAI-compatible endpoints (Ollama, vLLM, OpenRouter, …) here:
+# providers:
+#   ollama:
+#     type: openai-compatible
+#     base_url: http://localhost:11434/v1
+
+privacy:
+  # Prompts and outputs are stored so you can inspect them. Set to false for sensitive data.
+  capture_content: true
+
+workflows:
+  - workflows/*.yaml

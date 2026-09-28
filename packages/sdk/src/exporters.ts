@@ -76,6 +76,9 @@ export class HttpExporter implements TraceExporter {
   #queuedSpans = 0;
   #timer: ReturnType<typeof setTimeout> | null = null;
   #inFlight: Promise<void> | null = null;
+  /** Number of callers awaiting flush(); while > 0, retry timers keep the process alive. */
+  #flushing = 0;
+  #backoff: ReturnType<typeof setTimeout> | null = null;
   #warnedDrop = false;
   #warnedUnreachable = false;
   readonly stats: HttpExporterStats = { exportedTraces: 0, droppedTraces: 0, failedRequests: 0 };
@@ -188,7 +191,13 @@ export class HttpExporter implements TraceExporter {
       }
       if (attempt < this.#options.maxRetries) {
         const delay = Math.min(8000, 250 * 2 ** attempt) * (0.5 + Math.random() / 2);
-        await new Promise((resolve) => setTimeout(resolve, delay).unref?.());
+        await new Promise((resolve) => {
+          this.#backoff = setTimeout(resolve, delay);
+          // Background exports never keep the process alive; an awaited flush() does, so a
+          // caller's `await tracer.shutdown()` finishes instead of the process exiting mid-retry.
+          if (this.#flushing === 0) this.#backoff.unref?.();
+        });
+        this.#backoff = null;
       }
     }
     this.stats.failedRequests++;
@@ -200,7 +209,13 @@ export class HttpExporter implements TraceExporter {
       clearTimeout(this.#timer);
       this.#timer = null;
     }
-    await this.#drain();
+    this.#flushing++;
+    this.#backoff?.ref?.();
+    try {
+      await this.#drain();
+    } finally {
+      this.#flushing--;
+    }
   }
 
   async shutdown(): Promise<void> {

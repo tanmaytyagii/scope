@@ -1,0 +1,10 @@
+{"id":"double-charge","inputs":{"message":"I was charged twice for my order, please fix this asap","order_id":"A-1002"},"expected":{"intent":"refund","priority":"high"}}
+{"id":"refund-timing","inputs":{"message":"How long does a refund take to show up?"},"expected":{"intent":"refund","priority":"normal"}}
+{"id":"return-window","inputs":{"message":"Can I still return a jacket that was delivered two weeks ago?","order_id":"A-1002"},"expected":{"intent":"refund","priority":"normal"}}
+{"id":"where-is-order","inputs":{"message":"Where is my order? It has not arrived yet.","order_id":"A-1001"},"expected":{"intent":"shipping","priority":"normal"}}
+{"id":"lost-package","inputs":{"message":"The tracking page says my delivery is lost.","order_id":"A-1003"},"expected":{"intent":"shipping","priority":"high"}}
+{"id":"urgent-delivery","inputs":{"message":"I need to know the delivery date immediately, it is a gift.","order_id":"A-1004"},"expected":{"intent":"shipping","priority":"high"}}
+{"id":"password-reset","inputs":{"message":"I forgot my password and cannot log in."},"expected":{"intent":"account","priority":"normal"}}
+{"id":"change-email","inputs":{"message":"How do I change the email address on my account?"},"expected":{"intent":"account","priority":"normal"}}
+{"id":"urgent-login","inputs":{"message":"Urgent: I cannot log in before my meeting."},"expected":{"intent":"account","priority":"high"}}
+{"id":"store-question","inputs":{"message":"Do you have a physical store in Berlin?"},"expected":{"intent":"other","priority":"normal"}}

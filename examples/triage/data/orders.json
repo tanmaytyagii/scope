@@ -1,0 +1,6 @@
+{
+  "A-1001": { "status": "shipped", "carrier": "UPS", "eta": "2026-10-02" },
+  "A-1002": { "status": "delivered", "carrier": "USPS", "eta": null },
+  "A-1003": { "status": "lost", "carrier": "FedEx", "eta": null },
+  "A-1004": { "status": "processing", "carrier": null, "eta": "2026-10-06" }
+}

@@ -1,0 +1,379 @@
+{
+  "schema": "scope.baseline/v1",
+  "workflow": "support",
+  "variant": null,
+  "createdAt": "2026-09-28T16:05:31.581Z",
+  "source": {
+    "runId": "run_01M3MC7451RDFHSM0C2WH90BHN",
+    "runNumber": 1,
+    "git": {
+      "commit": "ac2f615e6253eeb326ba3a00091c982542bc0187",
+      "branch": "main",
+      "dirty": false,
+      "pullRequest": null,
+      "repository": "tanmaytyagii/scope"
+    }
+  },
+  "dataset": {
+    "name": "support",
+    "caseCount": 12,
+    "hash": "ca130ba52c3d3ac896133ac13d3d08289e9a4813e0da2e541155d55d91e68b44"
+  },
+  "summary": {
+    "cases": {
+      "total": 12,
+      "passed": 10,
+      "failed": 2,
+      "errored": 0
+    },
+    "passRate": 0.8333333333333334,
+    "errorRate": 0,
+    "latency": {
+      "p50Ms": 0.367,
+      "p95Ms": 4.010699999999999,
+      "meanMs": 1.4524166666666662,
+      "maxMs": 4.52
+    },
+    "tokens": {
+      "input": 1438,
+      "output": 234,
+      "total": 1672,
+      "meanPerCase": 139.33333333333334,
+      "estimated": true
+    },
+    "cost": {
+      "totalUsd": 0,
+      "meanPerCaseUsd": 0,
+      "incomplete": false,
+      "unpricedModels": []
+    },
+    "evaluators": [
+      {
+        "name": "grounded",
+        "type": "groundedness",
+        "kind": "heuristic",
+        "total": 12,
+        "passed": 11,
+        "failed": 0,
+        "errored": 0,
+        "skipped": 1,
+        "passRate": 1,
+        "meanScore": 1
+      },
+      {
+        "name": "no_invented_facts",
+        "type": "unsupported_claims",
+        "kind": "heuristic",
+        "total": 12,
+        "passed": 12,
+        "failed": 0,
+        "errored": 0,
+        "skipped": 0,
+        "passRate": 1,
+        "meanScore": 1
+      },
+      {
+        "name": "key_facts",
+        "type": "contains",
+        "kind": "deterministic",
+        "total": 12,
+        "passed": 10,
+        "failed": 2,
+        "errored": 0,
+        "skipped": 0,
+        "passRate": 0.8333333333333334,
+        "meanScore": 0.875
+      },
+      {
+        "name": "fast",
+        "type": "latency",
+        "kind": "deterministic",
+        "total": 12,
+        "passed": 12,
+        "failed": 0,
+        "errored": 0,
+        "skipped": 0,
+        "passRate": 1,
+        "meanScore": 1
+      }
+    ]
+  },
+  "cases": {
+    "delete-account": {
+      "outcome": "failed",
+      "durationMs": 0.338,
+      "traceId": "c440824f998b6f72f8d5c0f51efb3f58",
+      "evaluators": {
+        "fast": {
+          "status": "passed",
+          "score": 1
+        },
+        "grounded": {
+          "status": "passed",
+          "score": 1
+        },
+        "key_facts": {
+          "status": "failed",
+          "score": 0.5
+        },
+        "no_invented_facts": {
+          "status": "passed",
+          "score": 1
+        }
+      }
+    },
+    "express-shipping": {
+      "outcome": "passed",
+      "durationMs": 0.318,
+      "traceId": "1fc682f05f7b46825ddc07f4024d9613",
+      "evaluators": {
+        "fast": {
+          "status": "passed",
+          "score": 1
+        },
+        "grounded": {
+          "status": "passed",
+          "score": 1
+        },
+        "key_facts": {
+          "status": "passed",
+          "score": 1
+        },
+        "no_invented_facts": {
+          "status": "passed",
+          "score": 1
+        }
+      }
+    },
+    "free-shipping": {
+      "outcome": "passed",
+      "durationMs": 0.402,
+      "traceId": "929d53fe4a44f9621ca2f47acc9ed300",
+      "evaluators": {
+        "fast": {
+          "status": "passed",
+          "score": 1
+        },
+        "grounded": {
+          "status": "passed",
+          "score": 1
+        },
+        "key_facts": {
+          "status": "passed",
+          "score": 1
+        },
+        "no_invented_facts": {
+          "status": "passed",
+          "score": 1
+        }
+      }
+    },
+    "gift-card-refund": {
+      "outcome": "passed",
+      "durationMs": 3.329,
+      "traceId": "c2a271945a121415b01257fcd80155b3",
+      "evaluators": {
+        "grounded": {
+          "status": "passed",
+          "score": 1
+        },
+        "fast": {
+          "status": "passed",
+          "score": 1
+        },
+        "key_facts": {
+          "status": "passed",
+          "score": 1
+        },
+        "no_invented_facts": {
+          "status": "passed",
+          "score": 1
+        }
+      }
+    },
+    "international": {
+      "outcome": "passed",
+      "durationMs": 0.304,
+      "traceId": "99aceadd5c6e557bbfa323ae90438902",
+      "evaluators": {
+        "grounded": {
+          "status": "passed",
+          "score": 1
+        },
+        "no_invented_facts": {
+          "status": "passed",
+          "score": 1
+        },
+        "fast": {
+          "status": "passed",
+          "score": 1
+        },
+        "key_facts": {
+          "status": "passed",
+          "score": 1
+        }
+      }
+    },
+    "password-reset": {
+      "outcome": "passed",
+      "durationMs": 0.266,
+      "traceId": "af41880ebd237c7c4af5dbbb1c8fa945",
+      "evaluators": {
+        "fast": {
+          "status": "passed",
+          "score": 1
+        },
+        "grounded": {
+          "status": "passed",
+          "score": 1
+        },
+        "key_facts": {
+          "status": "passed",
+          "score": 1
+        },
+        "no_invented_facts": {
+          "status": "passed",
+          "score": 1
+        }
+      }
+    },
+    "refund-method": {
+      "outcome": "failed",
+      "durationMs": 3.594,
+      "traceId": "81b01d1b09151bbca81bb522512cb886",
+      "evaluators": {
+        "grounded": {
+          "status": "passed",
+          "score": 1
+        },
+        "fast": {
+          "status": "passed",
+          "score": 1
+        },
+        "key_facts": {
+          "status": "failed",
+          "score": 0
+        },
+        "no_invented_facts": {
+          "status": "passed",
+          "score": 1
+        }
+      }
+    },
+    "refund-timing": {
+      "outcome": "passed",
+      "durationMs": 4.52,
+      "traceId": "d50bb9a787b231e9c02b0295bd63f187",
+      "evaluators": {
+        "grounded": {
+          "status": "passed",
+          "score": 1
+        },
+        "fast": {
+          "status": "passed",
+          "score": 1
+        },
+        "key_facts": {
+          "status": "passed",
+          "score": 1
+        },
+        "no_invented_facts": {
+          "status": "passed",
+          "score": 1
+        }
+      }
+    },
+    "return-window": {
+      "outcome": "passed",
+      "durationMs": 3.427,
+      "traceId": "3f5d7254bfb2dd5b1553ac05da3b47fb",
+      "evaluators": {
+        "grounded": {
+          "status": "passed",
+          "score": 1
+        },
+        "fast": {
+          "status": "passed",
+          "score": 1
+        },
+        "key_facts": {
+          "status": "passed",
+          "score": 1
+        },
+        "no_invented_facts": {
+          "status": "passed",
+          "score": 1
+        }
+      }
+    },
+    "store-hours": {
+      "outcome": "passed",
+      "durationMs": 0.237,
+      "traceId": "776b56c83ddc744cccb3ad80398e3772",
+      "evaluators": {
+        "grounded": {
+          "status": "skipped",
+          "score": null
+        },
+        "no_invented_facts": {
+          "status": "passed",
+          "score": 1
+        },
+        "fast": {
+          "status": "passed",
+          "score": 1
+        },
+        "key_facts": {
+          "status": "passed",
+          "score": 1
+        }
+      }
+    },
+    "warranty-damage": {
+      "outcome": "passed",
+      "durationMs": 0.298,
+      "traceId": "b84597f8e38d904617e67ccd79973ad7",
+      "evaluators": {
+        "fast": {
+          "status": "passed",
+          "score": 1
+        },
+        "grounded": {
+          "status": "passed",
+          "score": 1
+        },
+        "key_facts": {
+          "status": "passed",
+          "score": 1
+        },
+        "no_invented_facts": {
+          "status": "passed",
+          "score": 1
+        }
+      }
+    },
+    "warranty-length": {
+      "outcome": "passed",
+      "durationMs": 0.396,
+      "traceId": "6201c52e6663526c10cf701de6f15398",
+      "evaluators": {
+        "fast": {
+          "status": "passed",
+          "score": 1
+        },
+        "grounded": {
+          "status": "passed",
+          "score": 1
+        },
+        "key_facts": {
+          "status": "passed",
+          "score": 1
+        },
+        "no_invented_facts": {
+          "status": "passed",
+          "score": 1
+        }
+      }
+    }
+  }
+}

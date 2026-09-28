@@ -1,0 +1,6 @@
+# yaml-language-server: $schema=.scope/schemas/project.schema.json
+version: 1
+project: triage
+
+workflows:
+  - workflows/*.yaml

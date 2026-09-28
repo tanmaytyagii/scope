@@ -360,6 +360,8 @@ export class Engine {
       variant: prepared.variant,
     };
     let outputs: JsonValue | null = null;
+    /** The declared outputs by name (or the last step's output): what `{{ outputs.* }}` sees. */
+    let outputMap: JsonValue | null = null;
     let traceId = '';
 
     const metadata: Record<string, unknown> = { workflow: prepared.name };
@@ -386,6 +388,7 @@ export class Engine {
               inputs: testCase.inputs,
               expected: testCase.expected,
               outputs,
+              outputMap,
               context: retrieved.length ? retrieved.join('\n\n') : null,
               scope,
               signal: options.signal,
@@ -468,6 +471,7 @@ export class Engine {
             }
           }
           outputs = (wf.outputs ? renderDeep(wf.outputs, scope) : last) as JsonValue;
+          outputMap = outputs;
           const declared = Object.keys(wf.outputs ?? {});
           trace.setOutput(outputs);
           // Evaluators judge the single declared output directly; multiple outputs as an object.
@@ -561,7 +565,9 @@ export class Engine {
     data: {
       inputs: JsonObject;
       expected: JsonValue | null;
+      /** What evaluators judge by default: the single declared output, or all of them. */
       outputs: JsonValue | null;
+      outputMap: JsonValue | null;
       context: string | null;
       scope: Record<string, unknown>;
       signal: AbortSignal | undefined;
@@ -592,7 +598,7 @@ export class Engine {
               trace: traceFacts,
               evalScope: {
                 ...data.scope,
-                outputs: data.outputs,
+                outputs: data.outputMap,
                 expected: data.expected,
                 trace: {
                   duration_ms: traceFacts.durationMs,
@@ -795,7 +801,8 @@ export class Engine {
             steps: {},
             case: {},
             variant: prepared.variant,
-            outputs,
+            // The stored trace output is the declared-outputs map, as `{{ outputs.* }}` expects.
+            outputs: stored.output,
             expected: stored.expected,
             trace: {
               duration_ms: stored.durationMs,

@@ -18,6 +18,7 @@ export function Waterfall({
   onSelect,
   collapsed,
   onToggle,
+  filtered,
 }: {
   spans: Span[];
   selected: string | null;
@@ -25,8 +26,14 @@ export function Waterfall({
   onSelect: (id: string, reveal?: boolean) => void;
   collapsed: ReadonlySet<string>;
   onToggle: (id: string, open?: boolean) => void;
+  /** A span filter's result: only these rows show, and rows shown only as context are muted. */
+  filtered?: { matched: ReadonlySet<string>; visible: ReadonlySet<string> } | null;
 }) {
-  const { rows, totalMs } = useMemo(() => layoutWaterfall(spans, collapsed), [spans, collapsed]);
+  // While filtering, every match is shown, even inside collapsed spans.
+  const { rows, totalMs } = useMemo(
+    () => layoutWaterfall(spans, filtered ? new Set() : collapsed, filtered?.visible),
+    [spans, collapsed, filtered],
+  );
   const ticks = useMemo(() => timeTicks(totalMs, 3), [totalMs]);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const index = Math.max(
@@ -59,12 +66,15 @@ export function Waterfall({
       case 'End':
         move(rows.length - 1);
         break;
+      // While filtering, nothing collapses: left goes to the parent, right to the first child.
       case 'ArrowRight':
-        if (row.childCount > 0 && collapsed.has(row.span.id)) onToggle(row.span.id, true);
+        if (!filtered && row.childCount > 0 && collapsed.has(row.span.id))
+          onToggle(row.span.id, true);
         else if (row.childCount > 0) move(index + 1);
         break;
       case 'ArrowLeft':
-        if (row.childCount > 0 && !collapsed.has(row.span.id)) onToggle(row.span.id, false);
+        if (!filtered && row.childCount > 0 && !collapsed.has(row.span.id))
+          onToggle(row.span.id, false);
         else if (row.span.parentId) onSelect(row.span.parentId);
         break;
       default:
@@ -100,7 +110,8 @@ export function Waterfall({
         {rows.map((row, i) => {
           const { span } = row;
           const isSelected = span.id === selected;
-          const open = row.childCount > 0 && !collapsed.has(span.id);
+          const context = filtered ? !filtered.matched.has(span.id) : false;
+          const open = row.childCount > 0 && (filtered ? true : !collapsed.has(span.id));
           const color =
             span.status === 'error'
               ? 'var(--bad)'
@@ -137,7 +148,7 @@ export function Waterfall({
                 className="flex h-8 min-w-0 items-center gap-1.5 pr-3 pl-4"
                 style={{ paddingLeft: 16 + row.depth * 14 }}
               >
-                {row.childCount > 0 ? (
+                {row.childCount > 0 && !filtered ? (
                   <button
                     type="button"
                     tabIndex={-1}
@@ -157,7 +168,8 @@ export function Waterfall({
                 <span
                   className={cx(
                     'min-w-0 truncate text-sm',
-                    isSelected ? 'font-medium text-fg' : 'text-fg',
+                    context ? 'text-fg-2' : 'text-fg',
+                    isSelected && 'font-medium',
                   )}
                   title={
                     span.model

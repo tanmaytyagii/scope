@@ -11,7 +11,7 @@ import {
   retrievedDocuments,
   truncation,
 } from './payload.ts';
-import { ancestors, layoutWaterfall, parentIds, timeTicks } from './spans.ts';
+import { ancestors, filterSpans, layoutWaterfall, parentIds, timeTicks } from './spans.ts';
 
 function span(
   id: string,
@@ -80,6 +80,28 @@ describe('waterfall layout', () => {
     const { rows } = layoutWaterfall(spans, new Set(['root']));
     expect(rows.map((r) => r.span.id)).toEqual(['root', 'orphan', 'eval', 'judge']);
     expect(rows[0]?.childCount).toBe(2);
+  });
+
+  it('filters spans by text and kind, keeping the ancestors of matches', () => {
+    const tree = [
+      ...spans,
+      span('call', 'b', 50, 30, { kind: 'llm', model: 'gpt-5', provider: 'openai' }),
+      span('boom', 'a', 10, 5, { status: 'error' }),
+    ];
+    expect(filterSpans(tree, { q: ' ', only: 'all' })).toBeNull();
+
+    const llm = filterSpans(tree, { q: '', only: 'llm' });
+    expect([...(llm?.matched ?? [])].sort()).toEqual(['call', 'judge']);
+    const { rows, totalMs } = layoutWaterfall(tree, new Set(), llm?.visible);
+    expect(rows.map((r) => r.span.id)).toEqual(['root', 'b', 'call', 'eval', 'judge']);
+    expect(totalMs).toBe(120);
+
+    const errors = filterSpans(tree, { q: '', only: 'errors' });
+    expect([...(errors?.visible ?? [])].sort()).toEqual(['a', 'boom', 'root']);
+
+    const byModel = filterSpans(tree, { q: 'GPT-5', only: 'all' });
+    expect([...(byModel?.matched ?? [])]).toEqual(['call']);
+    expect(filterSpans(tree, { q: 'gpt', only: 'errors' })?.matched.size).toBe(0);
   });
 
   it('finds parents and ancestors', () => {

@@ -45,17 +45,20 @@ function buildNodes(spans: readonly Span[]): Node[] {
 }
 
 /**
- * Flattens spans depth-first into waterfall rows, skipping the descendants of collapsed spans.
- * Spans whose parent is missing become roots, so partial traces still render.
+ * Flattens spans depth-first into waterfall rows, skipping the descendants of collapsed spans
+ * and, when `visible` is given, every span outside it. Spans whose parent is missing become
+ * roots, so partial traces still render. Bars keep the whole trace's time scale.
  */
 export function layoutWaterfall(
   spans: readonly Span[],
   collapsed: ReadonlySet<string> = new Set(),
+  visible?: ReadonlySet<string>,
 ): Waterfall {
   const end = Math.max(0, ...spans.map((s) => s.offsetMs + s.durationMs));
   const totalMs = end > 0 ? end : 1;
   const rows: SpanRow[] = [];
   const visit = (node: Node, depth: number, inEvaluation: boolean) => {
+    if (visible && !visible.has(node.span.id)) return;
     const evaluation = inEvaluation || node.span.kind === 'evaluation';
     rows.push({
       span: node.span,
@@ -70,6 +73,46 @@ export function layoutWaterfall(
   };
   for (const root of buildNodes(spans)) visit(root, 0, false);
   return { rows, totalMs: end };
+}
+
+export type SpanFilterKind = 'all' | 'errors' | 'llm';
+
+export interface SpanFilter {
+  /** Case-insensitive text matched against span names, kinds, providers and models. */
+  q: string;
+  only: SpanFilterKind;
+}
+
+/**
+ * Spans that match a filter, and the spans to show for them: the matches and their ancestors,
+ * so every match appears where it sits in the tree. Null when the filter is empty.
+ */
+export function filterSpans(
+  spans: readonly Span[],
+  filter: SpanFilter,
+): { matched: Set<string>; visible: Set<string> } | null {
+  const q = filter.q.trim().toLowerCase();
+  if (!q && filter.only === 'all') return null;
+  const byId = new Map(spans.map((s) => [s.id, s]));
+  const matched = new Set<string>();
+  for (const s of spans) {
+    if (filter.only === 'errors' && s.status !== 'error') continue;
+    if (filter.only === 'llm' && s.kind !== 'llm') continue;
+    if (q) {
+      const text = [s.name, s.kind, s.provider, s.model].filter(Boolean).join(' ').toLowerCase();
+      if (!text.includes(q)) continue;
+    }
+    matched.add(s.id);
+  }
+  const visible = new Set(matched);
+  for (const id of matched) {
+    let parent = byId.get(id)?.parentId;
+    while (parent && !visible.has(parent) && byId.has(parent)) {
+      visible.add(parent);
+      parent = byId.get(parent)?.parentId;
+    }
+  }
+  return { matched, visible };
 }
 
 /** Ids of every span that has children, for "collapse all". */

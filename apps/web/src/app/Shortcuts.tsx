@@ -61,6 +61,7 @@ const GENERAL: Array<[string[], string]> = [
 ];
 
 const TRACE: Array<[string[], string]> = [
+  [['[', ']'], 'Previous / next failing case of the run'],
   [['↑', '↓'], 'Previous / next span'],
   [['←', '→'], 'Collapse / expand span'],
   [['Home', 'End'], 'First / last span'],

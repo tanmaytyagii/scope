@@ -75,6 +75,10 @@ which are always called out).
   stale after dataset changes, or belonging to no workflow) and whether git ignores the local
   database. `scope doctor --network` asks each provider in use for its model list (read-only, no
   tokens) to confirm reachability, credentials and model names.
+- Trace explorer: step through a run's failing and errored cases with `[` / `]` (or the
+  header's arrows, "Failing case 2 of 5"), and filter the span tree by name, kind or model and to
+  errors or model calls — matches keep their parent spans for context; filters live in the URL.
+  The trace API returns `failingCases` (position, total, previous, next) for run cases.
 - The GitHub Action's `install` input: `auto` installs `scope-ai` from npm at the action's version
   when it is published and builds from source otherwise.
 

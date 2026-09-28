@@ -181,6 +181,7 @@ export function traceDetailDto(detail: TraceDetail): api.TraceDetail {
           variant: detail.run.variant,
         }
       : null,
+    failingCases: detail.failingCases,
     spans: detail.spans.map((s) => spanDto(s, origin)),
     evaluations: detail.evaluations.map(evaluationDto),
   };

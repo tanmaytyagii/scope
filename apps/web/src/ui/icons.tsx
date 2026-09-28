@@ -71,6 +71,11 @@ export const Dot = (p: IconProps) => (
     <circle cx="8" cy="8" r="3" fill="currentColor" stroke="none" />
   </Icon>
 );
+export const ChevronLeft = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M10 3.5L5.5 8 10 12.5" />
+  </Icon>
+);
 export const ChevronRight = (p: IconProps) => (
   <Icon {...p}>
     <path d="M6 3.5L10.5 8 6 12.5" />

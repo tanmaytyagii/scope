@@ -228,11 +228,27 @@ export async function listTraces(
   return { items, nextCursor };
 }
 
+export interface CaseLink {
+  caseId: string;
+  traceId: string;
+}
+
+/** Where a case stands among its run's failing and errored cases (ordered by case id). */
+export interface FailingCases {
+  total: number;
+  /** 1-based position of this case among them; null when this case passed. */
+  position: number | null;
+  previous: CaseLink | null;
+  next: CaseLink | null;
+}
+
 export interface TraceDetail {
   trace: TraceRecord & { evalStatus: TraceSummary['evalStatus'] };
   spans: SpanRecord[];
   evaluations: EvaluationRecord[];
   run: { id: string; number: number; workflowName: string; variant: string | null } | null;
+  /** Null for traces outside a run. */
+  failingCases: FailingCases | null;
 }
 
 function mapSpan(row: Selectable<Database['spans']>): SpanRecord {
@@ -321,7 +337,7 @@ export async function getTrace(
     .where('id', '=', id)
     .executeTakeFirst();
   if (!row) return null;
-  const [spanRows, evalRows, run] = await Promise.all([
+  const [spanRows, evalRows, run, failingCases] = await Promise.all([
     db
       .selectFrom('spans')
       .selectAll()
@@ -345,6 +361,9 @@ export async function getTrace(
           .where('id', '=', row.run_id)
           .executeTakeFirst()
       : Promise.resolve(undefined),
+    row.run_id && row.case_id
+      ? failingNeighbors(db, projectId, row.run_id, { caseId: row.case_id, traceId: row.id })
+      : Promise.resolve(null),
   ]);
   const spanStart = new Map(spanRows.map((sp) => [sp.id, sp.start_time]));
   return {
@@ -384,6 +403,69 @@ export async function getTrace(
     run: run
       ? { id: run.id, number: run.number, workflowName: run.workflow_name, variant: run.variant }
       : null,
+    failingCases,
+  };
+}
+
+/**
+ * The failing and errored cases of a run next to one case, in the order of the run's case list
+ * (case id, then trace id), so the trace explorer can step through what went wrong.
+ */
+async function failingNeighbors(
+  db: Kysely<Database>,
+  projectId: string,
+  runId: string,
+  current: CaseLink,
+): Promise<FailingCases> {
+  const failing = () =>
+    db
+      .selectFrom('traces')
+      .where('project_id', '=', projectId)
+      .where('run_id', '=', runId)
+      .where((eb) =>
+        eb.or([eb('status', '=', 'error'), eb('eval_status', 'in', ['failed', 'errored'])]),
+      );
+  const before = (eb: ExpressionBuilder<Database, 'traces'>) =>
+    eb.or([
+      eb('case_id', '<', current.caseId),
+      eb.and([eb('case_id', '=', current.caseId), eb('id', '<', current.traceId)]),
+    ]);
+  const after = (eb: ExpressionBuilder<Database, 'traces'>) =>
+    eb.or([
+      eb('case_id', '>', current.caseId),
+      eb.and([eb('case_id', '=', current.caseId), eb('id', '>', current.traceId)]),
+    ]);
+  const [previous, next, earlier, total, self] = await Promise.all([
+    failing()
+      .select(['id', 'case_id'])
+      .where(before)
+      .orderBy('case_id', 'desc')
+      .orderBy('id', 'desc')
+      .limit(1)
+      .executeTakeFirst(),
+    failing()
+      .select(['id', 'case_id'])
+      .where(after)
+      .orderBy('case_id')
+      .orderBy('id')
+      .limit(1)
+      .executeTakeFirst(),
+    failing()
+      .select((eb) => eb.fn.countAll().as('n'))
+      .where(before)
+      .executeTakeFirstOrThrow(),
+    failing()
+      .select((eb) => eb.fn.countAll().as('n'))
+      .executeTakeFirstOrThrow(),
+    failing().select('id').where('id', '=', current.traceId).executeTakeFirst(),
+  ]);
+  const link = (r: { id: string; case_id: string | null } | undefined): CaseLink | null =>
+    r?.case_id ? { caseId: r.case_id, traceId: r.id } : null;
+  return {
+    total: Number(total.n),
+    position: self ? Number(earlier.n) + 1 : null,
+    previous: link(previous),
+    next: link(next),
   };
 }
 

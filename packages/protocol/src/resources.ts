@@ -286,6 +286,21 @@ export const Evaluation = z
   })
   .register(components, { id: 'Evaluation' });
 
+const CaseLink = z.strictObject({ caseId: z.string(), traceId: z.string() });
+
+export const FailingCases = z
+  .strictObject({
+    total: z.number().int().describe('Failing and errored cases in the run.'),
+    position: z
+      .number()
+      .int()
+      .nullable()
+      .describe('1-based position of this case among them; null when it passed.'),
+    previous: CaseLink.nullable(),
+    next: CaseLink.nullable(),
+  })
+  .register(components, { id: 'FailingCases' });
+
 export const TraceDetail = z
   .strictObject({
     trace: z.strictObject({
@@ -307,6 +322,9 @@ export const TraceDetail = z
       evalStatus: TraceEvalStatus,
     }),
     run: RunRef.extend({ workflow: z.string(), variant: z.string().nullable() }).nullable(),
+    failingCases: FailingCases.nullable().describe(
+      "The run's failing and errored cases around this one, in case order; null outside runs.",
+    ),
     spans: z.array(Span).describe('Ordered by start time.'),
     evaluations: z.array(Evaluation).describe('In the order the evaluators ran.'),
   })

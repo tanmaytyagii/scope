@@ -43,7 +43,7 @@ The complete contract, generated from the server's own schemas, is at
 | GET | `/api/v1/runs/{run}/cases` | Per-case results (`outcome`, `evaluator`, `q`) |
 | GET | `/api/v1/comparisons?base=&head=` | Metric deltas and changed cases (`includeUnchanged=true` for all) |
 | GET | `/api/v1/traces` | Traces (`run`, `name`, `status`, `eval`, `model`, `case`, `q`, `since`, `until`, `sort`) |
-| GET | `/api/v1/traces/{trace}` | A trace with spans and evaluations; id or unique prefix |
+| GET | `/api/v1/traces/{trace}` | A trace with spans and evaluations, and for run cases where it stands among the run's failing cases (`failingCases`); id or unique prefix |
 | GET | `/api/v1/evaluators?window=7d` | Pass rate, mean score and per-run trend of each evaluator |
 | GET | `/api/v1/evaluations` | Evaluation results (`evaluator`, `status`, `kind`, `run`) |
 | GET | `/api/v1/workflows`, `/api/v1/workflows/{name}` | Workflows; one workflow's source, versions and variants |

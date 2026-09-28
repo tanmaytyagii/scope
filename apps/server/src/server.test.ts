@@ -2,7 +2,14 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createPrivacyPolicy, isScopeError, SCOPE_VERSION } from '@scope-ai/core';
-import { API_BASE, ErrorBody, ROUTES, type TraceDetail, type TracePage } from '@scope-ai/protocol';
+import {
+  API_BASE,
+  ErrorBody,
+  ROUTES,
+  type RunCasePage,
+  type TraceDetail,
+  type TracePage,
+} from '@scope-ai/protocol';
 import { HttpExporter, Tracer } from '@scope-ai/sdk';
 import { type Project, type Run, Store } from '@scope-ai/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -268,6 +275,31 @@ describe('traces', () => {
     expect(detail.trace.metadata.expected).toEqual(['5 to 7 business days']);
   });
 
+  it('places each case among the failing cases of its run', async () => {
+    let failingSeen = 0;
+    for (const run of [1, 2]) {
+      const { items } = (await get(`${API_BASE}/runs/${run}/cases`)).body as unknown as RunCasePage;
+      const failing = items.filter((c) => c.outcome !== 'passed');
+      failingSeen += failing.length;
+      for (const c of items) {
+        const detail = (await get(`${API_BASE}/traces/${c.traceId}`))
+          .body as unknown as TraceDetail;
+        const at = failing.findIndex((f) => f.traceId === c.traceId);
+        const before = failing.filter((f) => f.caseId < c.caseId);
+        const after = failing.filter((f) => f.caseId > c.caseId);
+        const link = (f: (typeof failing)[number] | undefined) =>
+          f ? { caseId: f.caseId, traceId: f.traceId } : null;
+        expect(detail.failingCases, `run ${run} ${c.caseId}`).toEqual({
+          total: failing.length,
+          position: at >= 0 ? at + 1 : null,
+          previous: link(before.at(-1)),
+          next: link(after[0]),
+        });
+      }
+    }
+    expect(failingSeen).toBeGreaterThan(1);
+  });
+
   it('returns 404 for unknown traces and explains malformed ids', async () => {
     const missing = await get(`${API_BASE}/traces/${hex(32, 'f')}`);
     expect(missing.status).toBe(404);
@@ -368,6 +400,10 @@ describe('ingestion', () => {
       expect(page.items).toHaveLength(1);
       expect(page.items[0]).toMatchObject({ run: null, spanCount: 3, llmCallCount: 1 });
       expect(page.items[0]?.costUsd).toBeCloseTo((1000 * 1.25 + 200 * 10) / 1e6);
+      // Outside a run there are no failing cases to step through.
+      const detail = (await get(`${API_BASE}/traces/${page.items[0]?.id}`))
+        .body as unknown as TraceDetail;
+      expect(detail.failingCases).toBeNull();
     } finally {
       await server.close();
     }

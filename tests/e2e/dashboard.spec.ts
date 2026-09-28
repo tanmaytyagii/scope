@@ -69,6 +69,44 @@ test('from a failing run to the cause, with the keyboard', async ({ page }) => {
   await expect(failed.getByLabel('Evidence content')).toBeVisible();
 });
 
+test('steps through the failing cases of a run and filters the span tree', async ({ page }) => {
+  const errors = watchConsole(page);
+  const res = await page.request.get('/api/v1/runs/2/cases?limit=200');
+  const { items } = (await res.json()) as {
+    items: Array<{ caseId: string; traceId: string; outcome: string }>;
+  };
+  const failing = items.filter((c) => c.outcome !== 'passed');
+  expect(failing.length).toBeGreaterThan(1);
+  const [first, second] = failing as [(typeof failing)[0], (typeof failing)[0]];
+
+  await page.goto(`/traces/${first.traceId}`);
+  const nav = page.getByRole('navigation', { name: 'Failing cases of this run' });
+  await expect(nav).toContainText(`Failing case 1 of ${failing.length}`);
+  await expect(nav.getByRole('button', { name: 'No previous failing case' })).toBeDisabled();
+  await page.keyboard.press(']');
+  await expect(page).toHaveURL(new RegExp(`/traces/${second.traceId}$`));
+  await expect(nav).toContainText(`Failing case 2 of ${failing.length}`);
+  await nav.getByRole('link', { name: `Previous failing case: ${first.caseId}` }).click();
+  await expect(page).toHaveURL(new RegExp(`/traces/${first.traceId}$`));
+
+  // Only model calls: each shows under its parents, which stay as context.
+  const tree = page.getByRole('tree', { name: 'Spans' });
+  const all = await tree.getByRole('treeitem').count();
+  await page.getByRole('main').getByText('Model calls', { exact: true }).click();
+  await expect(page).toHaveURL(/only=llm/);
+  await expect(page.getByText(/^\d+ of \d+ spans match$/)).toBeVisible();
+  const shown = await tree.getByRole('treeitem').count();
+  expect(shown).toBeLessThan(all);
+  await expect(tree.getByRole('treeitem', { name: /, llm,/ }).first()).toBeVisible();
+
+  await page.getByLabel('Filter spans by name, kind or model').fill('no-such-span');
+  await expect(page.getByText('No spans match.')).toBeVisible();
+  await page.getByRole('button', { name: 'Clear the filter' }).click();
+  await expect(page).not.toHaveURL(/only=|q=/);
+  await expect(tree.getByRole('treeitem')).toHaveCount(all);
+  expect(errors).toEqual([]);
+});
+
 test('compares two runs case by case', async ({ page }) => {
   await page.goto('/runs');
   await page.getByRole('checkbox', { name: 'Select run #1 to compare' }).check();
@@ -145,7 +183,7 @@ test.describe('accessibility', () => {
     test(`pages have no serious WCAG A/AA violations (${theme})`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: theme });
       const trace = await failingTraceId(page);
-      for (const path of [...pages, `/traces/${trace}`]) {
+      for (const path of [...pages, `/traces/${trace}`, `/traces/${trace}?only=llm`]) {
         await page.goto(path);
         await page.waitForLoadState('networkidle');
         const results = await new AxeBuilder({ page })

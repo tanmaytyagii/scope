@@ -61,6 +61,11 @@ export function hrNow(): number {
   return performance.timeOrigin + performance.now();
 }
 
+/** Epoch ms with microsecond resolution: enough to order spans that start in the same millisecond. */
+function roundMs(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
 export interface SpanSettings {
   privacy: PrivacyPolicy;
   pricing: PriceTable;
@@ -107,7 +112,7 @@ export class SpanRecorder implements SpanHandle {
     this.kind = init.kind;
     this.#settings = init.settings;
     this.#startMark = hrNow();
-    this.startTime = Math.floor(this.#startMark);
+    this.startTime = roundMs(this.#startMark);
   }
 
   get ended(): boolean {
@@ -159,7 +164,7 @@ export class SpanRecorder implements SpanHandle {
 
   addEvent(name: string, attributes?: Attributes): this {
     if (this.#ended) return this;
-    const event: SpanEvent = { name, time: Math.floor(hrNow()) };
+    const event: SpanEvent = { name, time: roundMs(hrNow()) };
     if (attributes) event.attributes = attributes;
     this.#events.push(event);
     return this;
@@ -256,7 +261,7 @@ export class SpanRecorder implements SpanHandle {
       status: this.#status,
       statusMessage: this.#statusMessage,
       startTime: this.startTime,
-      endTime: Math.floor(endMark),
+      endTime: roundMs(endMark),
       durationMs,
       input: this.#input,
       output: this.#output,

@@ -422,9 +422,12 @@ evaluations     id, project_id, trace_id → traces (cascade), run_id, span_id, 
                 index (run_id, evaluator), (project_id, evaluator, created_at), (trace_id)
 ```
 
-Conventions: timestamps are epoch milliseconds (`bigint`), JSON is `jsonb` on PostgreSQL and
-`text` on SQLite, and every tenant-owned row carries `project_id`, which every query filters
-on. Aggregations (overview, models, evaluator health) are computed in SQL over denormalized
+Conventions: timestamps are epoch milliseconds — `bigint` for records, `double precision` for
+trace and span times so spans that start within the same millisecond keep their order. JSON is
+`jsonb` on PostgreSQL and `text` on SQLite, and both drivers return it as text so one code path
+parses it. Every tenant-owned row carries `project_id`, which every query filters on; ingestion
+attaches spans and evaluations to their bundle's trace and refuses trace ids owned by another
+project. Aggregations (overview, models, evaluator health) are computed in SQL over denormalized
 columns, never by loading rows into memory. List endpoints use keyset pagination on
 `(start_time, id)`.
 

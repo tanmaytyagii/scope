@@ -5,8 +5,8 @@ trace in the dashboard, and catch a regression.
 
 ## 1. Install
 
-SCOPE needs Node.js 22.16 or newer. The `@scope-ai/*` packages are not published to npm yet, so
-install the CLI from source:
+SCOPE needs Node.js 22.16 or newer. It is not published to npm yet — from the first release on,
+`npm install -g scope-ai` installs the `scope` command. Until then, install it from source:
 
 ```bash
 git clone https://github.com/tanmaytyagii/scope.git

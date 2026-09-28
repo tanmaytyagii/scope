@@ -36,6 +36,13 @@ inputs:
     description: Node.js version used to run SCOPE (22.16 or newer).
     required: false
     default: '24'
+  install:
+    description: >
+      Where SCOPE comes from: "auto" installs scope-ai from npm at this action's version when that
+      version is published, and builds this action's source otherwise; "npm" always installs from
+      npm; "source" always builds from source.
+    required: false
+    default: auto
   upload-artifact:
     description: Upload the SQLite database and JSON report as a workflow artifact.
     required: false
@@ -60,20 +67,42 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
 
-    # SCOPE runs from the same commit as this action (pin the action to a tag or SHA).
-    - name: Build SCOPE
+    # SCOPE is the version of this action (pin the action to a tag or SHA).
+    - name: Install SCOPE
+      id: install
       shell: bash
       working-directory: ${{ github.action_path }}/../..
+      env:
+        SCOPE_ACTION_INSTALL: ${{ inputs.install }}
       run: |
-        npm ci --no-audit --no-fund --ignore-scripts --loglevel=error
-        npx tsc -b tsconfig.build.json
+        version=$(node -p "require('./packages/scope-ai/package.json').version")
+        mode=$SCOPE_ACTION_INSTALL
+        if [ "$mode" = auto ]; then
+          if npm view "scope-ai@$version" version >/dev/null 2>&1; then mode=npm; else mode=source; fi
+        fi
+        case $mode in
+          npm)
+            npm install --prefix "$RUNNER_TEMP/scope" --no-audit --no-fund --loglevel=error "scope-ai@$version"
+            echo "cli=$RUNNER_TEMP/scope/node_modules/scope-ai/bin.js" >> "$GITHUB_OUTPUT"
+            ;;
+          source)
+            npm ci --no-audit --no-fund --ignore-scripts --loglevel=error
+            npx tsc -b tsconfig.build.json
+            echo "cli=$PWD/packages/cli/dist/bin.js" >> "$GITHUB_OUTPUT"
+            ;;
+          *)
+            echo "::error::install must be auto, npm or source, not \"$SCOPE_ACTION_INSTALL\""
+            exit 2
+            ;;
+        esac
+        echo "SCOPE $version ($mode)"
 
     - name: Run SCOPE
       id: run
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
-        SCOPE_CLI: ${{ github.action_path }}/../../packages/cli/dist/bin.js
+        SCOPE_CLI: ${{ steps.install.outputs.cli }}
         SCOPE_ACTION_WORKFLOWS: ${{ inputs.workflows }}
         SCOPE_ACTION_VARIANTS: ${{ inputs.variants }}
         SCOPE_ACTION_BASELINE: ${{ inputs.baseline }}

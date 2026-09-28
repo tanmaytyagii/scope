@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createPrivacyPolicy, isScopeError } from '@scope-ai/core';
+import { createPrivacyPolicy, isScopeError, SCOPE_VERSION } from '@scope-ai/core';
 import { API_BASE, ErrorBody, ROUTES, type TraceDetail, type TracePage } from '@scope-ai/protocol';
 import { HttpExporter, Tracer } from '@scope-ai/sdk';
 import { type Project, type Run, Store } from '@scope-ai/storage';
@@ -620,7 +620,7 @@ describe('operations', () => {
   it('exposes Prometheus metrics with bounded route labels', async () => {
     await app.request(`${API_BASE}/runs/1`);
     const text = await (await app.request('/metrics')).text();
-    expect(text).toContain('scope_build_info{version="0.1.0"} 1');
+    expect(text).toContain(`scope_build_info{version="${SCOPE_VERSION}"} 1`);
     expect(text).toMatch(
       /scope_http_requests_total\{method="GET",route="\/api\/v1\/runs\/:run",status="200"\} \d+/,
     );

@@ -6,8 +6,8 @@ SCOPE server. The dashboard shows them exactly like workflow traces.
 
 ## Install
 
-The `@scope-ai/*` packages are not published to npm yet. Build them from a SCOPE checkout and
-install the tarballs into your application:
+From the first release on, `npm install @scope-ai/sdk`. The packages are not published to npm
+yet, so for now build them from a SCOPE checkout and install the tarballs into your application:
 
 ```bash
 # in the scope repository
@@ -15,7 +15,7 @@ npm ci && npm run build
 npm pack -w @scope-ai/core -w @scope-ai/sdk --pack-destination /tmp/scope-packs
 
 # in your application
-npm install /tmp/scope-packs/scope-ai-core-0.1.0.tgz /tmp/scope-packs/scope-ai-sdk-0.1.0.tgz
+npm install /tmp/scope-packs/scope-ai-core-*.tgz /tmp/scope-packs/scope-ai-sdk-*.tgz
 ```
 
 ## Trace a request

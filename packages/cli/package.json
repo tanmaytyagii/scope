@@ -2,6 +2,17 @@
   "name": "@scope-ai/cli",
   "version": "0.1.0",
   "description": "The scope command-line tool: run, evaluate, compare and inspect AI workflows.",
+  "keywords": [
+    "llm",
+    "ai",
+    "evaluation",
+    "tracing",
+    "cli"
+  ],
+  "homepage": "https://github.com/tanmaytyagii/scope#readme",
+  "bugs": {
+    "url": "https://github.com/tanmaytyagii/scope/issues"
+  },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -17,14 +28,21 @@
       "default": "./dist/index.js"
     }
   },
+  "bin": {
+    "scope": "dist/bin.js"
+  },
   "files": [
-    "dist"
+    "dist",
+    "!dist/.tsbuildinfo"
   ],
   "engines": {
     "node": ">=22.16.0"
   },
   "scripts": {
     "build": "tsc -b tsconfig.build.json"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@scope-ai/core": "0.1.0",
@@ -36,8 +54,5 @@
     "@scope-ai/storage": "0.1.0",
     "commander": "^15.0.0",
     "@scope-ai/server": "0.1.0"
-  },
-  "bin": {
-    "scope": "./dist/bin.js"
   }
 }

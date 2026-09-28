@@ -38,6 +38,7 @@ jobs:
         uses: ./integrations/github-action
         with:
           working-directory: action-demo
+          install: source # test this commit, not the published release
           artifact-name: scope-self-test
 
       - name: Introduce a regression (answers keep one sentence instead of two)
@@ -51,6 +52,7 @@ jobs:
         uses: ./integrations/github-action
         with:
           working-directory: action-demo
+          install: source
           upload-artifact: 'false'
 
       - name: Check both outcomes

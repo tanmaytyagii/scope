@@ -2,6 +2,15 @@
   "name": "@scope-ai/providers",
   "version": "0.1.0",
   "description": "Model providers for SCOPE: OpenAI, Anthropic, OpenAI-compatible endpoints and deterministic offline models.",
+  "keywords": [
+    "llm",
+    "openai",
+    "anthropic"
+  ],
+  "homepage": "https://github.com/tanmaytyagii/scope#readme",
+  "bugs": {
+    "url": "https://github.com/tanmaytyagii/scope/issues"
+  },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -18,13 +27,17 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/.tsbuildinfo"
   ],
   "engines": {
     "node": ">=22.16.0"
   },
   "scripts": {
     "build": "tsc -b tsconfig.build.json"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@scope-ai/core": "0.1.0",

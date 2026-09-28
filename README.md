@@ -33,7 +33,8 @@ next to your code.
 
 ## Quickstart
 
-Requires Node.js 22.16+. The packages are not on npm yet, so install from source:
+Requires Node.js 22.16+. SCOPE is not on npm yet — from the first release on, it installs with
+`npm install -g scope-ai`. Until then, install from source:
 
 ```bash
 git clone https://github.com/tanmaytyagii/scope.git && cd scope
@@ -239,12 +240,13 @@ document is generated from the same schemas the server validates against. Detail
 
 ## Status
 
-SCOPE is pre-1.0 (`0.1.0`) and under active development. What is described above works and is
+SCOPE is pre-1.0 and under active development. What is described above works and is
 tested in CI: unit, integration and CLI tests on SQLite and PostgreSQL, end-to-end dashboard
 tests with accessibility checks, an install test of the packed packages, a Docker image test, and
 a self-test of the GitHub Action.
 
-Not there yet, in [roadmap](docs/roadmap.md) order: npm packages and tagged action releases, a
+Not there yet, in [roadmap](docs/roadmap.md) order: a first published release — npm packages, the
+image on GHCR and tagged action releases (the pipeline is ready: [RELEASING.md](RELEASING.md)) — a
 Python SDK, automatic instrumentation of the OpenAI and Anthropic clients, OpenTelemetry (OTLP)
 ingestion, pull-request comments, retention policies, and user accounts.
 

@@ -27,6 +27,7 @@ packages/engine      workflow execution (llm, retrieve, transform, function step
 packages/storage     Kysely store: SQLite (node:sqlite) + PostgreSQL, migrations, analytics
 packages/protocol    HTTP API contract: Zod schemas, DTO types, OpenAPI document
 packages/cli         the `scope` binary (commander)
+packages/scope-ai    `npm install -g scope-ai`: re-exports the CLI's bin
 apps/server          Hono HTTP API + dashboard hosting (`scope ui`, `scope server`)
 apps/web             dashboard SPA (React 19, Vite, Tailwind v4, Radix, TanStack Query)
 ```
@@ -44,7 +45,9 @@ npm run typecheck              # tsc -b tsconfig.json (source condition, no emit
 npm test                       # vitest run (unit + integration + CLI)
 npm run build                  # tsc -b tsconfig.build.json + dashboard build
 npm run scope -- <args>        # run the CLI from TypeScript sources (no build needed)
-npm run smoke                  # pack every package, install into a temp dir: init, run, ui
+npm run smoke                  # pack every package, npm install scope-ai from them: init, run, ui
+npm run release:verify         # package manifests + tarball contents (after a build)
+npm run release:version -- X.Y.Z   # lockstep version bump (see RELEASING.md; never ad hoc)
 npm run test:e2e               # Playwright + axe against CLI-seeded data (build web first)
 npm run dev:web                # dashboard dev server, proxies /api to a running scope ui
 SCOPE_TEST_DATABASE_URL=postgres://… npm test   # also run storage/server tests on PostgreSQL
@@ -77,6 +80,9 @@ code as `*.test.ts` under `packages/*/src` and `apps/server/src`.
   the URL (`useUrlState`), types only from `@scope-ai/protocol`, formatting from
   `@scope-ai/core`. Rules: `docs/design-system.md`.
 - Conventional commits with package scopes (`feat(server): …`). No AI co-author trailers.
+- Versions: every package has the same version and pins internal dependencies exactly; only
+  `npm run release:version` changes them. Tests use `SCOPE_VERSION`, never a literal version.
+  Publishing happens only in `.github/workflows/release.yml` from a tag (RELEASING.md).
 
 ## Product rules (non-negotiable)
 

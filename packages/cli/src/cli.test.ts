@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SCOPE_VERSION } from '@scope-ai/core';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 const BIN = resolve(fileURLToPath(new URL('.', import.meta.url)), 'bin.ts');
@@ -77,7 +78,7 @@ describe('scope (no project needed)', () => {
 
   it('prints the version', async () => {
     const r = await scope(['version', '--json'], root);
-    expect(JSON.parse(r.stdout)).toMatchObject({ scope: '0.1.0' });
+    expect(JSON.parse(r.stdout)).toMatchObject({ scope: SCOPE_VERSION });
   });
 });
 

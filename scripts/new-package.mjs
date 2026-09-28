@@ -1,6 +1,9 @@
 // one-off helper: writes package.json + tsconfigs for a workspace package
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
+// New packages join the lockstep version of the others.
+const VERSION = JSON.parse(readFileSync('packages/core/package.json', 'utf8')).version;
+
 const [dir, name, description, deps = '', refs = ''] = process.argv.slice(2);
 mkdirSync(`${dir}/src`, { recursive: true });
 const pkgPath = `${dir}/package.json`;
@@ -9,12 +12,12 @@ const dependencies = {};
 for (const d of deps.split(',').filter(Boolean)) {
   const [n, v] = d.includes('@', 1)
     ? [d.slice(0, d.lastIndexOf('@')), d.slice(d.lastIndexOf('@') + 1)]
-    : [d, '0.1.0'];
+    : [d, VERSION];
   dependencies[n] = v;
 }
 const pkg = {
   name,
-  version: '0.1.0',
+  version: VERSION,
   description,
   license: 'Apache-2.0',
   repository: { type: 'git', url: 'git+https://github.com/tanmaytyagii/scope.git', directory: dir },

@@ -2,6 +2,15 @@
   "name": "@scope-ai/config",
   "version": "0.1.0",
   "description": "Workflow and project configuration for SCOPE: schemas, validation with source locations, templating and datasets.",
+  "keywords": [
+    "llm",
+    "workflow",
+    "yaml"
+  ],
+  "homepage": "https://github.com/tanmaytyagii/scope#readme",
+  "bugs": {
+    "url": "https://github.com/tanmaytyagii/scope/issues"
+  },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -18,13 +27,17 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/.tsbuildinfo"
   ],
   "engines": {
     "node": ">=22.16.0"
   },
   "scripts": {
     "build": "tsc -b tsconfig.build.json"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@scope-ai/core": "0.1.0",

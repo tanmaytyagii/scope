@@ -75,6 +75,7 @@ packages/engine      workflow execution
 packages/storage     SQLite/PostgreSQL store
 packages/protocol    API contract
 packages/cli         the scope command
+packages/scope-ai    the package users install (`npm install -g scope-ai`)
 apps/server          HTTP API and dashboard hosting
 apps/web             dashboard
 ```
@@ -133,6 +134,9 @@ A pull request should:
 - include tests and documentation updates,
 - pass `npm run check`,
 - update [CHANGELOG.md](CHANGELOG.md) under **Unreleased** for user-visible changes.
+
+Maintainers publish releases from tags; see [RELEASING.md](RELEASING.md). Pull requests never
+change package versions.
 
 ## License
 

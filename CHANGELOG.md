@@ -61,6 +61,14 @@ which are always called out).
 
 - CI lints GitHub workflow files with actionlint; the GitHub Action's runner has its own test
   suite; the API contract tests also run on PostgreSQL.
+- `scope-ai` package: `npm install -g scope-ai` installs the `scope` command (once published).
+- Release pipeline ([RELEASING.md](RELEASING.md)): `npm run release:version` sets one version on
+  every package; a `v*` tag publishes the npm packages with provenance, a multi-arch image to
+  GHCR and a GitHub release with the CHANGELOG section; a manual run is a dry run. Package
+  manifests and tarball contents are verified in CI, and the install test now installs
+  `scope-ai` and `@scope-ai/sdk` the way users will.
+- The GitHub Action's `install` input: `auto` installs `scope-ai` from npm at the action's version
+  when it is published and builds from source otherwise.
 
 ### Security
 

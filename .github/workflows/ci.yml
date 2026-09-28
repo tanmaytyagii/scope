@@ -26,6 +26,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - name: Package manifests (versions, metadata, licenses)
+        run: node scripts/verify-packages.mjs
       - name: Lint GitHub workflows (actionlint)
         run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -color
 
@@ -73,7 +75,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - name: Install packed packages into an empty project, run the starter workflow and serve the dashboard
+      - name: Package contents (exports, bins, no sources or build state)
+        run: node scripts/verify-packages.mjs --packed
+      - name: Install scope-ai from the packed packages, run the starter workflow and serve the dashboard
         run: node scripts/smoke-pack.mjs
 
   e2e:

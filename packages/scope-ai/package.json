@@ -1,11 +1,15 @@
 {
-  "name": "@scope-ai/core",
+  "name": "scope-ai",
   "version": "0.1.0",
-  "description": "SCOPE domain model and pure logic: traces, evaluations, run summaries, gates and comparisons.",
+  "description": "SCOPE — see what your AI actually does. Tracing, evaluation and regression testing for AI workflows: installs the `scope` command.",
   "keywords": [
     "llm",
+    "ai",
+    "observability",
     "evaluation",
-    "tracing"
+    "tracing",
+    "regression-testing",
+    "cli"
   ],
   "homepage": "https://github.com/tanmaytyagii/scope#readme",
   "bugs": {
@@ -15,28 +19,22 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tanmaytyagii/scope.git",
-    "directory": "packages/core"
+    "directory": "packages/scope-ai"
   },
   "type": "module",
-  "sideEffects": false,
-  "exports": {
-    ".": {
-      "source": "./src/index.ts",
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
+  "bin": {
+    "scope": "bin.js"
   },
   "files": [
-    "dist",
-    "!dist/.tsbuildinfo"
+    "bin.js"
   ],
   "engines": {
     "node": ">=22.16.0"
   },
-  "scripts": {
-    "build": "tsc -b tsconfig.build.json"
-  },
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "@scope-ai/cli": "0.1.0"
   }
 }

@@ -34,10 +34,10 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-Pin the action to a commit SHA (or a release tag, once releases are published) — SCOPE itself
-runs from the same commit as the action: the action builds the CLI from its own checkout, which
-adds about half a minute to the job. Installing from npm will replace the build step once the
-`@scope-ai/*` packages are published (see the [roadmap](../../docs/roadmap.md)).
+Pin the action to a release tag or a commit SHA: SCOPE runs at the action's version. With
+`install: auto` (the default) the action installs `scope-ai` at that version from npm when it
+is published, and otherwise builds the CLI from the action's own checkout, which adds about half a
+minute to the job. SCOPE is not on npm yet, so today the action builds from source.
 
 ### Baselines
 
@@ -66,6 +66,7 @@ reviewers can see the new numbers.
 | `baseline` | `auto` | `auto`, `none`, or a baseline file path |
 | `fail-on-gates` | `true` | `false` reports gate failures without failing the job |
 | `node-version` | `24` | Node.js used to run SCOPE (22.16 or newer) |
+| `install` | `auto` | `auto` (npm if this version is published, else source), `npm`, or `source` |
 | `upload-artifact` | `true` | Upload `.scope/scope.db` and the JSON reports |
 | `artifact-name` | `scope-results` | Name of the uploaded artifact |
 

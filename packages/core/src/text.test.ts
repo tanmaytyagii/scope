@@ -183,3 +183,21 @@ describe('toJsonValue', () => {
     });
   });
 });
+
+describe('bm25', () => {
+  it('ranks documents by relevance with deterministic ties', async () => {
+    const { createBm25Index } = await import('./bm25.ts');
+    const index = createBm25Index([
+      'Shipping to Canada takes 7 days.',
+      'Refunds are processed in 5 business days.',
+      'Our office is closed on public holidays.',
+      'Refunds for gift cards are not available.',
+    ]);
+    const hits = index.search('how long do refunds take', 3);
+    // "take" occurs in one document (high IDF); among the two "refund" documents the shorter wins.
+    expect(hits.map((h) => h.index)).toEqual([0, 3, 1]);
+    expect(hits[0]?.matched).toEqual(['take']);
+    expect(index.search('refund processing', 1).map((h) => h.index)).toEqual([1]);
+    expect(index.search('the and of')).toEqual([]);
+  });
+});

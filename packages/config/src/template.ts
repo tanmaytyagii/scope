@@ -10,7 +10,9 @@
  * There is no arbitrary code execution. A string consisting of exactly one expression keeps the
  * value's type; otherwise values are interpolated as text.
  */
-import { ErrorCodes, ScopeError, suggest } from '@scope-ai/core';
+import { asText, ErrorCodes, ScopeError, suggest } from '@scope-ai/core';
+
+export { asText };
 
 export type Literal = string | number | boolean | null;
 
@@ -303,21 +305,6 @@ function lookup(scope: TemplateScope, expr: PathExpr, source: string, lenient: b
     current = next;
   }
   return current;
-}
-
-/** Text form of a value: strings verbatim, objects with a `text` field → that text, else JSON. */
-export function asText(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    typeof (value as { text?: unknown }).text === 'string'
-  ) {
-    return (value as { text: string }).text;
-  }
-  return JSON.stringify(value, null, 2);
 }
 
 type FilterFn = (value: unknown, args: Literal[], source: string) => unknown;

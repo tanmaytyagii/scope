@@ -1,0 +1,35 @@
+{
+  "name": "@scope-ai/evaluators",
+  "version": "0.1.0",
+  "description": "SCOPE evaluators: deterministic, heuristic and model-based scoring of AI outputs.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tanmaytyagii/scope.git",
+    "directory": "packages/evaluators"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json"
+  },
+  "dependencies": {
+    "@scope-ai/core": "0.1.0",
+    "@scope-ai/providers": "0.1.0",
+    "ajv": "^8.20.0",
+    "zod": "^4.6.5"
+  }
+}

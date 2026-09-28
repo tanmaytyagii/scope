@@ -106,3 +106,21 @@ export function jsonToText(value: JsonValue | undefined): string {
   if (typeof value === 'string') return value;
   return JSON.stringify(value, null, 2);
 }
+
+/**
+ * Text form of a value, as used by evaluators and templates: strings verbatim, objects with a
+ * string `text` field (model outputs) → that text, other values → pretty JSON.
+ */
+export function asText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    typeof (value as { text?: unknown }).text === 'string'
+  ) {
+    return (value as { text: string }).text;
+  }
+  return JSON.stringify(value, null, 2);
+}

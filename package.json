@@ -1,0 +1,32 @@
+{
+  "name": "scope-monorepo",
+  "private": true,
+  "description": "SCOPE — open-source AI workflow observability and evaluation.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json && npm run build -w @scope-ai/web --if-present",
+    "typecheck": "tsc -b tsconfig.json",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "check": "npm run lint && npm run typecheck && npm run test",
+    "scope": "node --conditions=source packages/cli/src/bin.ts",
+    "clean": "node scripts/clean.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@types/node": "^22.20.4",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
+  }
+}

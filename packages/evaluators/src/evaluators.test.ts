@@ -40,11 +40,7 @@ const noModels: EvaluatorContext = {
 
 type TestInput = Partial<Omit<EvaluatorInput<unknown>, 'args'>> & { args?: unknown };
 
-async function run<A>(
-  def: EvaluatorDefinition<A>,
-  input: TestInput,
-  ctx = noModels,
-) {
+async function run<A>(def: EvaluatorDefinition<A>, input: TestInput, ctx = noModels) {
   const args = def.argsSchema.parse(input.args ?? {});
   return def.evaluate(
     {

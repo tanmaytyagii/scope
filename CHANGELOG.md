@@ -9,6 +9,16 @@ which are always called out).
 
 ### Added
 
+- Retention. `scope prune --older-than 30d` deletes runs (with their traces) and application
+  traces that started before a date or age; `--run` and `--trace` delete one; `--only`,
+  `--project` and `--all-projects` narrow or widen it. Without `--yes` it only says what it would
+  delete. Deletion runs in batches and can be interrupted and resumed; `--vacuum` shrinks a SQLite
+  file afterwards. `scope server --retention 30d` (`SCOPE_RETENTION`) prunes every project at
+  start and hourly, logs what it deleted and counts it in `scope_retention_deleted_total`. Runs
+  still running are only deleted once they have been running for a day.
+- `scope server` refuses `SCOPE_MAX_INGEST_BYTES` and `SCOPE_MAX_SPANS_PER_TRACE` values that are
+  not positive whole numbers, instead of starting with a broken limit.
+
 - Large traces open quickly in the dashboard. `GET /api/v1/traces/{trace}` takes
   `contentBudget=<bytes>`: every span's structure is returned, but inputs and outputs only up to
   the budget; the rest are marked `contentOmitted: true` (left out, not empty) and served one at a

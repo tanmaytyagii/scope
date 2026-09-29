@@ -2,13 +2,16 @@
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
-import { ErrorCodes, ScopeError } from '@scope-ai/core';
+import { ErrorCodes, ScopeError, silentLogger } from '@scope-ai/core';
 import { createApp, type ScopeApp } from './app.ts';
+import { type Retention, startRetention } from './retention.ts';
 import type { AppOptions } from './types.ts';
 
 export interface StartServerOptions extends AppOptions {
   host: string;
   port: number;
+  /** Delete runs and application traces older than this, at start and hourly. Off when unset. */
+  retentionMs?: number | null;
 }
 
 export interface RunningServer {
@@ -16,6 +19,8 @@ export interface RunningServer {
   host: string;
   port: number;
   scope: ScopeApp;
+  /** Scheduled retention, when `retentionMs` is set. */
+  retention: Retention | null;
   /** Stops accepting connections and closes open ones. */
   close(): Promise<void>;
 }
@@ -41,13 +46,23 @@ export function startServer(options: StartServerOptions): Promise<RunningServer>
       { fetch: scope.app.fetch, port: options.port, hostname: options.host },
       (info: AddressInfo) => {
         server.off('error', onError);
+        const retention: Retention | null = options.retentionMs
+          ? startRetention({
+              store: options.store,
+              logger: options.logger ?? silentLogger,
+              metrics: scope.metrics,
+              maxAgeMs: options.retentionMs,
+            })
+          : null;
         resolve({
           url: urlFor(options.host, info.port),
           host: options.host,
           port: info.port,
           scope,
+          retention,
           close: () =>
             new Promise<void>((done) => {
+              retention?.stop();
               (server as Server).closeAllConnections?.();
               server.close(() => done());
             }),

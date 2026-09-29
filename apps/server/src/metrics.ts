@@ -106,6 +106,10 @@ export class ServerMetrics {
     'scope_ingest_dropped_spans_total',
     'Spans dropped because a trace exceeded the per-trace span limit.',
   );
+  readonly pruned = new Counter(
+    'scope_retention_deleted_total',
+    'Runs, traces and spans deleted by scheduled retention (SCOPE_RETENTION), by kind.',
+  );
   readonly unexpectedErrors = new Counter(
     'scope_unexpected_errors_total',
     'Requests that failed with an unexpected (500) error.',
@@ -126,6 +130,7 @@ export class ServerMetrics {
       this.ingestedEvaluations.render(),
       this.ingestRejected.render(),
       this.droppedSpans.render(),
+      this.pruned.render(),
       this.unexpectedErrors.render(),
     ].join('\n')}\n`;
   }

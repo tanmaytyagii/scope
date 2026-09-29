@@ -96,6 +96,7 @@ through `SCOPE_DATABASE_URL`, so their runs appear on the server's dashboard too
 | `SCOPE_MAX_SPANS_PER_TRACE` | 1000 | Spans stored per trace; the rest are dropped and counted |
 | `SCOPE_CAPTURE_CONTENT` | `true` | `false`: the server drops inputs and outputs on ingestion |
 | `SCOPE_AUTO_MIGRATE` | `true` | Apply migrations on start |
+| `SCOPE_RETENTION` | off | `30d`, `2w`, …: delete runs and application traces older than this, in every project, at start and hourly (`--retention`; at least `1h`) |
 
 A `scope.yaml` in the server's working directory, if present, supplies the privacy policy and
 pricing overrides applied on ingestion ([configuration](./configuration.md)).

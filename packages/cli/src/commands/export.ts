@@ -10,7 +10,13 @@
  */
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { ErrorCodes, type JsonObject, type JsonValue, ScopeError } from '@scope-ai/core';
+import {
+  ErrorCodes,
+  type JsonObject,
+  type JsonValue,
+  parseCutoff,
+  ScopeError,
+} from '@scope-ai/core';
 import type { RunCase, TraceDetail, TraceFilters } from '@scope-ai/storage';
 import type { CommandContext } from '../context.ts';
 import { resolveRun } from './runs.ts';
@@ -36,17 +42,12 @@ const isObject = (v: unknown): v is JsonObject =>
 
 /** "7d", "24h", "30m" or an ISO date → epoch ms. */
 function parseSince(value: string, now = Date.now()): number {
-  const m = /^(\d+)\s*([mhd])$/.exec(value.trim());
-  if (m) {
-    const unit = { m: 60_000, h: 3_600_000, d: 86_400_000 }[m[2] as 'm' | 'h' | 'd'];
-    return now - Number(m[1]) * unit;
-  }
-  const date = Date.parse(value);
-  if (Number.isNaN(date))
+  const cutoff = parseCutoff(value, now);
+  if (cutoff === null)
     throw new ScopeError(ErrorCodes.usage, `--since "${value}" is not a duration or date`, {
       hint: 'Use 30m, 24h, 7d or an ISO date such as 2026-09-01.',
     });
-  return date;
+  return cutoff;
 }
 
 function write(ctx: CommandContext, output: string | undefined, content: string, what: string) {

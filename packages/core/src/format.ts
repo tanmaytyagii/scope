@@ -92,3 +92,24 @@ export function formatRelativeTime(timestamp: number, now: number = Date.now()):
 export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
   return `${formatNumber(count)} ${count === 1 ? singular : plural}`;
 }
+
+/** A byte count for people: 512 B, 3.4 KB, 120.5 MB, 2.1 GB (powers of 1,000). */
+export function formatBytes(bytes: number | null | undefined): string {
+  if (bytes === null || bytes === undefined || !Number.isFinite(bytes)) return '—';
+  if (bytes < 1000) return `${Math.round(bytes)} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = bytes / 1000;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit++;
+  }
+  return `${value.toFixed(1)} ${units[unit]}`;
+}
+
+/** A local date and time to the minute, as a terminal shows it: "2026-09-30 14:05". */
+export function formatTimestamp(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}

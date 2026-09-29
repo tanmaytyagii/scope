@@ -786,3 +786,63 @@ describe('errors', () => {
     });
   });
 });
+
+describe('scope prune', () => {
+  const dir = join(root, 'prune');
+
+  beforeAll(async () => {
+    await scope(['init', 'prune'], root);
+    for (let i = 0; i < 3; i++) await scope(['run', '-q'], dir);
+  });
+
+  it('says what it would delete, and deletes only with --yes', async () => {
+    const plan = await scope(['prune', '--older-than', '0m', '--json'], dir);
+    expect(plan.code).toBe(0);
+    expect(JSON.parse(plan.stdout)).toMatchObject({
+      project: 'prune',
+      deleted: false,
+      runs: 3,
+      runTraces: 36,
+    });
+    expect(JSON.parse((await scope(['runs', '--json'], dir)).stdout).runs).toHaveLength(3);
+
+    const one = await scope(['prune', '--run', '1', '--yes'], dir);
+    expect(one.code).toBe(0);
+    expect(one.stdout).toContain('Deleted run #1 (support) from project "prune"');
+    const left = JSON.parse((await scope(['runs', '--json'], dir)).stdout).runs as Array<{
+      number: number;
+    }>;
+    expect(left.map((r) => r.number).sort()).toEqual([2, 3]);
+
+    const all = await scope(['prune', '--older-than', '0m', '--yes', '--vacuum', '--json'], dir);
+    expect(JSON.parse(all.stdout)).toMatchObject({ deleted: true, vacuumed: true, runs: 2 });
+    const none = await scope(['prune', '--older-than', '30d'], dir);
+    expect(none.stdout).toContain('Nothing to delete in project "prune"');
+  });
+
+  it('refuses a server retention or limit it cannot honour, before listening', async () => {
+    const short = await scope(['server', '--port', '0', '--retention', '10m'], dir);
+    expect(short.code).toBe(2);
+    expect(short.stderr).toContain('Retention "10m" is shorter than an hour');
+    const limit = await scope(['server', '--port', '0'], dir, { SCOPE_MAX_INGEST_BYTES: '5MB' });
+    expect(limit.code).toBe(2);
+    expect(limit.stderr).toContain('SCOPE_MAX_INGEST_BYTES="5MB" is not a positive whole number');
+  });
+
+  it('refuses ambiguous or unsafe requests', async () => {
+    const cases: Array<[string[], string]> = [
+      [['prune'], 'Choose what to delete: --older-than, --run or --trace'],
+      [['prune', '--older-than', '30d', '--run', '1'], 'Choose what to delete'],
+      [['prune', '--older-than', 'soon'], '--older-than "soon" is not a duration or date'],
+      [['prune', '--run', '1', '--only', 'traces'], '--only applies to --older-than'],
+      [['prune', '--older-than', '1d', '--vacuum'], '--vacuum needs --yes'],
+      [['prune', '--run', '99'], 'Run 99 not found'],
+      [['prune', '--run', '1', '--all-projects'], '--all-projects applies to --older-than'],
+    ];
+    for (const [args, message] of cases) {
+      const r = await scope(args, dir);
+      expect(r.code, args.join(' ')).toBe(2);
+      expect(r.stderr, args.join(' ')).toContain(message);
+    }
+  });
+});

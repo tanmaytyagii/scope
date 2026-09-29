@@ -84,10 +84,17 @@ Runs are referenced by number (`12` or `#12`) or id; traces by id or a unique pr
 | Command | Does |
 | --- | --- |
 | `scope ui` | Serve the dashboard and API for this project on 127.0.0.1 (`--port`, `--open`; `--host` other than loopback requires `--insecure-no-auth`) |
-| `scope server` | Serve every project with API-key authentication (`--host`, `--port`; JSON logs) |
+| `scope server` | Serve every project with API-key authentication (`--host`, `--port`, `--retention 30d`; JSON logs) |
 | `scope keys create` | Create a key (`--project`, `--name`, `--scope ingest|read`, repeatable); printed once |
 | `scope keys list` | List a project's keys, never their secrets |
 | `scope keys revoke <key>` | Revoke a key by id (or unique id prefix) |
+
+### Data
+
+| Command | Does |
+| --- | --- |
+| `scope prune --older-than <age>` | Delete runs and application traces that started before `30d`, `2w`, `72h` or a date (`--only traces` or `--only runs`; `--project`, `--all-projects`). Shows what it would delete; deletes with `--yes`; `--vacuum` shrinks a SQLite file afterwards |
+| `scope prune --run <run>` / `--trace <id>` | Delete one run with its traces, or one application trace (a run's own traces go with their run) |
 
 ### Diagnostics
 

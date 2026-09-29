@@ -64,6 +64,7 @@ import type {
   WorkflowDetail,
   WorkflowSummary,
 } from './records.ts';
+import { type PruneCounts, type PruneSelection, planPrune, prune } from './retention.ts';
 import type { Database } from './schema.ts';
 import {
   getSpan,
@@ -815,6 +816,31 @@ export class Store {
       ...comparison,
       createdAt: Number(row.created_at),
     };
+  }
+
+  // ─── retention ─────────────────────────────────────────────────────────────────────────────
+
+  /** What `prune` would delete, without deleting anything. */
+  planPrune(selection: PruneSelection, now?: number): Promise<PruneCounts> {
+    return planPrune(this.db, selection, now);
+  }
+
+  /** Deletes runs and application traces in batches; see `PruneSelection`. */
+  prune(selection: PruneSelection, now?: number): Promise<PruneCounts> {
+    return prune(this.db, selection, now);
+  }
+
+  /**
+   * Gives the space of deleted rows back to the file system. SQLite only (it rewrites the file,
+   * needing as much free disk as the database); PostgreSQL's autovacuum reuses space by itself.
+   */
+  async vacuum(): Promise<boolean> {
+    if (this.dialect !== 'sqlite') return false;
+    await sql`vacuum`.execute(this.db);
+    // In WAL mode the rewritten pages land in the log first; move them into the file and empty
+    // the log, so the space is actually returned.
+    await sql`pragma wal_checkpoint(truncate)`.execute(this.db);
+    return true;
   }
 
   async deleteRun(projectId: string, runId: string): Promise<boolean> {

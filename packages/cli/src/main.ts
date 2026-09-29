@@ -10,6 +10,7 @@ import { evaluateCommand } from './commands/evaluate.ts';
 import { exportRunCommand, exportTracesCommand } from './commands/export.ts';
 import { initCommand } from './commands/init.ts';
 import { keysCreateCommand, keysListCommand, keysRevokeCommand } from './commands/keys.ts';
+import { pruneCommand } from './commands/prune.ts';
 import { reportCommand } from './commands/report.ts';
 import { runCommand } from './commands/run.ts';
 import { runsCommand } from './commands/runs.ts';
@@ -286,6 +287,12 @@ export async function main(argv: string[], options: MainOptions = {}): Promise<n
     .addOption(
       new Option('--host <host>', 'address to listen on (default: 0.0.0.0)').env('SCOPE_HOST'),
     )
+    .addOption(
+      new Option(
+        '--retention <age>',
+        'delete runs and application traces older than this (e.g. 30d), at start and hourly',
+      ).env('SCOPE_RETENTION'),
+    )
     .addHelpText(
       'after',
       `
@@ -318,6 +325,36 @@ Logs are JSON lines on stderr (SCOPE_LOG_FORMAT=pretty for text, SCOPE_LOG_LEVEL
     .description('revoke an API key; requests using it fail from then on')
     .option('--project <name>', 'project (default: this project)')
     .action(withContext((ctx, ref: string, opts) => keysRevokeCommand(ctx, ref, opts as never)));
+
+  program.commandsGroup('Data:');
+  program
+    .command('prune')
+    .description(
+      'delete old runs and traces, or one run or trace (shows what first; --yes deletes)',
+    )
+    .option(
+      '--older-than <age>',
+      'runs and application traces that started before 30d, 2w, … or a date',
+    )
+    .option('--only <kind>', 'with --older-than: only "traces" (outside runs) or only "runs"')
+    .option('--run <run>', 'one run (number or id), with its traces')
+    .option('--trace <id>', 'one application trace (id or unique prefix)')
+    .option('--project <name>', 'project (default: this project)')
+    .option('--all-projects', 'with --older-than: every project in the database')
+    .option('--yes', 'delete; without it, nothing is deleted')
+    .option('--vacuum', 'with --yes on SQLite: shrink the database file afterwards')
+    .addHelpText(
+      'after',
+      `
+Examples:
+  $ scope prune --older-than 30d                 See what is older than 30 days
+  $ scope prune --older-than 30d --yes           Delete it
+  $ scope prune --older-than 7d --only traces    Application traces only; keep runs
+  $ scope prune --run 12 --yes                   Delete run #12 and its traces
+
+\`scope server\` can prune on a schedule: SCOPE_RETENTION=30d.`,
+    )
+    .action(withContext((ctx, opts) => pruneCommand(ctx, opts as never)));
 
   program.commandsGroup('Diagnostics:');
   program.helpCommand('help [command]', 'show help for a command');

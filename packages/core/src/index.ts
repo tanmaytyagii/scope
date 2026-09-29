@@ -1,5 +1,6 @@
 export * from './bm25.ts';
 export * from './compare.ts';
+export * from './duration.ts';
 export * from './errors.ts';
 export * from './format.ts';
 export * from './gates.ts';

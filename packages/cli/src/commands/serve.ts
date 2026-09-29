@@ -9,6 +9,7 @@ import {
   createPrivacyPolicy,
   ErrorCodes,
   type Logger,
+  parseDuration,
   parseLogLevel,
   pluralize,
   ScopeError,
@@ -29,6 +30,37 @@ export interface ServeOptions {
   host?: string;
   open?: boolean;
   insecureNoAuth?: boolean;
+  retention?: string;
+}
+
+/** A positive whole number from an environment variable, or undefined when unset. */
+function envInteger(env: NodeJS.ProcessEnv, name: string): number | undefined {
+  const raw = env[name];
+  if (raw === undefined || raw.trim() === '') return undefined;
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value <= 0)
+    throw new ScopeError(ErrorCodes.usage, `${name}="${raw}" is not a positive whole number`, {
+      hint:
+        name === 'SCOPE_MAX_INGEST_BYTES'
+          ? 'Give the limit in bytes, e.g. 10485760 for 10 MiB.'
+          : 'Give a number, e.g. 2000.',
+    });
+  return value;
+}
+
+/** The retention age for `scope server`, from --retention or SCOPE_RETENTION. */
+function parseRetention(value: string | undefined): number | null {
+  if (value === undefined || value.trim() === '' || value.trim() === 'off') return null;
+  const ms = parseDuration(value);
+  if (ms === null)
+    throw new ScopeError(ErrorCodes.usage, `Retention "${value}" is not a duration`, {
+      hint: 'Use a duration such as 30d, 2w or 72h, or "off".',
+    });
+  if (ms < 3_600_000)
+    throw new ScopeError(ErrorCodes.usage, `Retention "${value}" is shorter than an hour`, {
+      hint: 'Retention deletes data automatically; use at least 1h (typically days, e.g. 30d).',
+    });
+  return ms;
 }
 
 function parsePort(value: string | undefined): number {
@@ -80,10 +112,13 @@ async function serve(
     port: number;
     logger: Logger;
     allowedHosts?: readonly string[] | null;
+    retentionMs?: number | null;
   },
 ): Promise<RunningServer> {
   const project = ctx.project();
   const store = await ctx.store();
+  const maxIngestBytes = envInteger(ctx.env, 'SCOPE_MAX_INGEST_BYTES');
+  const maxSpansPerTrace = envInteger(ctx.env, 'SCOPE_MAX_SPANS_PER_TRACE');
   return startServer({
     store,
     auth: settings.auth,
@@ -94,12 +129,9 @@ async function serve(
     logger: settings.logger,
     allowedHosts: settings.allowedHosts ?? null,
     webRoot: findWebRoot(),
-    ...(ctx.env.SCOPE_MAX_INGEST_BYTES
-      ? { maxIngestBytes: Number(ctx.env.SCOPE_MAX_INGEST_BYTES) }
-      : {}),
-    ...(ctx.env.SCOPE_MAX_SPANS_PER_TRACE
-      ? { maxSpansPerTrace: Number(ctx.env.SCOPE_MAX_SPANS_PER_TRACE) }
-      : {}),
+    retentionMs: settings.retentionMs ?? null,
+    ...(maxIngestBytes !== undefined ? { maxIngestBytes } : {}),
+    ...(maxSpansPerTrace !== undefined ? { maxSpansPerTrace } : {}),
   });
 }
 
@@ -193,8 +225,15 @@ export async function serverCommand(ctx: CommandContext, options: ServeOptions):
     format,
     write: (line) => ctx.out.stderr.write(`${line}\n`),
   });
+  const retentionMs = parseRetention(options.retention ?? ctx.env.SCOPE_RETENTION);
   const store = await ctx.store();
-  const server = await serve(ctx, { auth: { mode: 'api-key' }, host, port, logger });
+  const server = await serve(ctx, {
+    auth: { mode: 'api-key' },
+    host,
+    port,
+    logger,
+    retentionMs,
+  });
   const projects = await store.listProjects();
   const keys = (await Promise.all(projects.map((p) => store.listApiKeys(p.id)))).flat();
   const keyCount = keys.filter((k) => k.revokedAt === null).length;
@@ -204,6 +243,7 @@ export async function serverCommand(ctx: CommandContext, options: ServeOptions):
     auth: 'api-key',
     dashboard: findWebRoot() !== null,
     activeKeys: keyCount,
+    retention: retentionMs === null ? 'off' : (options.retention ?? ctx.env.SCOPE_RETENTION),
   });
   if (keyCount === 0) {
     logger.warn('no API keys exist yet; every API request will be rejected', {

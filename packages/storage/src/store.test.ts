@@ -524,6 +524,115 @@ function storeSuite(label: string, url: () => string, reset?: (store: Store) => 
       expect(await store.authenticateApiKey(secret)).toBeNull();
     });
 
+    it('prunes runs and application traces by age, project, run and trace', async () => {
+      // Projects of their own, so the counts other tests assert do not change.
+      const pid = (await store.ensureProject('retention')).id;
+      const other = (await store.ensureProject('retention-other')).id;
+      const now = Date.now();
+      const day = 86_400_000;
+      const aged = (bundle: TraceBundle, ms: number): TraceBundle => ({
+        ...bundle,
+        trace: {
+          ...bundle.trace,
+          startTime: bundle.trace.startTime - ms,
+          endTime: bundle.trace.endTime - ms,
+        },
+        spans: bundle.spans.map((sp) => ({
+          ...sp,
+          startTime: sp.startTime - ms,
+          endTime: sp.endTime - ms,
+        })),
+      });
+      const { workflowId, versionId } = await store.registerWorkflowVersion(pid, {
+        name: 'retained',
+        description: null,
+        hash: 'r1',
+        definition: {},
+        source: '',
+        path: null,
+      });
+      const run = async (ageMs: number, done = true) => {
+        const r = await store.createRun({
+          projectId: pid,
+          workflowId,
+          workflowVersionId: versionId,
+          workflowName: 'retained',
+          variant: null,
+          params: {},
+          dataset: null,
+          git: null,
+          trigger: 'cli',
+          baseline: null,
+          caseCount: 2,
+          startedAt: now - ageMs,
+        });
+        const bundles = await makeBundles([
+          { caseId: 'a', runId: r.id },
+          { caseId: 'b', runId: r.id },
+        ]);
+        await store.ingest(
+          pid,
+          bundles.map((b) => aged(b, ageMs)),
+        );
+        if (done)
+          await store.completeRun(r.id, {
+            status: 'completed',
+            summary: null,
+            gates: [],
+            gateStatus: 'passed',
+            endedAt: now - ageMs + 1000,
+          } as never);
+        return r;
+      };
+      const oldRun = await run(40 * day);
+      const newRun = await run(0);
+      const stuck = await run(30 * 3_600_000, false); // "running" for 30 hours: abandoned
+      const live = await run(2 * 3_600_000, false); // running for 2 hours: kept
+      const [oldApp, newApp] = await makeBundles([{ caseId: 'x' }, { caseId: 'y' }]);
+      await store.ingest(pid, [aged(oldApp as TraceBundle, 40 * day), newApp as TraceBundle]);
+      const [otherOld] = await makeBundles([{ caseId: 'z' }]);
+      await store.ingest(other, [aged(otherOld as TraceBundle, 40 * day)]);
+
+      // Traces made by makeBundles have 5 spans and 1 evaluation each.
+      const selection = { projectIds: [pid], before: now - 3_600_000 };
+      const plan = await store.planPrune(selection, now);
+      expect(plan).toMatchObject({ runs: 2, runTraces: 4, traces: 1, spans: 25, evaluations: 5 });
+      expect(plan.oldest).toBe(now - 40 * day);
+      // Planning deletes nothing.
+      expect(await store.getRun(pid, oldRun.id)).not.toBeNull();
+
+      expect(await store.prune(selection, now)).toEqual(plan);
+      expect(await store.getRun(pid, oldRun.id)).toBeNull();
+      expect(await store.getRun(pid, stuck.id)).toBeNull();
+      expect(await store.getRun(pid, newRun.id)).not.toBeNull();
+      expect(await store.getRun(pid, live.id)).not.toBeNull();
+      expect(await store.getTrace(pid, (oldApp as TraceBundle).trace.id)).toBeNull();
+      expect(await store.getTrace(pid, (newApp as TraceBundle).trace.id)).not.toBeNull();
+      expect(await store.getTrace(other, (otherOld as TraceBundle).trace.id)).not.toBeNull();
+      expect(await store.planPrune(selection, now)).toMatchObject({ runs: 0, traces: 0, spans: 0 });
+
+      // Only application traces; a run's own traces are never deleted one by one.
+      expect(
+        await store.planPrune({ projectIds: [other], before: now, only: 'runs' }, now),
+      ).toMatchObject({ runs: 0, traces: 0 });
+      const runTrace = (await store.listTraces(pid, { runId: newRun.id })).items[0]?.id as string;
+      expect(await store.planPrune({ projectIds: [pid], traceId: runTrace }, now)).toMatchObject({
+        traces: 0,
+      });
+      // One run, one trace, and every project at once.
+      expect(await store.prune({ projectIds: [pid], runId: newRun.id }, now)).toMatchObject({
+        runs: 1,
+        runTraces: 2,
+      });
+      expect(
+        await store.prune({ projectIds: [pid], traceId: (newApp as TraceBundle).trace.id }, now),
+      ).toMatchObject({ traces: 1, spans: 5 });
+      expect(await store.prune({ projectIds: null, before: now - day }, now)).toMatchObject({
+        traces: 1,
+      });
+      expect(await store.getTrace(other, (otherOld as TraceBundle).trace.id)).toBeNull();
+    });
+
     it('cascades run deletion to traces, spans, evaluations and comparisons', async () => {
       // Counted in this project: other tests store traces in projects of their own.
       const count = async (table: 'traces' | 'spans' | 'evaluations' | 'run_comparisons') =>

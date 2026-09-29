@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
-import type { TraceBundle } from '@scope-ai/core';
+import { silentLogger, type TraceBundle } from '@scope-ai/core';
 import { describe, expect, it } from 'vitest';
 import { HttpExporter, MemoryExporter } from './exporters.ts';
 import { Tracer } from './tracer.ts';
@@ -376,8 +376,149 @@ describe('HttpExporter', () => {
     exporter.export(fakeBundle(3));
     exporter.export(fakeBundle(3));
     expect(exporter.stats.droppedTraces).toBe(1);
+
+    const bytes = new HttpExporter({
+      url: 'http://127.0.0.1:9',
+      maxQueueBytes: 12_000,
+      flushIntervalMs: 60_000,
+    });
+    bytes.export(sizedBundle(1, 5000));
+    bytes.export(sizedBundle(2, 5000));
+    bytes.export(sizedBundle(3, 5000));
+    expect(bytes.stats.droppedTraces).toBe(1);
+  });
+
+  /** A server that answers each ingest request with `respond(body)`; records what arrived. */
+  async function withHandler(
+    respond: (body: { traces: Array<{ id: string }> }, raw: string) => [number, string],
+    run: (url: string, received: Array<{ ids: string[]; bytes: number }>) => Promise<void>,
+  ) {
+    const received: Array<{ ids: string[]; bytes: number }> = [];
+    const server = createServer((req, res) => {
+      let data = '';
+      req.on('data', (c) => {
+        data += c;
+      });
+      req.on('end', () => {
+        const body = JSON.parse(data) as { traces: Array<{ id: string }> };
+        const [status, text] = respond(body, data);
+        if (status === 200)
+          received.push({ ids: body.traces.map((t) => t.id), bytes: Buffer.byteLength(data) });
+        res.writeHead(status, { 'content-type': 'application/json' }).end(text);
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    try {
+      await run(`http://127.0.0.1:${(server.address() as AddressInfo).port}`, received);
+    } finally {
+      server.close();
+    }
+  }
+
+  it('bounds each request by bytes as well as by traces', async () => {
+    await withHandler(
+      () => [200, '{}'],
+      async (url, received) => {
+        const exporter = new HttpExporter({ url, maxBatchBytes: 12_000, flushIntervalMs: 60_000 });
+        for (let i = 1; i <= 5; i++) exporter.export(sizedBundle(i, 5000));
+        await exporter.flush();
+        expect(received.map((r) => r.ids.length)).toEqual([2, 2, 1]);
+        expect(received.every((r) => r.bytes <= 12_000)).toBe(true);
+        expect(exporter.stats).toMatchObject({ exportedTraces: 5, droppedTraces: 0 });
+      },
+    );
+  });
+
+  it('drops a trace larger than a request without sending it, and says so once', async () => {
+    await withHandler(
+      () => [200, '{}'],
+      async (url, received) => {
+        const warnings: unknown[] = [];
+        const exporter = new HttpExporter({
+          url,
+          maxBatchBytes: 8000,
+          flushIntervalMs: 60_000,
+          logger: {
+            ...silentLogger,
+            warn: (message, fields) => warnings.push({ message, fields }),
+          },
+        });
+        exporter.export(sizedBundle(1, 20_000));
+        exporter.export(sizedBundle(2, 20_000));
+        exporter.export(sizedBundle(3, 1000));
+        await exporter.flush();
+        expect(received).toEqual([{ ids: [traceId(3)], bytes: expect.any(Number) }]);
+        expect(exporter.stats).toMatchObject({ exportedTraces: 1, droppedTraces: 2 });
+        expect(warnings).toEqual([
+          {
+            message: 'SCOPE dropped a trace too large to send',
+            fields: expect.objectContaining({ traceId: traceId(1), maxBatchBytes: 8000 }),
+          },
+        ]);
+      },
+    );
+  });
+
+  it('splits a batch the server refuses as too large, so only oversized traces are lost', async () => {
+    // A server whose limit is smaller than the exporter's batch size.
+    await withHandler(
+      (_, raw) => (Buffer.byteLength(raw) > 16_000 ? [413, '{}'] : [200, '{}']),
+      async (url, received) => {
+        const exporter = new HttpExporter({ url, flushIntervalMs: 60_000 });
+        for (let i = 1; i <= 8; i++) exporter.export(sizedBundle(i, i === 5 ? 20_000 : 3000));
+        await exporter.flush();
+        expect(received.flatMap((r) => r.ids).sort()).toEqual(
+          [1, 2, 3, 4, 6, 7, 8].map(traceId).sort(),
+        );
+        expect(exporter.stats).toMatchObject({ exportedTraces: 7, droppedTraces: 1 });
+      },
+    );
+  });
+
+  it('isolates a trace the server names as invalid, and does not split other rejections', async () => {
+    const invalid = traceId(3);
+    const issues = JSON.stringify({
+      error: {
+        code: 'bad_request',
+        message: 'x',
+        details: { issues: [{ path: 'traces[2].runId' }] },
+      },
+    });
+    await withHandler(
+      (body) => (body.traces.some((t) => t.id === invalid) ? [400, issues] : [200, '{}']),
+      async (url, received) => {
+        const exporter = new HttpExporter({ url, flushIntervalMs: 60_000 });
+        for (let i = 1; i <= 6; i++) exporter.export(sizedBundle(i, 500));
+        await exporter.flush();
+        expect(received.flatMap((r) => r.ids).sort()).toEqual([1, 2, 4, 5, 6].map(traceId).sort());
+        expect(exporter.stats).toMatchObject({ exportedTraces: 5, droppedTraces: 1 });
+      },
+    );
+    let requests = 0;
+    await withHandler(
+      () => {
+        requests++;
+        return [400, '{"error":{"code":"bad_request","message":"Unsupported scope-protocol"}}'];
+      },
+      async (url) => {
+        const exporter = new HttpExporter({ url, flushIntervalMs: 60_000 });
+        for (let i = 1; i <= 6; i++) exporter.export(sizedBundle(i, 500));
+        await exporter.flush();
+        expect(requests).toBe(1);
+        expect(exporter.stats).toMatchObject({ exportedTraces: 0, droppedTraces: 6 });
+      },
+    );
   });
 });
+
+const traceId = (n: number) => n.toString(16).padStart(32, '0');
+
+/** A trace with distinct id `n` whose serialized form is about `bytes` long. */
+function sizedBundle(n: number, bytes: number): TraceBundle {
+  const bundle = fakeBundle(0);
+  bundle.trace = { ...bundle.trace, id: traceId(n), input: { text: 'x'.repeat(bytes) } };
+  return bundle;
+}
 
 function fakeBundle(spanCount: number): TraceBundle {
   return {

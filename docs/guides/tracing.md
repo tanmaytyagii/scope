@@ -173,10 +173,13 @@ recorded without content capture have no input and are skipped.
 
 The HTTP exporter is built to never hurt the host application:
 
-- traces are batched (up to 50 per request) and sent in the background, without keeping the
-  process alive;
-- the queue is bounded (2,048 spans); when full, new traces are dropped and one warning is
+- traces are batched (up to 50 per request, and at most 4 MiB, below the server's default 5 MiB
+  limit) and sent in the background, without keeping the process alive;
+- the queue is bounded (2,048 spans, 32 MiB); when full, new traces are dropped and one warning is
   logged;
+- a trace too large for one request is dropped on its own, with one warning naming the limit;
+  it cannot take other traces with it. If the server refuses a batch as too large, or names an
+  invalid trace in it, the exporter sends the rest again without it;
 - failed requests are retried with backoff (3 retries on network errors, 429 and 5xx), then
   dropped and counted in `exporter.stats`;
 - `await tracer.shutdown()` (or `flush()`) sends what is queued before the process exits — call it

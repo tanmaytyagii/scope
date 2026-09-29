@@ -7,6 +7,17 @@ which are always called out).
 
 ## [Unreleased]
 
+### Fixed
+
+- The SDK's HTTP exporter no longer loses whole batches. Requests are bounded by size as well as
+  by trace count (`maxBatchBytes`, 4 MiB by default, below the server's 5 MiB limit), a trace too
+  large for any request is dropped on its own with a warning, and when the server refuses a batch
+  as too large (413) or names an invalid trace (400 with `details.issues`), the exporter resends
+  the rest without it. Before, 50 traces of about 120 KB each made one 6 MB request, and all 50
+  were dropped. The queue is bounded by bytes too (`maxQueueBytes`, 32 MiB).
+- Ingestion errors caused by one record (a duplicate trace id, a span or evaluation without its
+  trace, an unknown run id) name the record in `details.issues`, as schema errors already did.
+
 ## [0.3.0] - 2026-09-29
 
 ### Changed

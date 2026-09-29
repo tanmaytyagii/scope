@@ -50,8 +50,15 @@ export interface HttpExporterOptions {
   project?: string | undefined;
   /** Maximum spans held in memory awaiting export. */
   maxQueueSpans?: number;
+  /** Maximum serialized bytes held in memory awaiting export. */
+  maxQueueBytes?: number;
   /** Maximum traces per request. */
   maxBatchTraces?: number;
+  /**
+   * Maximum request body size. Keep it at or below the server's limit (`SCOPE_MAX_INGEST_BYTES`,
+   * 5 MiB by default); a trace larger than this is dropped and counted rather than sent.
+   */
+  maxBatchBytes?: number;
   flushIntervalMs?: number;
   maxRetries?: number;
   timeoutMs?: number;
@@ -65,6 +72,19 @@ export interface HttpExporterStats {
   failedRequests: number;
 }
 
+/** A queued trace, serialized once when it is queued: its size bounds memory and requests. */
+interface Queued {
+  id: string;
+  trace: string;
+  spans: string;
+  evaluations: string;
+  spanCount: number;
+  bytes: number;
+}
+
+const byteLength = (text: string) => Buffer.byteLength(text, 'utf8');
+const joined = (items: readonly unknown[]) => items.map((item) => JSON.stringify(item)).join(',');
+
 export class HttpExporter implements TraceExporter {
   readonly #options: Required<
     Omit<HttpExporterOptions, 'apiKey' | 'project' | 'logger' | 'fetch'>
@@ -72,14 +92,16 @@ export class HttpExporter implements TraceExporter {
     Pick<HttpExporterOptions, 'apiKey' | 'project'>;
   readonly #logger: Logger;
   readonly #fetch: typeof fetch;
-  #queue: TraceBundle[] = [];
+  #queue: Queued[] = [];
   #queuedSpans = 0;
+  #queuedBytes = 0;
   #timer: ReturnType<typeof setTimeout> | null = null;
   #inFlight: Promise<void> | null = null;
   /** Number of callers awaiting flush(); while > 0, retry timers keep the process alive. */
   #flushing = 0;
   #backoff: ReturnType<typeof setTimeout> | null = null;
   #warnedDrop = false;
+  #warnedOversized = false;
   #warnedUnreachable = false;
   readonly stats: HttpExporterStats = { exportedTraces: 0, droppedTraces: 0, failedRequests: 0 };
 
@@ -89,7 +111,9 @@ export class HttpExporter implements TraceExporter {
       apiKey: options.apiKey,
       project: options.project,
       maxQueueSpans: options.maxQueueSpans ?? 2048,
+      maxQueueBytes: options.maxQueueBytes ?? 32 * 1024 * 1024,
       maxBatchTraces: options.maxBatchTraces ?? 50,
+      maxBatchBytes: options.maxBatchBytes ?? 4 * 1024 * 1024,
       flushIntervalMs: options.flushIntervalMs ?? 1000,
       maxRetries: options.maxRetries ?? 3,
       timeoutMs: options.timeoutMs ?? 10_000,
@@ -99,21 +123,50 @@ export class HttpExporter implements TraceExporter {
   }
 
   export(bundle: TraceBundle): void {
-    const size = bundle.spans.length;
-    if (this.#queuedSpans + size > this.#options.maxQueueSpans) {
+    const item: Queued = {
+      id: bundle.trace.id,
+      trace: JSON.stringify(bundle.trace),
+      spans: joined(bundle.spans),
+      evaluations: joined(bundle.evaluations),
+      spanCount: bundle.spans.length,
+      bytes: 0,
+    };
+    item.bytes = byteLength(item.trace) + byteLength(item.spans) + byteLength(item.evaluations);
+    if (item.bytes > this.#options.maxBatchBytes) {
+      this.#dropOversized(item);
+      return;
+    }
+    if (
+      this.#queuedSpans + item.spanCount > this.#options.maxQueueSpans ||
+      this.#queuedBytes + item.bytes > this.#options.maxQueueBytes
+    ) {
       this.stats.droppedTraces++;
       if (!this.#warnedDrop) {
         this.#warnedDrop = true;
         this.#logger.warn('SCOPE export queue is full; dropping traces', {
           maxQueueSpans: this.#options.maxQueueSpans,
+          maxQueueBytes: this.#options.maxQueueBytes,
         });
       }
       return;
     }
-    this.#queue.push(bundle);
-    this.#queuedSpans += size;
+    this.#queue.push(item);
+    this.#queuedSpans += item.spanCount;
+    this.#queuedBytes += item.bytes;
     if (this.#queue.length >= this.#options.maxBatchTraces) void this.#drain();
     else this.#schedule();
+  }
+
+  #dropOversized(item: Queued): void {
+    this.stats.droppedTraces++;
+    if (this.#warnedOversized) return;
+    this.#warnedOversized = true;
+    this.#logger.warn('SCOPE dropped a trace too large to send', {
+      traceId: item.id,
+      bytes: item.bytes,
+      maxBatchBytes: this.#options.maxBatchBytes,
+      hint: 'Lower privacy.maxPayloadBytes, or raise the server limit (SCOPE_MAX_INGEST_BYTES) and maxBatchBytes together.',
+    });
   }
 
   #schedule(): void {
@@ -126,27 +179,47 @@ export class HttpExporter implements TraceExporter {
     this.#timer.unref?.();
   }
 
+  /** Takes the next batch off the queue: at most maxBatchTraces traces and maxBatchBytes. */
+  #nextBatch(): Queued[] {
+    const batch: Queued[] = [];
+    let bytes = 0;
+    while (this.#queue.length > 0 && batch.length < this.#options.maxBatchTraces) {
+      const next = this.#queue[0] as Queued;
+      if (batch.length > 0 && bytes + next.bytes > this.#options.maxBatchBytes) break;
+      this.#queue.shift();
+      this.#queuedSpans -= next.spanCount;
+      this.#queuedBytes -= next.bytes;
+      bytes += next.bytes;
+      batch.push(next);
+    }
+    return batch;
+  }
+
   async #drain(): Promise<void> {
     if (this.#inFlight) return this.#inFlight;
     this.#inFlight = (async () => {
-      while (this.#queue.length > 0) {
-        const batch = this.#queue.splice(0, this.#options.maxBatchTraces);
-        this.#queuedSpans -= batch.reduce((n, b) => n + b.spans.length, 0);
-        await this.#send(batch);
-      }
+      while (this.#queue.length > 0) await this.#send(this.#nextBatch());
     })().finally(() => {
       this.#inFlight = null;
     });
     return this.#inFlight;
   }
 
-  async #send(batch: TraceBundle[]): Promise<void> {
-    const body = JSON.stringify({
-      project: this.#options.project,
-      traces: batch.map((b) => b.trace),
-      spans: batch.flatMap((b) => b.spans),
-      evaluations: batch.flatMap((b) => b.evaluations),
-    });
+  #body(batch: readonly Queued[]): string {
+    const list = (parts: string[]) => parts.filter((part) => part !== '').join(',');
+    const project =
+      this.#options.project === undefined
+        ? ''
+        : `"project":${JSON.stringify(this.#options.project)},`;
+    return (
+      `{${project}"traces":[${list(batch.map((b) => b.trace))}],` +
+      `"spans":[${list(batch.map((b) => b.spans))}],` +
+      `"evaluations":[${list(batch.map((b) => b.evaluations))}]}`
+    );
+  }
+
+  async #send(batch: Queued[]): Promise<void> {
+    const body = this.#body(batch);
     const headers: Record<string, string> = {
       'content-type': 'application/json',
       'user-agent': `scope-sdk-js/${SCOPE_VERSION}`,
@@ -169,11 +242,24 @@ export class HttpExporter implements TraceExporter {
         const retryable = response.status === 429 || response.status >= 500;
         if (!retryable) {
           const text = await response.text().catch(() => '');
+          // One oversized or invalid trace must not take the rest of its batch with it: send the
+          // halves separately until the traces the server refuses are on their own.
+          if (batch.length > 1 && splittable(response.status, text)) {
+            const half = Math.ceil(batch.length / 2);
+            await this.#send(batch.slice(0, half));
+            await this.#send(batch.slice(half));
+            return;
+          }
           this.stats.failedRequests++;
           this.stats.droppedTraces += batch.length;
           this.#logger.error('SCOPE server rejected traces', {
             status: response.status,
+            traces: batch.length,
+            ...(batch.length === 1 ? { traceId: batch[0]?.id } : {}),
             response: text.slice(0, 300),
+            ...(response.status === 401 || response.status === 403
+              ? { hint: 'Check SCOPE_API_KEY: an ingest-scoped key for this project.' }
+              : {}),
           });
           return;
         }
@@ -220,5 +306,22 @@ export class HttpExporter implements TraceExporter {
 
   async shutdown(): Promise<void> {
     await this.flush();
+  }
+}
+
+/**
+ * Whether splitting a rejected batch can help: the body was too large, or the server named the
+ * records it refused (`details.issues`). Other rejections (authentication, protocol version)
+ * would fail for every half too.
+ */
+function splittable(status: number, body: string): boolean {
+  if (status === 413) return true;
+  if (status !== 400) return false;
+  try {
+    const details = (JSON.parse(body) as { error?: { details?: { issues?: unknown } } }).error
+      ?.details;
+    return Array.isArray(details?.issues) && details.issues.length > 0;
+  } catch {
+    return false;
   }
 }

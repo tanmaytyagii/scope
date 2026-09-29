@@ -49,6 +49,17 @@ function badRequest(message: string, hint?: string): ScopeError {
   return new ScopeError(ErrorCodes.badRequest, message, { hint });
 }
 
+/**
+ * A rejection caused by one record of the batch. `details.issues` names it, as schema validation
+ * errors do, so a client can resend the other records without it.
+ */
+function recordError(path: string, message: string, hint?: string): ScopeError {
+  return new ScopeError(ErrorCodes.badRequest, `${path}: ${message}`, {
+    hint,
+    details: { issues: [{ path, message }] },
+  });
+}
+
 // ─── privacy ─────────────────────────────────────────────────────────────────────────────────
 
 /** Content (inputs, outputs, evaluator evidence): redacted, bounded, or null when capture is off. */
@@ -204,14 +215,15 @@ export function prepareBatch(
   const traceIndex = new Map<string, number>();
   request.traces.forEach((t, i) => {
     if (traceIndex.has(t.id))
-      throw badRequest(`traces[${i}].id: trace ${t.id} appears more than once in the request`);
+      throw recordError(`traces[${i}].id`, `trace ${t.id} appears more than once in the request`);
     traceIndex.set(t.id, i);
   });
   const spansByTrace = new Map<string, IngestSpan[]>();
   request.spans.forEach((s, i) => {
     if (!traceIndex.has(s.traceId)) {
-      throw badRequest(
-        `spans[${i}].traceId: trace ${s.traceId} is not in this request`,
+      throw recordError(
+        `spans[${i}].traceId`,
+        `trace ${s.traceId} is not in this request`,
         'Send each span in the same request as its trace.',
       );
     }
@@ -222,8 +234,9 @@ export function prepareBatch(
   const evalsByTrace = new Map<string, IngestEvaluation[]>();
   request.evaluations.forEach((e, i) => {
     if (!traceIndex.has(e.traceId)) {
-      throw badRequest(
-        `evaluations[${i}].traceId: trace ${e.traceId} is not in this request`,
+      throw recordError(
+        `evaluations[${i}].traceId`,
+        `trace ${e.traceId} is not in this request`,
         'Send each evaluation in the same request as its trace.',
       );
     }
@@ -291,16 +304,19 @@ export async function targetProject(
 
 /** Checks that run ids named by traces and evaluations exist in the project. */
 async function checkRuns(deps: Deps, project: Project, bundles: TraceBundle[]): Promise<void> {
-  const ids = new Set<string>();
-  for (const b of bundles) {
-    if (b.trace.runId) ids.add(b.trace.runId);
-    for (const e of b.evaluations) if (e.runId) ids.add(e.runId);
-  }
-  for (const id of ids) {
+  // Each run id, with where it is first named: a trace, or an evaluation of that trace.
+  const ids = new Map<string, string>();
+  bundles.forEach((b, i) => {
+    if (b.trace.runId && !ids.has(b.trace.runId)) ids.set(b.trace.runId, `traces[${i}].runId`);
+    for (const e of b.evaluations)
+      if (e.runId && !ids.has(e.runId)) ids.set(e.runId, `traces[${i}] (an evaluation's runId)`);
+  });
+  for (const [id, path] of ids) {
     const run = await deps.store.getRun(project.id, id);
     if (run?.id !== id) {
-      throw badRequest(
-        `runId: run ${id} does not exist in project "${project.slug}"`,
+      throw recordError(
+        path,
+        `run ${id} does not exist in project "${project.slug}"`,
         'Traces recorded outside a SCOPE run should have runId null.',
       );
     }

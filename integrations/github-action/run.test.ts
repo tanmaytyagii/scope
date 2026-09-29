@@ -92,6 +92,14 @@ const cli = (args: string[]) =>
 
 beforeAll(async () => {
   await exec(process.execPath, ['--conditions=source', CLI, 'init', 'demo'], root, {});
+  // These tests are about the action, not timing: on a busy CI runner the starter's latency
+  // warning gate (p95 +50% over a millisecond-scale baseline) is noise, and flipped "passed" to
+  // "passed with warnings" (CI on fc5398e).
+  const workflow = join(project, 'workflows', 'support.yaml');
+  const gate = '  - metric: latency.p95_ms\n    max_increase_pct: 50\n    severity: warn\n';
+  const text = readFileSync(workflow, 'utf8');
+  expect(text).toContain(gate);
+  writeFileSync(workflow, text.replace(gate, ''));
   expect((await cli(['run', 'workflows/support.yaml', '--quiet'])).code).toBe(0);
   expect((await cli(['baseline', 'save', '1'])).code).toBe(0);
 });

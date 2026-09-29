@@ -111,6 +111,8 @@ test('a run shows what changed against its baseline', async ({ page }) => {
   await page.goto('/runs/2');
   const panel = page.getByRole('region', { name: 'Compared with baseline' });
   await expect(panel).toContainText('baselines/support.json · saved from run #1');
+  // Run #2 is the terse variant, compared with the default parameters' baseline.
+  await expect(panel).toContainText('Changed since the baseline: sentences 2 → 1');
   await expect(panel.getByText(/^[1-9]\d* regressed$/)).toBeVisible();
   const passRate = panel
     .getByRole('row')
@@ -133,6 +135,9 @@ test('compares two runs case by case', async ({ page }) => {
   await page.getByRole('button', { name: /Compare selected/ }).click();
   await expect(page).toHaveURL(/\/compare\?base=1&head=2/);
   await expect(page.getByRole('heading', { name: /Run #1 → run #2/ })).toBeVisible();
+  const changed = page.getByRole('region', { name: 'What changed' });
+  await expect(changed.getByRole('row').filter({ hasText: 'sentences' })).toContainText('2');
+  await expect(changed.getByText('same workflow file')).toBeVisible();
   await expect(page.getByText(/\d+ regressed/)).toBeVisible();
   const passRate = page
     .getByRole('row')

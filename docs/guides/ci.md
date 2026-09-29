@@ -23,8 +23,9 @@ gates:
 
 ## 2. A committed baseline
 
-A baseline is a JSON snapshot of a run you trust — its summary and every case's outcome and
-scores — saved in the repository:
+A baseline is a JSON snapshot of a run you trust — its summary, every case's outcome and scores,
+and the configuration it ran with (parameters, workflow file hash, dataset hash) — saved in the
+repository:
 
 ```bash
 scope run workflows/support.yaml
@@ -37,7 +38,9 @@ git add baselines/support.json && git commit -m "chore: baseline for support wor
 
 From then on, `scope run workflows/support.yaml` compares with it automatically
 (`--baseline <file>` picks another, `--no-baseline` ignores it), reports which cases regressed
-and which were fixed, and applies the regression gates.
+and which were fixed, what changed in configuration ("sentences 2 → 1 · the workflow file"), and
+applies the regression gates. Baselines saved before SCOPE 0.3 have no configuration; save them
+again to get it.
 
 When a change *intentionally* moves quality — a new model, a stricter prompt — update the
 baseline in the same pull request. Reviewers then see the new numbers in the diff of

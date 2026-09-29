@@ -57,7 +57,12 @@ export async function buildReportInput(
       }
     : null;
   let comparison: Comparison | null = stored
-    ? { metrics: stored.metrics, counts: stored.counts, cases: stored.cases }
+    ? {
+        metrics: stored.metrics,
+        counts: stored.counts,
+        cases: stored.cases,
+        ...(stored.config ? { config: stored.config } : {}),
+      }
     : null;
   const file = stored
     ? undefined
@@ -72,7 +77,11 @@ export async function buildReportInput(
   if (baseline) {
     reportedBaseline = reportBaseline(baseline);
     const snapshots = await store.runCaseSnapshots(projectId, run.id);
-    comparison = buildComparison(run.summary, snapshots, baseline);
+    comparison = buildComparison(run.summary, snapshots, baseline, {
+      params: run.params,
+      workflow: await store.workflowVersionHash(projectId, run.workflowVersionId),
+      datasetHash: run.dataset?.hash ?? null,
+    });
   }
   const failing = [
     ...(await store.listRunCases(projectId, run.id, { outcome: 'errored', limit: 50 })).items,

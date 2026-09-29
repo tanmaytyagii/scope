@@ -2,6 +2,7 @@
  * Read endpoints of /api/v1. Handlers stay thin: parse → query storage → map to a resource.
  */
 import {
+  compareConfig,
   compareMany,
   compareRuns,
   ErrorCodes,
@@ -92,6 +93,19 @@ async function comparison(c: AppContext, deps: Deps): Promise<api.Comparison> {
       query.includeUnchanged === 'true'
         ? result.cases
         : result.cases.filter((change) => change.kind !== 'unchanged'),
+    // Versions are stored once per content hash, so equal version ids mean an identical file.
+    config: compareConfig(
+      {
+        params: base.params,
+        workflow: base.workflowVersionId,
+        datasetHash: base.dataset?.hash ?? null,
+      },
+      {
+        params: head.params,
+        workflow: head.workflowVersionId,
+        datasetHash: head.dataset?.hash ?? null,
+      },
+    ),
   };
 }
 
@@ -254,6 +268,7 @@ export function registerApi(app: Hono<AppEnv>, deps: Deps): void {
       counts: stored.counts,
       cases: stored.cases,
       omittedCases: stored.omittedCases,
+      config: stored.config ?? null,
     } satisfies api.BaselineComparison);
   });
 

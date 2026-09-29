@@ -247,6 +247,7 @@ export async function runCommand(
           dataset,
           workflowId: workflowVersion.workflowId,
           workflowVersionId: workflowVersion.versionId,
+          workflowHash: loaded.hash,
           projectId: projectRow.id,
           git,
           trigger,
@@ -394,6 +395,8 @@ interface ExecuteParams {
   dataset: Dataset;
   workflowId: string;
   workflowVersionId: string;
+  /** SHA-256 of the workflow file, compared with the baseline's. */
+  workflowHash: string;
   projectId: string;
   git: ReturnType<typeof collectGitInfo>;
   trigger: ReturnType<typeof detectTrigger>;
@@ -498,7 +501,11 @@ async function executeVariant(
   });
 
   const snapshots = Object.fromEntries(caseResults.map((r) => [r.caseId, snapshotCase(r)]));
-  const comparison = buildComparison(summary, snapshots, p.baseline);
+  const comparison = buildComparison(summary, snapshots, p.baseline, {
+    params: p.prepared.params,
+    workflow: p.workflowHash,
+    datasetHash: p.dataset.hash,
+  });
   // Kept with the run, so the dashboard shows what the gates compared against — the baseline
   // file may come from another machine, and its run may not be in this database.
   if (comparison && run.baseline && !cancelled)
@@ -508,6 +515,7 @@ async function executeVariant(
       metrics: comparison.metrics,
       counts: comparison.counts,
       cases: comparison.cases,
+      config: comparison.config ?? null,
     });
   const failures = executions
     .filter(

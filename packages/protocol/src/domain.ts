@@ -4,7 +4,7 @@
  */
 import { SPAN_KINDS } from '@scope-ai/core';
 import { z } from 'zod';
-import { components } from './common.ts';
+import { components, JsonValue } from './common.ts';
 
 export const SpanKind = z.enum(SPAN_KINDS);
 export const SpanStatus = z.enum(['ok', 'error']);
@@ -182,6 +182,31 @@ export const MetricRow = z
   })
   .register(components, { id: 'MetricRow' });
 
+export const ConfigDiff = z
+  .strictObject({
+    params: z
+      .array(
+        z.strictObject({
+          key: z.string(),
+          base: JsonValue.nullable().describe('Null when the parameter is absent on this side.'),
+          head: JsonValue.nullable(),
+        }),
+      )
+      .describe('Parameters with different values.'),
+    workflowChanged: z
+      .boolean()
+      .nullable()
+      .describe('Whether the workflow file changed; null when a side does not record it.'),
+    datasetChanged: z
+      .boolean()
+      .nullable()
+      .describe('Whether the dataset changed; null when a side does not record it.'),
+    paramsKnown: z
+      .boolean()
+      .describe('False when the base predates configuration records, so parameters are unknown.'),
+  })
+  .register(components, { id: 'ConfigDiff' });
+
 const EvaluatorCell = z.strictObject({ status: EvaluationStatus, score: z.number().nullable() });
 
 export const CaseSnapshot = z
@@ -211,6 +236,7 @@ export const CaseChange = z
   .register(components, { id: 'CaseChange' });
 
 export type MetricRow = z.output<typeof MetricRow>;
+export type ConfigDiff = z.output<typeof ConfigDiff>;
 export type SpanKind = z.output<typeof SpanKind>;
 export type SpanStatus = z.output<typeof SpanStatus>;
 export type EvaluatorKind = z.output<typeof EvaluatorKind>;

@@ -61,6 +61,10 @@ export async function baselineSaveCommand(
     dataset: run.dataset
       ? { name: run.dataset.name, caseCount: run.dataset.caseCount, hash: run.dataset.hash }
       : null,
+    config: {
+      params: run.params,
+      workflowHash: await store.workflowVersionHash(project.id, run.workflowVersionId),
+    },
     summary: run.summary,
     cases,
   };

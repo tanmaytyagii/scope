@@ -5,6 +5,7 @@
 import type {
   CaseChange,
   CaseChangeKind,
+  ConfigDiff,
   DatasetInfo,
   ErrorInfo,
   EvaluationStatus,
@@ -60,6 +61,8 @@ export interface BaselineComparisonRecord {
   cases: CaseChange[];
   /** Changed cases beyond the stored ones. */
   omittedCases: number;
+  /** What changed in configuration (null for comparisons stored before SCOPE 0.3). */
+  config?: ConfigDiff | null;
   createdAt: number;
 }
 

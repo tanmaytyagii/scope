@@ -247,6 +247,7 @@ describe('scope run → inspect → baseline → regression', () => {
       schema: 'scope.baseline/v1',
       workflow: 'support',
       source: { runNumber: 1 },
+      config: { params: { sentences: 2 }, workflowHash: expect.stringMatching(/^[0-9a-f]{64}$/) },
     });
     expect(Object.keys(baseline.cases)).toHaveLength(12);
 
@@ -325,6 +326,13 @@ describe('scope run → inspect → baseline → regression', () => {
     const md = await scope(['report', '4', '--format', 'markdown'], project);
     expect(md.stdout).toContain('### ❌ SCOPE · support — failed');
     expect(md.stdout).toContain('| Metric | Baseline | Current | Change | Gate |');
+    // The baseline records its configuration, so the report says what changed: the workflow
+    // file was edited so that answers keep one sentence.
+    expect(md.stdout).toContain(
+      '**Changed since the baseline:** sentences 2 → 1 · the workflow file',
+    );
+    const text = await scope(['compare', '1', '4'], project);
+    expect(text.stdout).toMatch(/Changed\s+sentences 2 → 1 · the workflow file/);
 
     // Replacing the baseline file later does not rewrite history: the report shows what the
     // run's gates compared against.

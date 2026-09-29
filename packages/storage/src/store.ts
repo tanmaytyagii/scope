@@ -745,6 +745,18 @@ export class Store {
     return rows.map((r) => r.variant as string).sort();
   }
 
+  /** The content hash of a workflow version (the same file hashes the same on any machine). */
+  async workflowVersionHash(projectId: string, versionId: string): Promise<string | null> {
+    const row = await this.db
+      .selectFrom('workflow_versions')
+      .innerJoin('workflows', 'workflows.id', 'workflow_versions.workflow_id')
+      .select('workflow_versions.hash')
+      .where('workflows.project_id', '=', projectId)
+      .where('workflow_versions.id', '=', versionId)
+      .executeTakeFirst();
+    return row?.hash ?? null;
+  }
+
   /**
    * Stores how a run compared with its baseline. Changed cases beyond
    * MAX_STORED_CASE_CHANGES are counted, not stored.
@@ -760,6 +772,7 @@ export class Store {
       counts: input.counts,
       cases,
       omittedCases: changed.length - cases.length,
+      config: input.config ?? null,
     };
     await this.db
       .insertInto('run_comparisons')
@@ -791,7 +804,7 @@ export class Store {
       .executeTakeFirst();
     if (!row) return null;
     const comparison = readJson<
-      Pick<BaselineComparisonRecord, 'metrics' | 'counts' | 'cases' | 'omittedCases'>
+      Pick<BaselineComparisonRecord, 'metrics' | 'counts' | 'cases' | 'omittedCases' | 'config'>
     >(row.comparison);
     return {
       runId: row.run_id,

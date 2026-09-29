@@ -7,7 +7,12 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { allItems, useBaselineComparison, useRun, useRunCases, useRuns } from '../api/queries.ts';
 import { useTitle, useUrlState } from '../app/hooks.ts';
-import { CaseChangeCounts, CaseChangeTable, MetricDeltaTable } from '../components/Comparison.tsx';
+import {
+  CaseChangeCounts,
+  CaseChangeTable,
+  describeConfig,
+  MetricDeltaTable,
+} from '../components/Comparison.tsx';
 import {
   formatCost,
   formatDateTime,
@@ -367,6 +372,12 @@ function BaselineComparisonPanel({ run }: { run: Run }) {
         onlyHead="new since the baseline"
         onlyBase="missing from this run"
       />
+      {describeConfig(d.config).length > 0 && (
+        <p className="border-b border-line px-4 py-2.5 text-sm text-fg-2">
+          <span className="font-medium text-fg">Changed since the baseline:</span>{' '}
+          {describeConfig(d.config).join(' · ')}
+        </p>
+      )}
       <MetricDeltaTable
         metrics={d.metrics}
         headline={d.headline}

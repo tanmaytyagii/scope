@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareMany, compareRuns, snapshotCase } from './compare.ts';
+import { compareConfig, compareMany, compareRuns, snapshotCase } from './compare.ts';
 import { formatDelta, formatDuration, formatPercent, formatUsd } from './format.ts';
 import { evaluateGates, gateStatus } from './gates.ts';
 import { describeMetric, readMetric } from './metrics.ts';
@@ -263,6 +263,42 @@ describe('compareMany', () => {
     expect(m.cases).toEqual([
       { caseId: 'new', outcomes: [null, 'passed'], traceIds: [null, 't-new'] },
     ]);
+  });
+});
+
+describe('compareConfig', () => {
+  it('lists changed parameters and whether the workflow and dataset changed', () => {
+    const diff = compareConfig(
+      {
+        params: { model: 'a', sentences: 2, tools: ['x'], old: 1 },
+        workflow: 'h1',
+        datasetHash: 'd1',
+      },
+      {
+        params: { model: 'a', sentences: 1, tools: ['x'], new: true },
+        workflow: 'h2',
+        datasetHash: 'd1',
+      },
+    );
+    expect(diff).toEqual({
+      params: [
+        { key: 'new', base: null, head: true },
+        { key: 'old', base: 1, head: null },
+        { key: 'sentences', base: 2, head: 1 },
+      ],
+      workflowChanged: true,
+      datasetChanged: false,
+      paramsKnown: true,
+    });
+  });
+
+  it('says what it does not know', () => {
+    expect(
+      compareConfig(
+        { params: null, workflow: null, datasetHash: 'd' },
+        { params: { a: 1 }, workflow: 'h', datasetHash: 'd' },
+      ),
+    ).toEqual({ params: [], workflowChanged: null, datasetChanged: false, paramsKnown: false });
   });
 });
 

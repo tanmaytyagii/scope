@@ -6,7 +6,14 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { loadDataset, loadWorkflow, prepareCases } from '@scope-ai/config';
-import { compareRuns, evaluateGates, gateStatus, snapshotCase, summarizeRun } from '@scope-ai/core';
+import {
+  compareConfig,
+  compareRuns,
+  evaluateGates,
+  gateStatus,
+  snapshotCase,
+  summarizeRun,
+} from '@scope-ai/core';
 import { Engine, toCaseResult } from '@scope-ai/engine';
 import type { Project, Run, Store } from '@scope-ai/storage';
 
@@ -178,10 +185,16 @@ export async function runWorkflow(
       },
       { summary, cases: Object.fromEntries(results.map((r) => [r.caseId, snapshotCase(r)])) },
     );
+    // The baseline came from the same workflow file and dataset; only the variant differs.
+    const config = compareConfig(
+      { params: baselineOf.params, workflow: loaded.hash, datasetHash: dataset.hash },
+      { params: prepared.params, workflow: loaded.hash, datasetHash: dataset.hash },
+    );
     await store.saveBaselineComparison(project.id, {
       runId: run.id,
       baseline: completed.baseline,
       ...comparison,
+      config,
     });
   }
   return completed;

@@ -7,6 +7,9 @@ import {
   type CaseChange,
   type CaseSnapshot,
   type Comparison,
+  type ConfigDiff,
+  type ConfigSnapshot,
+  compareConfig,
   compareRuns,
   type EvaluatorSummary,
   formatDelta,
@@ -79,9 +82,23 @@ export function buildComparison(
   summary: RunSummary,
   cases: Record<string, CaseSnapshot>,
   baseline: Baseline | null,
+  head?: ConfigSnapshot,
 ): Comparison | null {
   if (!baseline) return null;
-  return compareRuns({ summary: baseline.summary, cases: baseline.cases }, { summary, cases });
+  const comparison = compareRuns(
+    { summary: baseline.summary, cases: baseline.cases },
+    { summary, cases },
+  );
+  if (head)
+    comparison.config = compareConfig(
+      {
+        params: baseline.config?.params ?? null,
+        workflow: baseline.config?.workflowHash ?? null,
+        datasetHash: baseline.dataset?.hash ?? null,
+      },
+      head,
+    );
+  return comparison;
 }
 
 // ─── text ────────────────────────────────────────────────────────────────────────────────────
@@ -185,6 +202,24 @@ export function renderGatesText(
     .join('\n');
 }
 
+function showValue(value: unknown): string {
+  if (value === null || value === undefined) return '(none)';
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  return text.length > 40 ? `${text.slice(0, 39)}…` : text;
+}
+
+/**
+ * What changed in configuration, as short phrases: "sentences 2 → 1", "the workflow file",
+ * "the dataset". Empty when nothing is known to have changed.
+ */
+export function describeConfig(config: ConfigDiff | undefined): string[] {
+  if (!config) return [];
+  const out = config.params.map((p) => `${p.key} ${showValue(p.base)} → ${showValue(p.head)}`);
+  if (config.workflowChanged) out.push('the workflow file');
+  if (config.datasetChanged) out.push('the dataset');
+  return out;
+}
+
 export function renderComparisonText(
   comparison: Comparison,
   evaluators: ReadonlyArray<{ name: string; kind: string }>,
@@ -219,6 +254,8 @@ export function renderComparisonText(
     `${counts.unchanged} unchanged`,
   ].filter(Boolean);
   const lines = [table, '', `  ${s.dim('Cases')}  ${parts.join(s.dim(` ${sym.dot} `))}`];
+  const changed = describeConfig(comparison.config);
+  if (changed.length) lines.push(`  ${s.dim('Changed')}  ${changed.join(s.dim(` ${sym.dot} `))}`);
   for (const c of comparison.cases
     .filter((x) => x.kind === 'regressed' || x.kind === 'fixed')
     .slice(0, 10)) {
@@ -284,6 +321,12 @@ export function renderMarkdown(input: ReportInput): string {
       lines.push(`- ${g.severity === 'warn' ? '⚠️' : '❌'} ${mdEscape(g.message)}`);
     lines.push('');
   }
+  const changed = describeConfig(comparison?.config);
+  if (changed.length)
+    lines.push(
+      `**Changed since the baseline:** ${changed.map((c) => mdEscape(c)).join(' · ')}`,
+      '',
+    );
 
   // Metrics table (with baseline column when comparing).
   const metricRows: Array<{
@@ -468,6 +511,7 @@ export function reportJson(input: ReportInput) {
           metrics: input.comparison.metrics,
           counts: input.comparison.counts,
           cases: input.comparison.cases.filter((c) => c.kind !== 'unchanged'),
+          config: input.comparison.config ?? null,
         }
       : null,
     failures: input.failures,

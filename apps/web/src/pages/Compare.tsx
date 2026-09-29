@@ -8,7 +8,12 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { allItems, useComparison, useRuns } from '../api/queries.ts';
 import { useTitle, useUrlState } from '../app/hooks.ts';
-import { CaseChangeCounts, CaseChangeTable, MetricDeltaTable } from '../components/Comparison.tsx';
+import {
+  CaseChangeCounts,
+  CaseChangeTable,
+  ConfigChanges,
+  MetricDeltaTable,
+} from '../components/Comparison.tsx';
 import { Button } from '../ui/Button.tsx';
 import { Select } from '../ui/Controls.tsx';
 import { PageHeader } from '../ui/Figures.tsx';
@@ -223,6 +228,13 @@ function PairCompare() {
           {data.head.run.workflow}); case ids may not correspond.
         </p>
       )}
+      <Panel title="What changed" description="Configuration of the two runs">
+        <ConfigChanges
+          config={data.config}
+          baseLabel={`Base #${data.base.run.number}`}
+          headLabel={`Head #${data.head.run.number}`}
+        />
+      </Panel>
       <Metrics data={data} />
       <Cases
         data={data}

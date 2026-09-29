@@ -78,6 +78,13 @@ export const BaselineSchema = z.object({
   createdAt: z.string(),
   source: z.object({ runId: z.string(), runNumber: z.number(), git: GitSchema }),
   dataset: z.object({ name: z.string(), caseCount: z.number(), hash: z.string() }).nullable(),
+  // Added in SCOPE 0.3; older baselines have none.
+  config: z
+    .object({
+      params: z.record(z.string(), z.json()),
+      workflowHash: z.string().nullable(),
+    })
+    .optional(),
   summary: SummarySchema,
   cases: z.record(z.string(), CaseSnapshotSchema),
 });

@@ -9,6 +9,7 @@ import {
   Attributes,
   CaseChange,
   CaseOutcome,
+  ConfigDiff,
   DatasetInfo,
   ErrorInfo,
   EvaluationStatus,
@@ -215,6 +216,9 @@ export const BaselineComparison = z
     }),
     cases: z.array(CaseChange).describe('Changed cases, worst first.'),
     omittedCases: z.number().int().describe('Changed cases not stored (beyond the first 500).'),
+    config: ConfigDiff.nullable().describe(
+      'What changed in configuration since the baseline; null for runs before SCOPE 0.3.',
+    ),
   })
   .register(components, { id: 'BaselineComparison' });
 
@@ -267,6 +271,7 @@ export const Comparison = z
     cases: z
       .array(CaseChange)
       .describe('Changed cases, worst first. Unchanged cases only with includeUnchanged=true.'),
+    config: ConfigDiff.describe('Parameters, workflow version and dataset that differ.'),
   })
   .register(components, { id: 'Comparison' });
 

@@ -1,6 +1,7 @@
 /**
  * Comparison of two runs (or a run and a baseline): metric deltas and per-case changes.
  */
+import { type JsonObject, type JsonValue, stableStringify } from './json.ts';
 import { describeMetric, listMetrics, type MetricDescriptor, readMetric } from './metrics.ts';
 import {
   type CaseOutcome,
@@ -233,6 +234,8 @@ export interface Comparison {
   metrics: MetricDelta[];
   cases: CaseChange[];
   counts: Record<CaseChangeKind, number>;
+  /** Configuration differences, when the caller knows both sides' configuration. */
+  config?: ConfigDiff;
 }
 
 export function compareRuns(base: ComparisonSide, head: ComparisonSide): Comparison {
@@ -328,6 +331,68 @@ export interface Baseline {
     git: GitInfo | null;
   };
   dataset: { name: string; caseCount: number; hash: string } | null;
+  /**
+   * The configuration the source run used (added in SCOPE 0.3; absent in older files), so a
+   * comparison can say what changed besides the results.
+   */
+  config?: BaselineConfig;
   summary: RunSummary;
   cases: Record<string, CaseSnapshot>;
+}
+
+export interface BaselineConfig {
+  /** Parameters after the variant was applied. */
+  params: JsonObject;
+  /** SHA-256 of the workflow file; identical files have identical hashes on any machine. */
+  workflowHash: string | null;
+}
+
+// ─── Configuration differences ───────────────────────────────────────────────────────────────
+
+/** What a run was configured with, as far as comparisons need it. */
+export interface ConfigSnapshot {
+  params: JsonObject | null;
+  /** Anything that identifies the workflow version (a file hash, or a stored version id). */
+  workflow: string | null;
+  datasetHash: string | null;
+}
+
+export interface ParamChange {
+  key: string;
+  /** Absent on one side: null. */
+  base: JsonValue | null;
+  head: JsonValue | null;
+}
+
+/** What differs in configuration between two runs, beyond their results. */
+export interface ConfigDiff {
+  /** Parameters with different values; empty when both sides are known and equal. */
+  params: ParamChange[];
+  /** Whether the workflow file changed; null when either side does not record it. */
+  workflowChanged: boolean | null;
+  /** Whether the dataset changed; null when either side does not record it. */
+  datasetChanged: boolean | null;
+  /** False when the base side predates configuration records (parameters unknown). */
+  paramsKnown: boolean;
+}
+
+export function compareConfig(base: ConfigSnapshot, head: ConfigSnapshot): ConfigDiff {
+  const params: ParamChange[] = [];
+  const paramsKnown = base.params !== null && head.params !== null;
+  if (base.params && head.params) {
+    const keys = [...new Set([...Object.keys(base.params), ...Object.keys(head.params)])].sort();
+    for (const key of keys) {
+      const b = base.params[key] ?? null;
+      const h = head.params[key] ?? null;
+      if (stableStringify(b) !== stableStringify(h)) params.push({ key, base: b, head: h });
+    }
+  }
+  const differ = (a: string | null, b: string | null) =>
+    a === null || b === null ? null : a !== b;
+  return {
+    params,
+    workflowChanged: differ(base.workflow, head.workflow),
+    datasetChanged: differ(base.datasetHash, head.datasetHash),
+    paramsKnown,
+  };
 }

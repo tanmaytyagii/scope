@@ -196,6 +196,13 @@ describe('runs', () => {
     expect(body.base).toMatchObject({ run: { number: 1, variant: null } });
     expect(body.head).toMatchObject({ run: { number: 2, variant: 'terse' } });
     expect(body.headline).toContain('pass_rate');
+    // The terse variant of the same workflow file, over the same dataset.
+    expect(body.config).toEqual({
+      params: [{ key: 'sentences', base: 2, head: 1 }],
+      workflowChanged: false,
+      datasetChanged: false,
+      paramsKnown: true,
+    });
     const counts = body.counts as Record<string, number>;
     const cases = body.cases as Array<{ kind: string }>;
     expect(cases.every((c) => c.kind !== 'unchanged')).toBe(true);
@@ -313,6 +320,12 @@ describe('traces', () => {
     expect(data.run).toMatchObject({ number: second.number, variant: 'terse' });
     expect(data.baseline).toMatchObject({ file: 'baselines/support.json', runId: first.id });
     expect(data.baselineRun).toEqual({ id: first.id, number: first.number });
+    expect(data.config).toEqual({
+      params: [{ key: 'sentences', base: 2, head: 1 }],
+      workflowChanged: false,
+      datasetChanged: false,
+      paramsKnown: true,
+    });
     expect(data.headline[0]).toBe('pass_rate');
     // Every case is counted; only the changed ones are listed.
     const counted = Object.values(data.counts).reduce((a, b) => a + b, 0);

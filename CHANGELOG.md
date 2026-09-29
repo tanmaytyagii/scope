@@ -44,6 +44,12 @@ which are always called out).
   `scope report --format junit`. Every case is a test case (failed or errored, with reasons and
   the trace), each run's gates a second suite; GitLab, Jenkins, CircleCI and Azure Pipelines show
   them as test results. The CI guide has GitLab, Jenkins, CircleCI and Azure setups.
+- Comparisons say what changed in configuration, not only in results: which parameters differ,
+  and whether the workflow file or the dataset changed. Baseline files record the parameters and
+  workflow hash they came from (a new optional `config` field; older SCOPE versions ignore it),
+  so `scope run`, reports, the job summary and pull request comment ("Changed since the baseline:
+  sentences 2 → 1 · the workflow file"), the run page and `scope compare` show it; the Compare
+  page and `GET /api/v1/comparisons` compare two runs' configuration too.
 - [Privacy and data](docs/guides/privacy.md): what is stored, what leaves the machine, what is
   redacted where, and how to keep content out.
 

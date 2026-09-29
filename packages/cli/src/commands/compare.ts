@@ -7,6 +7,8 @@ import { relative, resolve } from 'node:path';
 import { readBaseline } from '@scope-ai/config';
 import {
   type CaseSnapshot,
+  type ConfigSnapshot,
+  compareConfig,
   compareMany,
   compareRuns,
   ErrorCodes,
@@ -28,6 +30,7 @@ export interface ComparisonSideInfo {
   cases: Record<string, CaseSnapshot>;
   workflow: string;
   variant: string | null;
+  config: ConfigSnapshot;
 }
 
 export async function loadSide(ctx: CommandContext, ref: string): Promise<ComparisonSideInfo> {
@@ -40,6 +43,11 @@ export async function loadSide(ctx: CommandContext, ref: string): Promise<Compar
       cases: baseline.cases,
       workflow: baseline.workflow,
       variant: baseline.variant,
+      config: {
+        params: baseline.config?.params ?? null,
+        workflow: baseline.config?.workflowHash ?? null,
+        datasetHash: baseline.dataset?.hash ?? null,
+      },
     };
   }
   const store = await ctx.store();
@@ -58,6 +66,11 @@ export async function loadSide(ctx: CommandContext, ref: string): Promise<Compar
     cases: await store.runCaseSnapshots(project.id, run.id),
     workflow: run.workflowName,
     variant: run.variant,
+    config: {
+      params: run.params,
+      workflow: await store.workflowVersionHash(project.id, run.workflowVersionId),
+      datasetHash: run.dataset?.hash ?? null,
+    },
   };
 }
 
@@ -77,6 +90,7 @@ export async function compareCommand(
     { summary: base.summary, cases: base.cases },
     { summary: head.summary, cases: head.cases },
   );
+  comparison.config = compareConfig(base.config, head.config);
   ctx.out.emitJson({ base: base.label, head: head.label, ...comparison });
   if (ctx.out.json) return;
   const s = ctx.out.style;

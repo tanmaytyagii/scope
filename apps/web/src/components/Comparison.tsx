@@ -2,7 +2,7 @@
  * The pieces of a comparison between two sides — two runs, or a run and its baseline: metric
  * deltas with direction-aware verdicts, and the cases whose outcome or scores changed.
  */
-import type { CaseChange, MetricDelta } from '@scope-ai/protocol';
+import type { CaseChange, ConfigDiff, JsonValue, MetricDelta } from '@scope-ai/protocol';
 import { Link } from 'react-router';
 import { formatDelta, formatDuration, formatMetric, formatScore } from '../lib/format.ts';
 import { ArrowDown, ArrowRight, ArrowUp } from '../ui/icons.tsx';
@@ -210,5 +210,75 @@ export function CaseChangeTable({
         ))}
       </tbody>
     </Table>
+  );
+}
+
+function showValue(value: JsonValue | null): string {
+  if (value === null) return 'not set';
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  return text.length > 60 ? `${text.slice(0, 59)}…` : text;
+}
+
+/** "sentences 2 → 1", "the workflow file", "the dataset": what changed, in short phrases. */
+export function describeConfig(config: ConfigDiff | null | undefined): string[] {
+  if (!config) return [];
+  return [
+    ...config.params.map((p) => `${p.key} ${showValue(p.base)} → ${showValue(p.head)}`),
+    ...(config.workflowChanged ? ['the workflow file'] : []),
+    ...(config.datasetChanged ? ['the dataset'] : []),
+  ];
+}
+
+/** The configuration two runs differ in: parameters side by side, and workflow and dataset. */
+export function ConfigChanges({
+  config,
+  baseLabel,
+  headLabel,
+}: {
+  config: ConfigDiff;
+  baseLabel: string;
+  headLabel: string;
+}) {
+  const same = (flag: boolean | null, what: string) =>
+    flag === null ? `${what}: not recorded` : flag ? `${what} changed` : `same ${what}`;
+  return (
+    <div>
+      {config.params.length > 0 ? (
+        <Table>
+          <THead>
+            <TH>Parameter</TH>
+            <TH align="right">{baseLabel}</TH>
+            <TH align="right">{headLabel}</TH>
+          </THead>
+          <tbody>
+            {config.params.map((p) => (
+              <TR key={p.key}>
+                <TD className="font-mono text-xs text-fg">{p.key}</TD>
+                <TD align="right" className="font-mono text-xs">
+                  {showValue(p.base)}
+                </TD>
+                <TD align="right" className="font-mono text-xs">
+                  {showValue(p.head)}
+                </TD>
+              </TR>
+            ))}
+          </tbody>
+        </Table>
+      ) : (
+        <p className="px-4 pt-3 text-sm text-fg-2">
+          {config.paramsKnown
+            ? 'The same parameters.'
+            : 'Parameters are not recorded for the base (saved before SCOPE 0.3).'}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2 px-4 py-2.5">
+        <Pill tone={config.workflowChanged ? 'info' : 'neutral'}>
+          {same(config.workflowChanged, 'workflow file')}
+        </Pill>
+        <Pill tone={config.datasetChanged ? 'info' : 'neutral'}>
+          {same(config.datasetChanged, 'dataset')}
+        </Pill>
+      </div>
+    </div>
   );
 }

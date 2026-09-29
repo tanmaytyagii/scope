@@ -130,6 +130,9 @@ describe('GitHub Action runner', () => {
       expect(r.stdout).toMatch(/^::error title=SCOPE · support · run #\d+::Pass rate: /m);
       expect(r.summary).toContain('### ❌ SCOPE · support — failed');
       expect(r.summary).toContain('regressed');
+      expect(r.summary).toContain(
+        '**Changed since the baseline:** sentences 2 → 1 · the workflow file',
+      );
 
       const reportOnly = await runAction({ 'fail-on-gates': 'false' });
       expect(reportOnly.code).toBe(0);

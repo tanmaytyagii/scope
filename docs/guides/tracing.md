@@ -42,9 +42,17 @@ trace it is a child of the current span; outside one it is a trace of its own.
 The client keeps its exact behavior: same return values (`.withResponse()` and stream helpers
 work), same errors, no changes to requests. Recording failures never reach your code.
 
-- **Streams** are recorded as your code reads them; a stream that is never read or cancelled
-  never finishes its span. OpenAI reports token usage for streams only with
-  `stream_options: { include_usage: true }`; without it, streamed calls have no token counts.
+- **Streams** are recorded as your code reads them, including a stream your traced handler
+  returns for a web framework to send later: the trace waits for its open model span and is
+  exported when the stream ends. If your code stops reading early, the span keeps what arrived
+  and is marked `scope.stream.incomplete: cancelled`. A stream nobody reads to the end is closed
+  after `openSpanGraceMs` (10 minutes by default) as an error, marked `abandoned`. OpenAI reports
+  token usage for streams only with `stream_options: { include_usage: true }`; without it,
+  streamed calls have no token counts.
+- **Failures** — timeouts, network errors, API errors, a stream that breaks midway — are recorded
+  on the span with the SDK's error class (`APIConnectionTimeoutError`, `RateLimitError`, …) and
+  rethrown unchanged. Calls the SDK retries are one span with the final outcome. Malformed
+  responses are passed to your code as they are; SCOPE records what it can read from them.
 - **OpenAI-compatible servers** (Ollama, vLLM, OpenRouter, Gemini's OpenAI endpoint): point the
   OpenAI client at them and name the provider — `instrumentOpenAI(new OpenAI({ baseURL }),
   { tracer, provider: 'ollama' })`. Their cost is unknown unless you pass prices with
@@ -166,8 +174,12 @@ recorded without content capture have no input and are skipped.
 | `SCOPE_CAPTURE_CONTENT` | `true` | `false` records structure, timing and tokens but no inputs or outputs |
 | `SCOPE_LOG_LEVEL` | `warn` | The SDK's own log level |
 
-`createTracer({ exporter, privacy, pricing, logger })` accepts the same settings in code. Use
-`MemoryExporter` in tests.
+`createTracer({ exporter, privacy, pricing, openSpanGraceMs, logger })` accepts the same
+settings in code. Use `MemoryExporter` in tests.
+
+A trace is exported when its function returns — or, if spans are still open then (a stream
+returned to the caller), when they end, at most `openSpanGraceMs` later. Spans still open at that
+point, or at `tracer.shutdown()`, are closed as errors. At most 1,000 traces wait at once.
 
 ## Delivery guarantees
 

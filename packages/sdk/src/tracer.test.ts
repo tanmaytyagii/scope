@@ -263,6 +263,75 @@ describe('Tracer', () => {
   });
 });
 
+describe('spans that outlive their trace function', () => {
+  it('waits for them before exporting, without keeping the caller waiting', async () => {
+    const { exporter, tracer } = setup();
+    let release!: () => void;
+    const late = new Promise<void>((r) => {
+      release = r;
+    });
+    // The function returns while its span is still open (a stream handed to the caller).
+    await tracer.trace('handler', {}, () => {
+      void tracer.span('stream', { kind: 'llm' }, async (span) => {
+        await late;
+        span.setOutput({ text: 'done' });
+      });
+      return 'returned';
+    });
+    expect(exporter.bundles).toHaveLength(0);
+    release();
+    await new Promise((r) => setTimeout(r, 5));
+    expect(exporter.bundles).toHaveLength(1);
+    expect(exporter.bundles[0]?.spans.find((s) => s.name === 'stream')).toMatchObject({
+      status: 'ok',
+      output: { text: 'done' },
+    });
+  });
+
+  it('closes them as errors after the grace period, or at shutdown', async () => {
+    const graced = setup({ openSpanGraceMs: 30 });
+    await graced.tracer.trace('handler', {}, () => {
+      void graced.tracer.span('never', {}, () => new Promise(() => {}));
+    });
+    await new Promise((r) => setTimeout(r, 80));
+    expect(graced.exporter.bundles[0]?.spans.find((s) => s.name === 'never')).toMatchObject({
+      status: 'error',
+      statusMessage: 'span did not end within 0 s of its trace',
+    });
+
+    const { exporter, tracer } = setup();
+    await tracer.trace('handler', {}, () => {
+      void tracer.span('never', {}, () => new Promise(() => {}));
+    });
+    await tracer.shutdown();
+    expect(exporter.bundles[0]?.spans.find((s) => s.name === 'never')).toMatchObject({
+      status: 'error',
+      statusMessage: 'span was still open when the tracer shut down',
+    });
+  });
+
+  it('holds at most 1,000 traces, releasing the oldest first', async () => {
+    const { exporter, tracer } = setup();
+    for (let i = 0; i < 1001; i++)
+      await tracer.trace(`t${i}`, {}, () => {
+        void tracer.span('never', {}, () => new Promise(() => {}));
+      });
+    await new Promise((r) => setTimeout(r, 5));
+    expect(exporter.bundles.map((b) => b.trace.name)).toEqual(['t0']);
+  });
+
+  it('closes them at once when the grace period is 0, as a workflow run needs', async () => {
+    const { exporter, tracer } = setup({ openSpanGraceMs: 0 });
+    await tracer.trace('case', {}, () => {
+      void tracer.span('never', {}, () => new Promise(() => {}));
+    });
+    expect(exporter.bundles[0]?.spans.find((s) => s.name === 'never')).toMatchObject({
+      status: 'error',
+      statusMessage: 'span did not end before its trace',
+    });
+  });
+});
+
 describe('HttpExporter shutdown', () => {
   it('keeps the process alive until an awaited shutdown finishes, even when retries fail', async () => {
     // Background exports must never hold a process open, but `await tracer.shutdown()` must

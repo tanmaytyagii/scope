@@ -28,6 +28,8 @@ type AnyFn = (...args: unknown[]) => unknown;
 type Obj = Record<string | symbol, unknown>;
 
 const INSTRUMENTED = Symbol.for('scope-ai.instrumented');
+/** Distinct tool calls kept from one streamed response. */
+const MAX_STREAM_TOOL_CALLS = 128;
 
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null;
 const num = (v: unknown): number | undefined =>
@@ -47,6 +49,11 @@ interface CallResult {
   cacheWriteTokens?: number | undefined;
   finishReason?: string | undefined;
   requestId?: string | undefined;
+  /**
+   * Why a streamed output is partial: the application stopped reading (`cancelled`), or did not
+   * read it to the end within the tracer's grace period (`abandoned`).
+   */
+  incomplete?: 'cancelled' | 'abandoned' | undefined;
 }
 
 interface CallSpec {
@@ -71,6 +78,15 @@ function observeCall(spec: CallSpec, observe: (span: SpanHandle) => Promise<Call
     try {
       const result = await observe(span);
       span.setOutput(result.output);
+      if (result.incomplete) {
+        // The output is what arrived before the stream stopped, not the whole response.
+        span.setAttribute('scope.stream.incomplete', result.incomplete);
+        if (result.incomplete === 'abandoned')
+          span.setStatus(
+            'error',
+            `the stream was not read to the end within ${Math.round(spec.tracer.openSpanGraceMs / 1000)} s`,
+          );
+      }
       span.recordModelCall({
         provider: spec.provider,
         providerType: spec.providerType,
@@ -136,14 +152,37 @@ function intercept(
   if (params.stream === true && spec.fromStream) {
     const collector = spec.fromStream();
     let finish!: (error?: unknown) => void;
+    let cancelled = false;
     const finished = new Promise<void>((resolve, reject) => {
       finish = (error) => (error === undefined ? resolve() : reject(error));
     });
     observeCall(call, async () => {
-      await finished;
-      return collector.result();
+      // A stream nobody reads to the end would hold its span (and trace) forever.
+      const grace = spec.tracer.openSpanGraceMs;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const abandoned = new Promise<'abandoned'>((resolve) => {
+        if (grace <= 0) return;
+        timer = setTimeout(() => resolve('abandoned'), grace);
+        timer.unref?.();
+      });
+      try {
+        const ended = finished.then(() => 'ended' as const);
+        // Handled even when the grace period wins the race and the stream fails afterwards: an
+        // unhandled rejection would crash the application.
+        ended.catch(() => {});
+        const outcome = await Promise.race([ended, abandoned]);
+        const result = collector.result();
+        if (outcome === 'abandoned') result.incomplete = 'abandoned';
+        else if (cancelled) result.incomplete = 'cancelled';
+        return result;
+      } finally {
+        clearTimeout(timer);
+      }
     });
-    const wrap = (stream: unknown) => watchStream(stream, collector.onEvent, finish);
+    const wrap = (stream: unknown) =>
+      watchStream(stream, collector.onEvent, finish, () => {
+        cancelled = true;
+      });
     const wrapped = (
       typeof promise._thenUnwrap === 'function'
         ? promise._thenUnwrap(wrap)
@@ -162,11 +201,15 @@ function intercept(
   return promise;
 }
 
-/** A proxy of an async-iterable stream that reports each event and the end of iteration. */
+/**
+ * A proxy of an async-iterable stream that reports each event, the end of iteration, and
+ * whether the application stopped reading before the end (`onCancel`).
+ */
 function watchStream(
   stream: unknown,
   onEvent: (event: unknown) => void,
   finish: (error?: unknown) => void,
+  onCancel: () => void,
 ): unknown {
   if (!isObj(stream) || typeof stream[Symbol.asyncIterator] !== 'function') {
     finish();
@@ -204,6 +247,7 @@ function watchStream(
             }
           },
           async return(value?: unknown) {
+            if (!done) onCancel();
             end();
             return iterator.return ? iterator.return(value) : { done: true, value };
           },
@@ -333,6 +377,8 @@ export function instrumentOpenAI<T>(client: T, options: InstrumentOptions): T {
                 for (const t of Array.isArray(delta?.tool_calls) ? delta.tool_calls : []) {
                   if (!isObj(t)) continue;
                   const index = count(t.index) ?? 0;
+                  // Real responses have a handful of tool calls; indexes past this are noise.
+                  if (!tools.has(index) && tools.size >= MAX_STREAM_TOOL_CALLS) continue;
                   const entry = tools.get(index) ?? { name: '', arguments: '' };
                   const fn = isObj(t.function) ? t.function : {};
                   entry.name += str(fn.name) ?? '';
@@ -360,9 +406,14 @@ export function instrumentOpenAI<T>(client: T, options: InstrumentOptions): T {
                 }
               },
               result() {
+                // Deltas that never carried a name or arguments are not tool calls.
+                const calls = [...tools.entries()]
+                  .sort(([a], [b]) => a - b)
+                  .map(([, call]) => call)
+                  .filter((call) => call.name !== '' || call.arguments !== '');
                 return {
                   ...result,
-                  output: tools.size ? { text, toolCalls: [...tools.values()] } : { text },
+                  output: calls.length ? { text, toolCalls: calls } : { text },
                 };
               },
             };

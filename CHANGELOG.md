@@ -17,6 +17,19 @@ which are always called out).
   were dropped. The queue is bounded by bytes too (`maxQueueBytes`, 32 MiB).
 - Ingestion errors caused by one record (a duplicate trace id, a span or evaluation without its
   trace, an unknown run id) name the record in `details.issues`, as schema errors already did.
+- A streamed model response that a traced handler returns for its web framework to send (the
+  usual way to stream a chat answer) is now recorded completely: the trace waits for its open
+  model span and is exported when the stream ends. Before, the span was closed as an error with
+  no output or tokens the moment the handler returned. Spans still open after `openSpanGraceMs`
+  (10 minutes by default, a new tracer option) or at `shutdown()` are closed as errors; at most
+  1,000 traces wait at once. `scope run` keeps closing open spans when a case ends.
+- Instrumented streams mark partial output: `scope.stream.incomplete` is `cancelled` when the
+  application stops reading early, and `abandoned` (an error) when a stream is not read to the
+  end within the grace period — before, an unread stream held its trace in memory forever.
+- Errors recorded on spans name the error's class when its `name` is the generic `Error`, as with
+  the OpenAI and Anthropic SDKs: `APIConnectionTimeoutError`, `RateLimitError`, not `Error`.
+- Streamed tool-call deltas without a name or arguments are no longer recorded as empty tool
+  calls, and at most 128 tool calls are kept from one response.
 
 ## [0.3.0] - 2026-09-29
 

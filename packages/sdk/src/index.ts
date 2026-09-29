@@ -21,6 +21,8 @@ export interface CreateTracerOptions {
   project?: string;
   privacy?: PrivacyOptions;
   pricing?: PriceTable;
+  /** See {@link TracerOptions.openSpanGraceMs} (default 10 minutes). */
+  openSpanGraceMs?: number;
   logger?: Logger;
   env?: Readonly<Record<string, string | undefined>>;
 }
@@ -65,6 +67,7 @@ export function createTracer(options: CreateTracerOptions = {}): Tracer {
     exporter,
     privacy,
     ...(options.pricing ? { pricing: options.pricing } : {}),
+    ...(options.openSpanGraceMs !== undefined ? { openSpanGraceMs: options.openSpanGraceMs } : {}),
     logger,
   });
 }

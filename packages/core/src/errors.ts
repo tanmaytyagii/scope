@@ -88,7 +88,16 @@ export function toErrorInfo(error: unknown, options: { includeStack?: boolean } 
     return info;
   }
   if (error instanceof Error) {
-    const info: ErrorInfo = { type: error.name || 'Error', message: error.message };
+    // Many libraries subclass Error without setting `name` (the OpenAI and Anthropic SDKs among
+    // them); the class name tells a timeout from a rate limit.
+    const className = error.constructor?.name;
+    const type =
+      error.name && error.name !== 'Error'
+        ? error.name
+        : className && className !== 'Object'
+          ? className
+          : 'Error';
+    const info: ErrorInfo = { type, message: error.message };
     const code = (error as { code?: unknown }).code;
     if (typeof code === 'string') info.code = code;
     if (options.includeStack && error.stack) info.stack = error.stack;

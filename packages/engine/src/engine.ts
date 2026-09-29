@@ -234,6 +234,9 @@ export class Engine {
       },
       privacy: options.project.privacy,
       pricing: options.project.pricing,
+      // A case is complete when its trace function returns: evaluation and the run summary read
+      // its trace right away, so spans left open are closed then rather than waited for.
+      openSpanGraceMs: 0,
       logger: this.#logger,
     });
   }

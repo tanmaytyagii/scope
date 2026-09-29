@@ -51,6 +51,14 @@ export interface TracerOptions {
   maxSpansPerTrace?: number;
   /** Include stack traces in recorded errors. Off by default: stacks reveal file paths. */
   includeStacks?: boolean;
+  /**
+   * How long a trace waits, after its traced function has returned, for spans that are still
+   * open — typically a streamed model response returned to the caller and read later. The trace
+   * is exported when they end; spans still open after this are closed as errors. Also how long
+   * an instrumented stream may go unread before its span is closed. Default 10 minutes; 0 closes
+   * open spans as soon as the function returns.
+   */
+  openSpanGraceMs?: number;
   logger?: Logger;
 }
 
@@ -113,8 +121,13 @@ interface TraceState {
   metadata: JsonObject;
   dropped: number;
   rootDurationMs: number | null;
+  /** The root span's record, once the traced function has returned. */
+  rootRecord: SpanRecord | null;
   handle: TraceHandle;
 }
+
+/** At most this many traces wait for open spans at once; the oldest is closed to make room. */
+const MAX_WAITING_TRACES = 1000;
 
 interface ActiveContext {
   trace: TraceState;
@@ -128,6 +141,9 @@ export class Tracer {
   readonly #maxSpans: number;
   readonly #logger: Logger;
   readonly #pending = new Set<Promise<void>>();
+  readonly #openSpanGraceMs: number;
+  /** Traces whose function has returned while some of their spans are still open. */
+  readonly #waiting = new Map<TraceState, ReturnType<typeof setTimeout>>();
 
   constructor(options: TracerOptions) {
     this.#exporter = options.exporter;
@@ -143,7 +159,13 @@ export class Tracer {
       includeStacks: options.includeStacks ?? false,
     };
     this.#maxSpans = options.maxSpansPerTrace ?? 1000;
+    this.#openSpanGraceMs = options.openSpanGraceMs ?? 600_000;
     this.#logger = options.logger ?? silentLogger;
+  }
+
+  /** See {@link TracerOptions.openSpanGraceMs}. */
+  get openSpanGraceMs(): number {
+    return this.#openSpanGraceMs;
   }
 
   get privacy(): PrivacyPolicy {
@@ -176,6 +198,7 @@ export class Tracer {
       metadata: options.metadata ? (toJsonValue(options.metadata) as JsonObject) : {},
       dropped: 0,
       rootDurationMs: null,
+      rootRecord: null,
       handle: undefined as unknown as TraceHandle,
     };
     const root = new SpanRecorder({
@@ -232,6 +255,7 @@ export class Tracer {
     }
     const rootRecord = root.end();
     state.rootDurationMs = rootRecord.durationMs;
+    state.rootRecord = rootRecord;
 
     if (options.finalize) {
       try {
@@ -243,9 +267,52 @@ export class Tracer {
       }
     }
 
+    if (this.#openSpanGraceMs > 0 && state.spans.some((s) => !s.ended)) this.#wait(state);
+    else await this.#complete(state);
+
+    if (failed) throw failure;
+    return result as T;
+  }
+
+  /**
+   * Holds a trace whose function returned with spans still open (a stream the caller reads
+   * later) until they end, or until the grace period is over. The caller is not kept waiting.
+   */
+  #wait(state: TraceState): void {
+    if (this.#waiting.size >= MAX_WAITING_TRACES) {
+      const [oldest] = this.#waiting.keys();
+      if (oldest)
+        void this.#release(oldest, 'span was still open when too many traces were waiting');
+    }
+    const seconds = Math.round(this.#openSpanGraceMs / 1000);
+    const timer = setTimeout(
+      () => void this.#release(state, `span did not end within ${seconds} s of its trace`),
+      this.#openSpanGraceMs,
+    );
+    // Waiting never keeps the process alive; shutdown() closes what is still waiting.
+    timer.unref?.();
+    this.#waiting.set(state, timer);
+  }
+
+  /** Exports a waiting trace, closing spans that are still open with `reason`. */
+  async #release(state: TraceState, reason?: string): Promise<void> {
+    const timer = this.#waiting.get(state);
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    this.#waiting.delete(state);
+    await this.#complete(state, reason);
+  }
+
+  /** Builds the trace record from its spans and exports it. */
+  async #complete(
+    state: TraceState,
+    openReason = 'span did not end before its trace',
+  ): Promise<void> {
+    const traceId = state.id;
+    const name = state.name;
+    const rootRecord = state.rootRecord as SpanRecord;
     // Close spans left open by un-awaited work, so the trace is complete.
-    for (const span of state.spans)
-      if (!span.ended) span.setStatus('error', 'span did not end before its trace').end();
+    for (const span of state.spans) if (!span.ended) span.setStatus('error', openReason).end();
     const spans = state.spans.map((s) => s.end());
     const rollup = rollupSpans(spans);
     if (state.dropped > 0) state.metadata['scope.dropped_spans'] = state.dropped;
@@ -271,9 +338,6 @@ export class Tracer {
       llmCallCount: rollup.llmCallCount,
     };
     await this.#export({ trace, spans, evaluations: state.evaluations });
-
-    if (failed) throw failure;
-    return result as T;
   }
 
   async span<T>(
@@ -311,6 +375,9 @@ export class Tracer {
       throw error;
     } finally {
       span.end();
+      // The last open span of a trace whose function has already returned: export it now.
+      if (this.#waiting.has(context.trace) && context.trace.spans.every((s) => s.ended))
+        void this.#release(context.trace);
     }
   }
 
@@ -336,6 +403,11 @@ export class Tracer {
   }
 
   async shutdown(): Promise<void> {
+    await Promise.all(
+      [...this.#waiting.keys()].map((state) =>
+        this.#release(state, 'span was still open when the tracer shut down'),
+      ),
+    );
     await this.flush();
     await this.#exporter.shutdown?.();
   }

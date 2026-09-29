@@ -72,7 +72,7 @@ one, and `scope db status` says so. **Back up before upgrading.**
 | 0.1 | `0001_initial` | — |
 | 0.2 | `0002_run_comparisons` | No (0.1 fails to migrate it) |
 | 0.3 | none | Yes: 0.2 opens a 0.3 database |
-| 0.4 | `0003_run_manifest` | No (0.3 fails to migrate it) |
+| 0.4 | `0003_run_manifest`, `0004_window_indexes` | No (0.3 fails to migrate it) |
 
 To upgrade a Compose deployment:
 

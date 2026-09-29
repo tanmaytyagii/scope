@@ -99,7 +99,12 @@ function storeSuite(label: string, url: () => string, reset?: (store: Store) => 
 
     it('applies migrations once and reports state', async () => {
       expect(await store.migrationState()).toEqual({
-        applied: ['0001_initial', '0002_run_comparisons', '0003_run_manifest'],
+        applied: [
+          '0001_initial',
+          '0002_run_comparisons',
+          '0003_run_manifest',
+          '0004_window_indexes',
+        ],
         pending: [],
         newer: [],
       });
@@ -708,7 +713,7 @@ describe('storage urls and errors', () => {
 
     const store = await Store.open(url);
     expect(await store.migrationState()).toEqual({
-      applied: ['0001_initial', '0002_run_comparisons', '0003_run_manifest'],
+      applied: ['0001_initial', '0002_run_comparisons', '0003_run_manifest', '0004_window_indexes'],
       pending: [],
       newer: [],
     });

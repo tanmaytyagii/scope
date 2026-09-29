@@ -68,6 +68,13 @@ which are always called out).
   were dropped. The queue is bounded by bytes too (`maxQueueBytes`, 32 MiB).
 - A run's case list (`GET /runs/{run}/cases`, the run page) read every evaluation of the project
   to find those of one page of cases, on SQLite; found by the new query-plan test.
+- The dashboard's time-window pages stay fast as data grows. Migration `0004_window_indexes`
+  adds covering indexes for the overview, models and evaluator pages and the failed-evaluations
+  list, so they read an index in time order instead of every row in the window: at 300,000 traces
+  the overview's trace totals went from 617 ms to 22 ms on first load, the models page's queries
+  from 1.2 s to 20 ms and 300 ms to 140 ms, and the failed-evaluations list from 31 ms to 1 ms, for
+  6% more disk. A trace's and a run's evaluations are read by trace or run id alone, which the new
+  indexes would otherwise have turned into project-wide walks (caught by the query-plan test).
 - SQLite keeps up to 64 MiB of pages in memory (was 2 MiB): at 200,000 traces ingestion is 40%
   faster because index pages stay cached.
 - Ingestion errors caused by one record (a duplicate trace id, a span or evaluation without its

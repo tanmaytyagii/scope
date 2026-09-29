@@ -481,7 +481,7 @@ export async function getTrace(
     db
       .selectFrom('evaluations')
       .selectAll()
-      .where('project_id', '=', projectId)
+      // The trace is this project's: select its evaluations by trace id alone (see below).
       .where('trace_id', '=', id)
       .orderBy('created_at')
       .orderBy('evaluator')
@@ -683,7 +683,7 @@ export async function listRunCases(
         .selectFrom('evaluations')
         .select(['trace_id', 'evaluator', 'type', 'kind', 'status', 'score', 'reason'])
         // The page's traces are this project's; with a project_id condition SQLite walks every
-        // evaluation of the project through its (project_id, evaluator) index.
+        // evaluation of the project through one of its project indexes.
         .where(
           'trace_id',
           'in',
@@ -756,7 +756,8 @@ export async function runCaseResults(
     db
       .selectFrom('evaluations')
       .select(['trace_id', 'evaluator', 'type', 'kind', 'status', 'score'])
-      .where('project_id', '=', projectId)
+      // The run is this project's. With a project_id condition SQLite may pick an index on
+      // (project_id, created_at) for the ordering and walk every evaluation of the project.
       .where('run_id', '=', runId)
       .orderBy('created_at')
       .execute(),

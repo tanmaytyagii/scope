@@ -153,6 +153,12 @@ it('keeps the hot queries off whole-table and whole-project scans', async () => 
   await store.listRunCases(project.id, run.id, { outcome: 'failed' });
   await store.runCaseResults(project.id, run.id);
   await store.runCaseSnapshots(project.id, run.id);
+  // The dashboard's window aggregates and evaluation lists.
+  const window = { since: Date.now() - 30 * 86_400_000, until: Date.now() + 60_000 };
+  await store.overview(project.id, { ...window, bucketMs: 86_400_000 });
+  await store.modelUsage(project.id, window);
+  await store.evaluatorHealth(project.id, window);
+  await store.listEvaluations(project.id, { status: 'failed', limit: 50 });
   // Retention.
   await store.planPrune({ projectIds: [project.id], before: Date.now() - 86_400_000 });
   await store.prune({ projectIds: [project.id], traceId: sample.trace.id });
@@ -161,6 +167,7 @@ it('keeps the hot queries off whole-table and whole-project scans', async () => 
 
   const db = new DatabaseSync(file, { readOnly: true });
   const problems: string[] = [];
+  const plans = new Map<string, string>();
   const seen = new Set<string>();
   for (const q of captured) {
     if (seen.has(q.sql) || !/^\s*select|^\s*delete|^\s*update/i.test(q.sql)) continue;
@@ -177,10 +184,24 @@ it('keeps the hot queries off whole-table and whole-project scans', async () => 
       .prepare(`explain query plan ${q.sql}`)
       .all(...params)
       .map((row) => String((row as { detail: string }).detail));
+    plans.set(q.sql, plan.join(' | '));
     const bad = plan.filter((line) => BAD_PLAN.some((pattern) => pattern.test(line)));
     if (bad.length) problems.push(`${q.sql}\n    ${bad.join('\n    ')}`);
   }
   db.close();
   expect(seen.size).toBeGreaterThan(20);
   expect(problems).toEqual([]);
+  // The window aggregates read covering indexes in time order (migration 0004), not rows.
+  for (const [pattern, index] of [
+    [/from "spans" where "project_id" = \? and "kind" = \?/, 'spans_model_calls_idx'],
+    [/from "traces" where "project_id" = \? and "start_time" >= \?/, 'traces_project_window_idx'],
+    [
+      /from "evaluations" where "project_id" = \? and "created_at" >= \?/,
+      'evaluations_project_window_idx',
+    ],
+  ] as const) {
+    const q = captured.find((c) => pattern.test(c.sql) && /count\(\*\)|sum\(/.test(c.sql));
+    expect(q, String(pattern)).toBeDefined();
+    expect(plans.get(q?.sql ?? ''), String(pattern)).toContain(index);
+  }
 });

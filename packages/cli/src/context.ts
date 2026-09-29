@@ -75,10 +75,13 @@ export class CommandContext {
   }
 
   /**
-   * The project's store, opened on first use. `onQuery` applies only if this call opens it
-   * (`scope server` passes one first, for slow-query warnings).
+   * The project's store, opened on first use. The options apply only if this call opens it:
+   * `onQuery` (`scope server`'s slow-query warnings), `migrate: false` to leave the schema as it
+   * is (`scope db status`, `scope db backup`).
    */
-  async store(options: { onQuery?: OpenStoreOptions['onQuery'] } = {}): Promise<Store> {
+  async store(
+    options: { onQuery?: OpenStoreOptions['onQuery']; migrate?: boolean } = {},
+  ): Promise<Store> {
     if (!this.#store) {
       const project = this.project();
       this.out.debug(
@@ -86,7 +89,7 @@ export class CommandContext {
       );
       this.#store = await Store.open(project.storage.url, {
         logger: this.logger,
-        autoMigrate: this.env.SCOPE_AUTO_MIGRATE !== 'false',
+        autoMigrate: options.migrate ?? this.env.SCOPE_AUTO_MIGRATE !== 'false',
         ...(options.onQuery ? { onQuery: options.onQuery } : {}),
       });
     }

@@ -9,6 +9,17 @@ which are always called out).
 
 ### Added
 
+- `scope db status` shows where the database is, whether its schema is current (or was migrated
+  by a newer SCOPE), its size and what each project holds; `scope db migrate` applies pending
+  migrations (for `SCOPE_AUTO_MIGRATE=false`); `scope db backup <file>` writes a consistent copy
+  of a SQLite database while it is in use. None of them migrates on open.
+- A production-style deployment: [`deploy/compose.yaml`](deploy/compose.yaml) runs `scope server`
+  on PostgreSQL with secrets from `deploy/.env`, health checks on `/readyz`, restart policies, and
+  optional HTTPS through Caddy. The new [operations guide](docs/guides/operations.md) covers
+  deploying, monitoring, upgrades, backups, retention and key rotation; the
+  [API guide](docs/guides/api.md#stability-and-deprecation) states which interfaces are stable and
+  how they are deprecated.
+- Request logs name the project and the API key id behind each request.
 - Retention. `scope prune --older-than 30d` deletes runs (with their traces) and application
   traces that started before a date or age; `--run` and `--trace` delete one; `--only`,
   `--project` and `--all-projects` narrow or widen it. Without `--yes` it only says what it would

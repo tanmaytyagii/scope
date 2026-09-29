@@ -1,0 +1,6 @@
+# HTTPS in front of SCOPE. With a public domain Caddy obtains and renews a certificate by itself;
+# with "localhost" it uses its own local certificate authority (for trying this out).
+{$SCOPE_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy scope:4700
+}

@@ -5,6 +5,7 @@ import { SCOPE_VERSION } from '@scope-ai/core';
 import { Command, CommanderError, Option } from 'commander';
 import { baselineSaveCommand } from './commands/baseline.ts';
 import { compareManyCommand } from './commands/compare.ts';
+import { dbBackupCommand, dbMigrateCommand, dbStatusCommand } from './commands/db.ts';
 import { doctorCommand } from './commands/doctor.ts';
 import { evaluateCommand } from './commands/evaluate.ts';
 import { exportRunCommand, exportTracesCommand } from './commands/export.ts';
@@ -355,6 +356,25 @@ Examples:
 \`scope server\` can prune on a schedule: SCOPE_RETENTION=30d.`,
     )
     .action(withContext((ctx, opts) => pruneCommand(ctx, opts as never)));
+
+  const db = program
+    .command('db')
+    .description('the database: status, migrations, backups (for operators)');
+  db.command('status')
+    .description('where the database is, its schema version, its size and what each project holds')
+    .action(withContext((ctx) => dbStatusCommand(ctx)));
+  db.command('migrate')
+    .description('apply pending migrations (needed when SCOPE_AUTO_MIGRATE=false)')
+    .action(withContext((ctx) => dbMigrateCommand(ctx)));
+  db.command('backup')
+    .argument('<file>', 'where to write the copy')
+    .description('write a consistent copy of a SQLite database while it is in use')
+    .option('--force', 'replace the file if it exists')
+    .action(
+      withContext((ctx, file: string, opts: { force?: boolean }) =>
+        dbBackupCommand(ctx, file, opts),
+      ),
+    );
 
   program.commandsGroup('Diagnostics:');
   program.helpCommand('help [command]', 'show help for a command');

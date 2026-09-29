@@ -37,8 +37,8 @@ npm run scope -- --help
 npm run scope -- run workflows/support.yaml --cwd examples/rag
 ```
 
-Packages resolve to their TypeScript sources through the `source` export condition, so edits
-are picked up immediately by the CLI, the server and the tests.
+Packages resolve to their TypeScript sources through the `scope-source` export condition, so
+edits are picked up immediately by the CLI, the server and the tests.
 
 ### Useful commands
 
@@ -51,7 +51,9 @@ are picked up immediately by the CLI, the server and the tests.
 | `npm run build` | Emit `dist/` for every package and build the dashboard |
 | `npm run dev:web` | Dashboard dev server with hot reload (proxies `/api` to a running `scope ui`) |
 | `npm run test:e2e` | Playwright tests for the dashboard (build it first: `npm run build -w @scope-ai/web`; one-time: `npx playwright install chromium`) |
-| `npm run bench` | Ingestion and API timings on generated data (`-- --traces 100000`); see [docs/performance.md](docs/performance.md) |
+| `npm run bench` | Ingestion and API timings on generated data (`-- --traces 100000`, `-- --database postgres://…`); see [docs/performance.md](docs/performance.md) |
+| `npm run bench:check` | The CI performance check: timings at 2,000 and 50,000 traces must not grow with the database |
+| `npm run smoke` | Pack every package and install them into an empty project, as users will |
 | `npm run clean` | Remove build output |
 
 ### Testing against PostgreSQL
@@ -77,8 +79,12 @@ packages/storage     SQLite/PostgreSQL store
 packages/protocol    API contract
 packages/cli         the scope command
 packages/scope-ai    the package users install (`npm install -g scope-ai`)
-apps/server          HTTP API and dashboard hosting
+apps/server          HTTP API, OTLP ingestion and dashboard hosting
 apps/web             dashboard
+integrations/        the GitHub Action
+examples/            runnable examples (each one run by examples/examples.test.ts)
+deploy/              production-style Docker Compose deployment
+tests/e2e/           Playwright tests of the dashboard
 ```
 
 Read [docs/architecture.md](docs/architecture.md) before larger changes. Decisions with real
@@ -103,6 +109,46 @@ Open an issue before starting so two people don't build the same thing.
 - **A refusal evaluator.** "Refusal detection" is on the roadmap's evaluator list: a heuristic
   evaluator that flags answers declining the question. See [Adding an evaluator](#adding-an-evaluator);
   its documentation must say how it can be wrong.
+
+## Working on each part
+
+Each part has a guard that catches the mistakes that are easy to make there.
+
+**CLI** (`packages/cli`). One file per command in `src/commands/`, registered in `src/main.ts`.
+Every command supports `--json` (JSON on stdout, diagnostics on stderr) and the documented exit
+codes; errors are `ScopeError`s with a hint. `src/cli.test.ts` runs the real binary in temporary
+projects — add a case there, and a row to [docs/guides/cli.md](docs/guides/cli.md).
+
+**SDK** (`packages/sdk`). Runs inside other people's applications: it must never throw into them,
+block them or grow without bound. Anything read from a provider response or an ingested payload is
+validated before use (see `count()` in `instrument.ts`). Test instrumentation with the real
+`openai` and `@anthropic-ai/sdk` packages against a local server, as `instrument.test.ts` and
+`instrument-robustness.test.ts` do.
+
+**Server** (`apps/server`, `packages/protocol`). Every route is declared once in
+`packages/protocol/src/routes.ts` with Zod schemas; the OpenAPI document is generated from it. The
+contract test calls every route and validates its response, and `isolation.test.ts` checks that
+no route shows one project's data through another project's key — both pick up a new route
+automatically. `/api/v1` only changes additively (see the stability policy in
+[docs/guides/api.md](docs/guides/api.md)).
+
+**Storage** (`packages/storage`). The only package that knows SQL; every query is scoped to a
+project. Migrations are append-only and tested on SQLite and PostgreSQL
+(`SCOPE_TEST_DATABASE_URL`). `query-plans.test.ts` fails when a query scans a whole table or
+project: select spans and evaluations by trace id, not by project and trace id together.
+
+**Dashboard** (`apps/web`). Tokens, primitives and rules are in
+[docs/design-system.md](docs/design-system.md). Types come only from `@scope-ai/protocol`. Every
+chart has a table twin. The Playwright suite (`tests/e2e`) checks journeys, keyboard use and axe
+accessibility in both themes against data the CLI produced.
+
+**Evaluators** (`packages/evaluators`). See [Adding an evaluator](#adding-an-evaluator) and the
+[custom evaluator contract](docs/guides/custom-evaluators.md).
+
+**Integrations** (OTLP in `apps/server/src/otlp/`, instrumentation in `packages/sdk`). Claim only
+what is tested, and say how: [docs/integrations.md](docs/integrations.md) lists each path with its
+evidence. Mapping tests use each convention's documented attributes; end-to-end tests use the real
+exporter or instrumentation packages.
 
 ## Common contributions
 

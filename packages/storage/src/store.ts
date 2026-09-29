@@ -109,6 +109,8 @@ export interface OpenStoreOptions {
 export interface MigrationState {
   applied: string[];
   pending: string[];
+  /** Applied by a newer SCOPE version: this version cannot use the database. */
+  newer: string[];
 }
 
 export interface CreateRunInput {
@@ -284,9 +286,23 @@ export class Store {
 
   async migrationState(): Promise<MigrationState> {
     const migrations = await this.#migrator().getMigrations();
+    const known = new Set(migrations.map((m) => m.name));
+    // Migrations recorded in the database that this version does not have: a newer SCOPE
+    // migrated it. (No table yet means a new database.)
+    let recorded: string[] = [];
+    try {
+      const table = this.#schema ? `${this.#schema}.scope_migrations` : 'scope_migrations';
+      const rows = await sql<{ name: string }>`select name from ${sql.table(table)}`.execute(
+        this.db,
+      );
+      recorded = rows.rows.map((r) => r.name);
+    } catch {
+      recorded = [];
+    }
     return {
       applied: migrations.filter((m) => m.executedAt).map((m) => m.name),
       pending: migrations.filter((m) => !m.executedAt).map((m) => m.name),
+      newer: recorded.filter((name) => !known.has(name)).sort(),
     };
   }
 
@@ -844,6 +860,87 @@ export class Store {
       ...comparison,
       createdAt: Number(row.created_at),
     };
+  }
+
+  // ─── operations ────────────────────────────────────────────────────────────────────────────
+
+  /** Bytes the database takes: the SQLite file's pages, or SCOPE's tables in PostgreSQL. */
+  async databaseSize(): Promise<number> {
+    if (this.dialect === 'sqlite') {
+      const pages = await sql<{
+        n: number;
+      }>`select page_count * page_size as n from pragma_page_count(), pragma_page_size()`.execute(
+        this.db,
+      );
+      return Number(pages.rows[0]?.n ?? 0);
+    }
+    const row = await sql<{ n: string | null }>`
+      select sum(pg_total_relation_size(c.oid))::bigint as n
+      from pg_class c join pg_namespace ns on ns.oid = c.relnamespace
+      where ns.nspname = current_schema() and c.relkind = 'r'`.execute(this.db);
+    return Number(row.rows[0]?.n ?? 0);
+  }
+
+  /** Every project with how much it holds. Counts whole tables: for operators, not hot paths. */
+  async projectsOverview(): Promise<
+    Array<{
+      slug: string;
+      runs: number;
+      traces: number;
+      spans: number;
+      evaluations: number;
+      oldest: number | null;
+      newest: number | null;
+    }>
+  > {
+    const counts = async (table: 'runs' | 'traces' | 'spans' | 'evaluations') =>
+      new Map(
+        (
+          await this.db
+            .selectFrom(table)
+            .select(['project_id', (eb) => eb.fn.countAll<number>().as('n')])
+            .groupBy('project_id')
+            .execute()
+        ).map((r) => [r.project_id, Number(r.n)]),
+      );
+    const [projects, runs, traces, spans, evaluations, times] = await Promise.all([
+      this.listProjects(),
+      counts('runs'),
+      counts('traces'),
+      counts('spans'),
+      counts('evaluations'),
+      this.db
+        .selectFrom('traces')
+        .select([
+          'project_id',
+          (eb) => eb.fn.min<number>('start_time').as('oldest'),
+          (eb) => eb.fn.max<number>('start_time').as('newest'),
+        ])
+        .groupBy('project_id')
+        .execute(),
+    ]);
+    const range = new Map(times.map((t) => [t.project_id, t]));
+    return projects.map((p) => ({
+      slug: p.slug,
+      runs: runs.get(p.id) ?? 0,
+      traces: traces.get(p.id) ?? 0,
+      spans: spans.get(p.id) ?? 0,
+      evaluations: evaluations.get(p.id) ?? 0,
+      oldest: range.has(p.id) ? Number(range.get(p.id)?.oldest) : null,
+      newest: range.has(p.id) ? Number(range.get(p.id)?.newest) : null,
+    }));
+  }
+
+  /**
+   * Writes a consistent copy of a SQLite database to `path` while it stays in use (VACUUM INTO).
+   * PostgreSQL databases are backed up with PostgreSQL's own tools (pg_dump).
+   */
+  async backupSqlite(path: string): Promise<void> {
+    if (this.dialect !== 'sqlite')
+      throw new ScopeError(ErrorCodes.storageUnsupported, 'Backups of PostgreSQL use pg_dump', {
+        hint: 'e.g. pg_dump --format=custom --file=scope.dump "$SCOPE_DATABASE_URL"; see the operations guide.',
+      });
+    await sql`vacuum into ${path}`.execute(this.db);
   }
 
   // ─── retention ─────────────────────────────────────────────────────────────────────────────

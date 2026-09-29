@@ -163,3 +163,31 @@ Response:
 
 Limits: 5 MiB per request (413 above it) and 1,000 traces per request. Retry on 429 and 5xx with
 backoff; do not retry 4xx other than 429.
+
+## Stability and deprecation
+
+SCOPE is pre-1.0, but these interfaces are treated as public: other programs depend on them, so
+they change only in the ways described here.
+
+| Interface | Stable | Changes |
+| --- | --- | --- |
+| Read API (`/api/v1/*`) and its OpenAPI document | Yes | Additive only: new endpoints, fields and query parameters. Clients must ignore fields they do not know. Removing or changing the meaning of a field needs `/api/v2`, with `/api/v1` kept alongside it for at least two minor releases |
+| Ingestion (`POST /api/v1/ingest`, `scope-protocol: 1`) | Yes | New optional fields only. A breaking change would be protocol version 2, and servers keep accepting version 1 |
+| OTLP (`POST /v1/traces`) | Yes | Follows the OTLP/HTTP specification; mappings of more conventions are added over time |
+| Error envelope and codes | Yes | New codes may appear; existing codes keep their meaning |
+| `@scope-ai/sdk`: `createTracer`, `Tracer`, `instrumentOpenAI`, `instrumentAnthropic`, exporters | Yes | New options and methods; existing ones keep their behavior, or change it with a deprecation first (below) |
+| CLI commands, flags, exit codes, `--json` output | Yes | New commands, flags and JSON fields; exit codes never change meaning |
+| Workflow YAML and `scope.yaml` (`version: 1`), dataset files, baseline files (`schema: scope.baseline/v1`), the JSON report (`schema: scope.report/v1`) | Yes | New optional keys only; files written by earlier versions keep working |
+| Custom evaluator modules | Yes | See the [contract](./custom-evaluators.md) |
+| Other exports of `@scope-ai/*` packages (`core`, `storage`, `engine`, …) | No | Internal building blocks: used by SCOPE's own packages and may change in any minor release |
+| The database schema | No | Only SCOPE reads it; migrations change it. Use the API or `scope export` instead |
+
+**Deprecation.** Before a stable interface changes behavior or is removed, it is deprecated in a
+minor release: the CHANGELOG says so under *Deprecated* with the replacement, the CLI and SDK
+print a warning when the deprecated form is used, and the change itself comes no earlier than the
+next minor release. Security fixes are the exception: they may change behavior at once, and the
+CHANGELOG says what and why.
+
+**Timeouts and retries.** The server answers ingestion synchronously; clients should retry on
+`429`, `5xx` and network errors with backoff, and not on other `4xx` (the SDK does exactly this).
+Ingestion is idempotent per trace id, so a retried request never duplicates data.

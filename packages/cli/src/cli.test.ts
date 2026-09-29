@@ -846,3 +846,53 @@ describe('scope prune', () => {
     }
   });
 });
+
+describe('scope db', () => {
+  const dir = join(root, 'dbops');
+
+  beforeAll(async () => {
+    await scope(['init', 'dbops'], root);
+    await scope(['run', '-q'], dir);
+  });
+
+  it('reports the database without migrating it, and migrates on request', async () => {
+    const status = await scope(['db', 'status', '--json'], dir);
+    expect(status.code).toBe(0);
+    const body = JSON.parse(status.stdout);
+    expect(body).toMatchObject({
+      storage: { dialect: 'sqlite' },
+      schema: { pending: [], newer: [] },
+      projects: [{ slug: 'dbops', runs: 1, traces: 12 }],
+    });
+    expect(body.bytes).toBeGreaterThan(0);
+    const text = await scope(['db', 'status'], dir);
+    expect(text.stdout).toMatch(/schema\s+up to date/);
+
+    const migrate = await scope(['db', 'migrate'], dir);
+    expect(migrate.code).toBe(0);
+    expect(migrate.stdout).toContain('Nothing to apply');
+  });
+
+  it('backs up a SQLite database to a file that opens as a SCOPE database', async () => {
+    const file = join(root, 'dbops-backup.db');
+    const backup = await scope(['db', 'backup', file], dir);
+    expect(backup.code).toBe(0);
+    expect(backup.stdout).toContain('Backed up SQLite');
+    const again = await scope(['db', 'backup', file], dir);
+    expect(again.code).toBe(2);
+    expect(again.stderr).toContain('already exists');
+    expect((await scope(['db', 'backup', file, '--force'], dir)).code).toBe(0);
+    // The copy is a working database: its runs can be listed.
+    const runs = await scope(['runs', '--json'], dir, { SCOPE_DATABASE_URL: `sqlite:${file}` });
+    expect(JSON.parse(runs.stdout).runs).toHaveLength(1);
+  });
+
+  it('says how to back up PostgreSQL instead', async () => {
+    const r = await scope(['db', 'backup', 'x.db'], dir, {
+      SCOPE_DATABASE_URL:
+        process.env.SCOPE_TEST_DATABASE_URL ?? 'postgres://scope:x@127.0.0.1:9/scope',
+    });
+    expect(r.code).toBeGreaterThan(0);
+    expect(r.stderr).toMatch(/pg_dump|Unable to connect to PostgreSQL/);
+  });
+});

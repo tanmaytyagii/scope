@@ -101,6 +101,7 @@ function storeSuite(label: string, url: () => string, reset?: (store: Store) => 
       expect(await store.migrationState()).toEqual({
         applied: ['0001_initial', '0002_run_comparisons'],
         pending: [],
+        newer: [],
       });
       expect(await store.migrate()).toEqual([]);
       expect((await store.ensureProject('acme')).id).toBe(projectId);
@@ -709,6 +710,7 @@ describe('storage urls and errors', () => {
     expect(await store.migrationState()).toEqual({
       applied: ['0001_initial', '0002_run_comparisons'],
       pending: [],
+      newer: [],
     });
     expect((await store.ensureProject('legacy')).id).toBe(project.id);
     await store.close();

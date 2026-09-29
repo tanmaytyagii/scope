@@ -194,7 +194,7 @@ export function registerApi(app: Hono<AppEnv>, deps: Deps): void {
         version: SCOPE_VERSION,
         auth: deps.auth.mode,
         storage: { dialect: store.dialect, location: store.target.display },
-        migrations,
+        migrations: { applied: migrations.applied, pending: migrations.pending },
       },
       privacy: {
         captureContent: deps.privacy.captureContent,

@@ -1,0 +1,70 @@
+# SCOPE for a team: `scope server` (API keys) on PostgreSQL, optionally behind Caddy with HTTPS.
+#
+#   cd deploy && cp .env.example .env     # set POSTGRES_PASSWORD (and SCOPE_DOMAIN for HTTPS)
+#   docker compose up -d                  # builds the image from this repository
+#   docker compose exec scope scope keys create --project my-app --name app --scope ingest
+#   docker compose --profile https up -d  # adds Caddy on ports 80 and 443 for SCOPE_DOMAIN
+#
+# What this sets up, how to upgrade and how to back it up: docs/guides/operations.md.
+name: scope
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: scope
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: scope
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scope -d scope"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  scope:
+    # Built from this repository by default. To run a published image instead, set SCOPE_IMAGE
+    # (e.g. ghcr.io/tanmaytyagii/scope:0.4) and start with `docker compose up -d --no-build`.
+    image: ${SCOPE_IMAGE:-scope:local}
+    build: ..
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SCOPE_DATABASE_URL: postgres://scope:${POSTGRES_PASSWORD}@postgres:5432/scope
+      SCOPE_RETENTION: ${SCOPE_RETENTION:-off}
+      SCOPE_LOG_LEVEL: ${SCOPE_LOG_LEVEL:-info}
+      SCOPE_MAX_INGEST_BYTES: ${SCOPE_MAX_INGEST_BYTES:-5242880}
+    # Only this machine can reach the server directly; other machines come through the proxy.
+    ports:
+      - "127.0.0.1:${SCOPE_PORT:-4700}:4700"
+    healthcheck:
+      # Ready means the database is reachable and migrated, not only that the process is up.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4700/readyz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 3
+
+  caddy:
+    profiles: [https]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      scope:
+        condition: service_healthy
+    environment:
+      SCOPE_DOMAIN: ${SCOPE_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+volumes:
+  postgres:
+  caddy-data:

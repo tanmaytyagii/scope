@@ -6,11 +6,14 @@ the credentials SCOPE handles, as the highest priority.
 
 ## Supported versions
 
-SCOPE is pre-1.0. Security fixes are released for the latest minor version only.
+SCOPE is pre-1.0. Security fixes are released for the latest minor version only — upgrade to it
+to receive them ([releases](https://github.com/tanmaytyagii/scope/releases),
+[CHANGELOG](CHANGELOG.md)).
 
 | Version | Supported |
 | --- | --- |
-| 0.1.x | ✅ |
+| Latest minor (0.x) | ✅ |
+| Earlier minors | ❌ |
 
 ## Reporting a vulnerability
 
@@ -35,7 +38,14 @@ the issue is resolved. We will credit you in the release notes unless you prefer
 - Authentication or authorization bypass on `scope server`.
 - A web page reading from or writing to a local `scope ui` (it rejects requests not addressed to
   `localhost`/`127.0.0.1` to defeat DNS rebinding, and accepts ingestion only as
-  `application/json`, which browsers cannot send cross-site without a CORS preflight).
+  `application/json` or, for OpenTelemetry, `application/x-protobuf` — neither of which browsers
+  send cross-site without a CORS preflight, and SCOPE sends no CORS headers).
+- Untrusted content breaking out of where it is shown: model output, dataset text or ingested
+  attributes rendered as Markdown in pull request comments (mentions, links, images), or as HTML
+  in the dashboard.
+- Ingested data that can make the server or an instrumented application hang, crash or use
+  unbounded memory (malformed OTLP, provider responses seen by `instrumentOpenAI` /
+  `instrumentAnthropic`).
 - Injection (SQL, script injection in the dashboard) through ingested trace data.
 - Redaction failures for the built-in secret patterns documented in
   [ADR 0010](docs/decisions/0010-privacy-defaults.md).
@@ -48,3 +58,10 @@ the issue is resolved. We will credit you in the release notes unless you prefer
   use `scope server` with API keys instead.
 - `function` steps and custom evaluators execute project code with the CLI's privileges, like a
   test runner. Only run workflows you trust.
+- There are no user accounts: access to a shared server is per project, through API keys. A `read`
+  key can read every prompt and response in its project.
+- The server speaks plain HTTP; put TLS in front of it (see the
+  [operations guide](docs/guides/operations.md)).
+
+How a deployment should be set up — keys, TLS, network exposure, backups — is in the
+[operations guide](docs/guides/operations.md).

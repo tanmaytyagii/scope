@@ -5,12 +5,15 @@
  * database), ingested through the store, and read through the HTTP API as the dashboard does.
  *
  *   node --conditions=scope-source scripts/bench.mjs [--traces 20000] [--spans 1000]
+ *     [--database postgres://…]
  *
  * Prints ingestion throughput, API timings (median of 5) and response sizes, including one
  * trace with the maximum number of spans, then OTLP ingestion through POST /v1/traces: whole
- * traces per request, and one large trace arriving in pieces.
+ * traces per request, one large trace arriving in pieces, and concurrent requests; retention;
+ * the database's size and the process's peak memory. By default the database is a temporary
+ * SQLite file; with --database, use an empty PostgreSQL database or schema.
  */
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MemoryExporter, Tracer } from '@scope-ai/sdk';
@@ -23,9 +26,20 @@ const arg = (name, fallback) => {
 };
 const TRACES = arg('traces', 20_000);
 const BIG_SPANS = arg('spans', 1000);
+const DATABASE = (() => {
+  const i = process.argv.indexOf('--database');
+  return i >= 0 ? process.argv[i + 1] : null;
+})();
+
+let peakRss = 0;
+const sampleMemory = () => {
+  peakRss = Math.max(peakRss, process.memoryUsage().rss);
+};
+setInterval(sampleMemory, 200).unref();
 
 const dir = mkdtempSync(join(tmpdir(), 'scope-bench-'));
-const store = await Store.open(`sqlite:${join(dir, 'bench.db')}`);
+const store = await Store.open(DATABASE ?? `sqlite:${join(dir, 'bench.db')}`);
+console.log(`database ${store.target.display}`);
 const project = await store.ensureProject('bench');
 const { app } = createApp({ store, auth: { mode: 'none', defaultProject: project } });
 
@@ -120,6 +134,15 @@ await time('evaluators (30d)', '/evaluators?window=30d');
 await time('evaluations, failed', '/evaluations?status=failed&limit=50');
 await time('models (30d)', '/models?window=30d');
 await time(`trace with ${BIG_SPANS} spans`, `/traces/${big.trace.id}`);
+await time(
+  `trace with ${BIG_SPANS} spans, 2 MiB budget`,
+  `/traces/${big.trace.id}?contentBudget=2097152`,
+);
+// A term that matches one old trace: the search passes ~90% of the traces to find it.
+await time(
+  'traces, search (rare term)',
+  `/traces?limit=50&q=${encodeURIComponent(`order ${Math.floor(TRACES / 10)}?`)}`,
+);
 
 // ─── OTLP ingestion ──────────────────────────────────────────────────────────────────────────
 // Through POST /v1/traces as OpenTelemetry exporters send it (JSON encoding), measured after the
@@ -206,6 +229,76 @@ for (let from = 0; from < BIG_SPANS; from += PIECE) {
 console.log(
   `ingest   1 trace × ${BIG_SPANS} spans in ${pieces.length} requests of ${PIECE}: ` +
     `first ${pieces[0]} ms, last ${pieces.at(-1)} ms, total ${Math.round(pieces.reduce((a, b) => a + b, 0))} ms`,
+);
+
+// Concurrent OTLP requests, as several application instances send at once.
+const CONCURRENT = 8;
+started = performance.now();
+let next = OTLP_TRACES + 1;
+await Promise.all(
+  Array.from({ length: CONCURRENT }, async () => {
+    for (let r = 0; r < 5; r++) {
+      const spans = [];
+      for (let i = 0; i < OTLP_PER_REQUEST; i++) spans.push(...otlpSpans(next++, 0, 6));
+      await sendOtlp(spans);
+    }
+  }),
+);
+const concurrentMs = ms(started);
+const concurrentTraces = CONCURRENT * 5 * OTLP_PER_REQUEST;
+console.log(
+  `ingest   ${concurrentTraces} traces in ${CONCURRENT} concurrent streams of ${OTLP_PER_REQUEST}-trace requests in ${concurrentMs} ms (${Math.round(concurrentTraces / (concurrentMs / 1000))} traces/s)`,
+);
+
+// ─── retention ───────────────────────────────────────────────────────────────────────────────
+const OLD = Math.max(1000, Math.round(TRACES / 20));
+const age = 90 * 86_400_000;
+for (let offset = 0; offset < OLD; offset += BATCH) {
+  const batch = await bundles(Math.min(BATCH, OLD - offset), 6, 50_000_000 + offset);
+  await store.ingest(
+    project.id,
+    batch.map((b) => ({
+      ...b,
+      trace: { ...b.trace, startTime: b.trace.startTime - age, endTime: b.trace.endTime - age },
+      spans: b.spans.map((sp) => ({
+        ...sp,
+        startTime: sp.startTime - age,
+        endTime: sp.endTime - age,
+      })),
+    })),
+  );
+}
+const selection = { projectIds: [project.id], before: Date.now() - 60 * 86_400_000 };
+started = performance.now();
+const plan = await store.planPrune(selection);
+const planMs = ms(started);
+started = performance.now();
+const deleted = await store.prune(selection);
+console.log(
+  `\nprune    plan ${planMs} ms; delete ${deleted.traces} traces (${deleted.spans} spans) in ${ms(started)} ms` +
+    (plan.traces === OLD ? '' : ` (planned ${plan.traces} of ${OLD})`),
+);
+
+// ─── size and memory ─────────────────────────────────────────────────────────────────────────
+let bytes = null;
+if (store.dialect === 'sqlite') {
+  bytes = 0;
+  for (const suffix of ['', '-wal'])
+    try {
+      bytes += statSync(`${store.target.location}${suffix}`).size;
+    } catch {}
+} else {
+  const { sql } = await import('kysely');
+  const row =
+    await sql`select sum(pg_total_relation_size(c.oid))::bigint as bytes from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = current_schema() and c.relkind = 'r'`.execute(
+      store.db,
+    );
+  bytes = Number(row.rows[0]?.bytes ?? 0);
+}
+sampleMemory();
+const stats = await store.projectStats(project.id);
+console.log(
+  `size     ${(bytes / 1024 / 1024).toFixed(0)} MiB for ${stats.traces} traces, ${stats.spans} spans (${Math.round(bytes / stats.spans)} bytes a span); benchmark process peak memory (with data generation) ${Math.round(peakRss / 1024 / 1024)} MiB`,
 );
 
 await store.close();

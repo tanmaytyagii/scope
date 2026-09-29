@@ -41,6 +41,9 @@ Ordered by expected value to users. Items move up when users ask for them.
    groundedness (model), refusal detection.
 10. **Accounts** — users, organizations, SSO and role-based access for shared servers.
 11. **Online evaluation** — sampled evaluation of production traffic with alerting.
+12. **Rollups at scale** — pre-aggregated time buckets for the dashboard's overview, evaluator
+    and model views, once deployments outgrow window scans (today ~260 ms at 100,000 traces on
+    SQLite; see [performance](./performance.md)).
 
 ## How to influence the roadmap
 

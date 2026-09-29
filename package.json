@@ -23,6 +23,7 @@
     "scope": "node --conditions=source packages/cli/src/bin.ts",
     "clean": "node scripts/clean.mjs",
     "smoke": "node scripts/smoke-pack.mjs",
+    "bench": "node --conditions=source scripts/bench.mjs",
     "release:version": "node scripts/set-version.mjs",
     "release:verify": "node scripts/verify-packages.mjs --packed",
     "release:publish": "node scripts/publish.mjs",

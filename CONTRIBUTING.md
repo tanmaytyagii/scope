@@ -51,6 +51,7 @@ are picked up immediately by the CLI, the server and the tests.
 | `npm run build` | Emit `dist/` for every package and build the dashboard |
 | `npm run dev:web` | Dashboard dev server with hot reload (proxies `/api` to a running `scope ui`) |
 | `npm run test:e2e` | Playwright tests for the dashboard (build it first: `npm run build -w @scope-ai/web`; one-time: `npx playwright install chromium`) |
+| `npm run bench` | Ingestion and API timings on generated data (`-- --traces 100000`); see [docs/performance.md](docs/performance.md) |
 | `npm run clean` | Remove build output |
 
 ### Testing against PostgreSQL

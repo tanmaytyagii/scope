@@ -49,6 +49,7 @@ npm run smoke                  # pack every package, npm install scope-ai from t
 npm run release:verify         # package manifests + tarball contents (after a build)
 npm run release:version -- X.Y.Z   # lockstep version bump (see RELEASING.md; never ad hoc)
 npm run test:e2e               # Playwright + axe against CLI-seeded data (build web first)
+npm run bench -- --traces N    # ingestion and API timings on a temporary database (docs/performance.md)
 npm run dev:web                # dashboard dev server, proxies /api to a running scope ui
 SCOPE_TEST_DATABASE_URL=postgres://… npm test   # also run storage/server tests on PostgreSQL
 ```

@@ -50,17 +50,30 @@ source (Apache-2.0).
   from the Action; measured performance ([performance.md](./performance.md)); refreshed README,
   screenshots and guides.
 
+- **v0.3 Ecosystem and adoption** — see [v0.3-roadmap.md](./v0.3-roadmap.md) for the audit, each
+  item's outcome and how it was verified. In short: OpenTelemetry ingestion (`POST /v1/traces`,
+  protobuf and JSON, GenAI/OpenLLMetry/OpenInference/Vercel AI SDK mapping, traces assembled
+  across requests); one-line OpenAI and Anthropic client instrumentation (`@scope-ai/sdk`);
+  redaction of everything a trace stores; JUnit reports for other CI systems; comparisons that
+  say what changed in configuration (baseline `config`); `scope export` (traces as JSONL or
+  dataset cases, run results as CSV or JSONL); the custom evaluator contract; every example run
+  in CI; actions pinned to SHAs on Node.js 24 with Dependabot; an OTLP benchmark that found and
+  fixed a whole-project span scan; a security review of the new inputs (Markdown escaping in PR
+  comments, untrusted response numbers); guides organized by task;
+  [integrations](./integrations.md) and [extensibility](./extensibility.md).
+
 ## In Progress
 
 - Nothing half-done.
 
 ## Not Started
 
-- The first published release: 0.2.0 is prepared, but publishing needs the maintainer's npm
-  organization and token (one-time setup in [RELEASING.md](../RELEASING.md)), then a `v0.2.0` tag.
-- Roadmap items, in order: Python SDK, OpenAI/Anthropic client auto-instrumentation, OTLP
-  ingestion, server-side baselines, retention (`scope prune`), dataset tooling, more evaluators,
-  accounts, online evaluation, rollups at scale.
+- The first published release: publishing needs the maintainer's npm organization and token
+  (one-time setup in [RELEASING.md](../RELEASING.md)), then a tag. The packages are at 0.2.0;
+  v0.3's changes are under "Unreleased" in the CHANGELOG. Publishing 0.2.0 first or cutting 0.3.0
+  directly (`npm run release:version -- 0.3.0`) is the maintainer's call.
+- Roadmap items, in order: Python SDK, server-side baselines, retention (`scope prune`), dataset
+  tooling in the dashboard, more evaluators, accounts, online evaluation, rollups at scale.
 
 ## Current Architecture
 
@@ -69,19 +82,20 @@ See [architecture.md](./architecture.md). All packages and apps are implemented 
 
 ## Current Milestone
 
-v0.2 is complete and 0.2.0 is prepared (CHANGELOG section, versions). Next: the maintainer sets
-up npm (RELEASING.md) and pushes the `v0.2.0` tag, which publishes.
+v0.3 is complete (see [v0.3-roadmap.md](./v0.3-roadmap.md)). Next: the maintainer sets up npm
+(RELEASING.md), picks the version to publish, and pushes its tag. The first push after v0.3 is
+also the first CI run of the Node.js 24 action versions.
 
 ## Working Commands
 
 ```bash
-npm ci && npm run check          # lint, typecheck (incl. dashboard + e2e), 277 tests (+4 on PostgreSQL)
+npm ci && npm run check          # lint, typecheck (incl. dashboard + e2e), 352 tests (366 runs with PostgreSQL)
 npm run build                    # packages (tsc -b) + dashboard (vite)
 npm run release:verify           # package manifests and tarball contents (after a build)
 npm run smoke                    # pack all packages, npm install scope-ai from them: init, run, ui
 npx playwright install chromium  # once
 npm run test:e2e                 # dashboard E2E, 34 tests (needs the dashboard built)
-npm run bench -- --traces 100000 # ingestion and API timings (docs/performance.md)
+npm run bench -- --traces 100000 # SDK and OTLP ingestion, API timings (docs/performance.md)
 node scripts/screenshots.mjs     # regenerate docs/images from real runs
 npm run scope -- ui              # local dashboard on 127.0.0.1:4700 (from sources)
 npm run dev:web                  # dashboard dev server, proxies /api to scope ui
@@ -102,11 +116,15 @@ SCOPE_TEST_DATABASE_URL=postgres://scope:scope@127.0.0.1:55432/scope_test npm te
 - API-key authentication does one database lookup per request (no cache).
 - The dashboard initial bundle is ~160 KB gzipped (React, React Router, TanStack Query);
   pages load on demand.
-- Time-window aggregates (overview, evaluators, models) scan their window: ~260 ms at 100,000
+- Time-window aggregates (overview, evaluators, models) scan their window: ~220 ms at 100,000
   traces on SQLite ([performance.md](./performance.md)); rollups are on the roadmap.
+- OTLP: gzip bodies are decompressed synchronously (bounded at 20 MiB), and a trace arriving in
+  many pieces is recomputed from all its stored spans for each piece (a few ms per piece at the
+  1,000-span limit).
 - The span tree is not virtualized; fine at the 1,000-span limit.
 
 ## Next Milestone
 
-The first published release (maintainer action), then the Python SDK speaking the ingestion
-protocol (docs/guides/api.md#ingestion).
+The first published release (maintainer action), then the Python SDK. Python applications can
+already send traces through OpenTelemetry (`/v1/traces`); a native SDK would add SCOPE's own
+evaluations and `scope run` parity.

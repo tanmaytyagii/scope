@@ -13,7 +13,8 @@
       "!**/coverage",
       "!**/playwright-report",
       "!**/test-results",
-      "!**/.scope"
+      "!**/.scope",
+      "!**/baselines/*.json"
     ]
   },
   "formatter": {

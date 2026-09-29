@@ -107,6 +107,8 @@ describe('contract', () => {
     const [first, second] = runs as [Run, Run];
     const trace = (await get(`${API_BASE}/traces?limit=1`)).body as unknown as TracePage;
     const traceId = trace.items[0]?.id as string;
+    const detail = (await get(`${API_BASE}/traces/${traceId}`)).body as unknown as TraceDetail;
+    const spanId = detail.spans[0]?.id as string;
     const concrete: Record<string, string> = {
       '/runs/{run}': `/runs/${first.number}`,
       '/runs/{run}/cases': `/runs/${first.id}/cases`,
@@ -114,6 +116,7 @@ describe('contract', () => {
       '/comparisons': `/comparisons?base=${first.number}&head=${second.number}`,
       '/comparisons/matrix': `/comparisons/matrix?runs=${first.number},${second.number}`,
       '/traces/{trace}': `/traces/${traceId}`,
+      '/traces/{trace}/spans/{span}': `/traces/${traceId}/spans/${spanId}`,
       '/workflows/{workflow}': '/workflows/support',
     };
     for (const route of ROUTES.filter((r) => r.method === 'get')) {
@@ -284,6 +287,38 @@ describe('traces', () => {
     expect(llm).toMatchObject({ provider: 'local', model: 'extractive' });
     expect(detail.evaluations.map((e) => e.evaluator)).toEqual(['grounded', 'key_facts']);
     expect(detail.trace.metadata.expected).toEqual(['5 to 7 business days']);
+  });
+
+  it('bounds trace content on request and serves omitted spans one by one', async () => {
+    const list = (await get(`${API_BASE}/traces?run=1&case=refund-time`))
+      .body as unknown as TracePage;
+    const id = list.items[0]?.id as string;
+    const full = (await get(`${API_BASE}/traces/${id}`)).body as unknown as TraceDetail;
+    expect(full.spans.every((s) => s.contentOmitted === false)).toBe(true);
+    const bounded = (await get(`${API_BASE}/traces/${id}?contentBudget=0`))
+      .body as unknown as TraceDetail;
+    const withContent = full.spans.filter((s) => s.input !== null || s.output !== null);
+    expect(withContent.length).toBeGreaterThan(0);
+    for (const span of bounded.spans) {
+      const original = full.spans.find((s) => s.id === span.id);
+      const had = original?.input !== null || original?.output !== null;
+      expect(span, span.name).toMatchObject(
+        had ? { contentOmitted: true, input: null, output: null } : { contentOmitted: false },
+      );
+      expect(span.offsetMs).toBe(original?.offsetMs);
+    }
+    const target = withContent[0];
+    const one = await get(`${API_BASE}/traces/${id}/spans/${target?.id}`);
+    expect(one.status).toBe(200);
+    expect(one.body).toEqual(target);
+
+    expect((await get(`${API_BASE}/traces/${id}?contentBudget=-1`)).status).toBe(400);
+    const unknown = await get(`${API_BASE}/traces/${id}/spans/${'f'.repeat(16)}`);
+    expect(unknown.status).toBe(404);
+    const malformed = await get(`${API_BASE}/traces/${id}/spans/nope`);
+    expect((malformed.body.error as { hint: string }).hint).toBe(
+      'Span ids are 16 lowercase hexadecimal characters.',
+    );
   });
 
   it('lays two to four runs side by side', async () => {

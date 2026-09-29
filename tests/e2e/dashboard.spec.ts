@@ -107,6 +107,27 @@ test('steps through the failing cases of a run and filters the span tree', async
   expect(errors).toEqual([]);
 });
 
+test('a large trace loads without all its content, and a span loads it when selected', async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  const { largeTraceId } = JSON.parse(
+    readFileSync(join(import.meta.dirname, '.state.json'), 'utf8'),
+  ) as { largeTraceId: string };
+  const downloads: number[] = [];
+  page.on('response', async (response) => {
+    if (response.url().includes(`/api/v1/traces/${largeTraceId}?`))
+      downloads.push((await response.body()).length);
+  });
+  await page.goto(`/traces/${largeTraceId}`);
+  const tree = page.getByRole('tree', { name: 'Spans' });
+  await expect(tree.getByRole('treeitem')).toHaveCount(31);
+  expect(downloads[0]).toBeLessThan(2.5 * 1024 * 1024); // of 3.6 MB of content
+  await tree.getByRole('treeitem', { name: /part-30/ }).click();
+  await expect(page.getByText('part 30: lorem ipsum').first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('a run shows what changed against its baseline', async ({ page }) => {
   await page.goto('/runs/2');
   const panel = page.getByRole('region', { name: 'Compared with baseline' });

@@ -7,6 +7,18 @@ which are always called out).
 
 ## [Unreleased]
 
+### Added
+
+- Large traces open quickly in the dashboard. `GET /api/v1/traces/{trace}` takes
+  `contentBudget=<bytes>`: every span's structure is returned, but inputs and outputs only up to
+  the budget; the rest are marked `contentOmitted: true` (left out, not empty) and served one at a
+  time by the new `GET /api/v1/traces/{trace}/spans/{span}`. Storage reads content only for spans
+  within the budget, so memory is bounded too. The trace explorer asks for 2 MiB and loads a
+  span's content when it is selected: a 1,000-span trace with ~120 KB per span went from a
+  118.7 MiB response (server at 1.1 GiB) to a 2.3 MiB one, open in under a second. Without the
+  parameter the API returns everything, as before. Spans carry the new `contentOmitted` field
+  (always `false` then).
+
 ### Fixed
 
 - The SDK's HTTP exporter no longer loses whole batches. Requests are bounded by size as well as

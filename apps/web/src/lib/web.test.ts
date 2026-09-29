@@ -40,6 +40,7 @@ function span(
     inputTokens: null,
     outputTokens: null,
     costUsd: null,
+    contentOmitted: false,
     ...extra,
   };
 }

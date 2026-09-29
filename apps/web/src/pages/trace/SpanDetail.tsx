@@ -6,6 +6,7 @@
 import type { Evaluation, JsonValue, Span, TraceDetail } from '@scope-ai/protocol';
 import { Tabs } from 'radix-ui';
 import { type ReactNode, useState } from 'react';
+import { useSpan } from '../../api/queries.ts';
 import {
   formatCost,
   formatDateTime,
@@ -175,19 +176,52 @@ function RawTabs(span: Span): TabDef[] {
   return tabs;
 }
 
-function contentOmitted(span: Span): boolean {
+/** Content capture was off when the span was stored: its input and output were never kept. */
+function captureOff(span: Span): boolean {
   return span.attributes['scope.content.omitted'] === true;
 }
 
-export function SpanDetail({
-  span,
-  trace,
-  evaluation,
-}: {
+interface SpanDetailProps {
   span: Span;
   trace: TraceDetail;
   evaluation: Evaluation | undefined;
-}) {
+}
+
+/**
+ * A span of a large trace may arrive without its input and output (the trace was loaded with a
+ * content budget); they are fetched when the span is shown, and the panel says so meanwhile.
+ */
+export function SpanDetail(props: SpanDetailProps) {
+  const { span, trace } = props;
+  const full = useSpan(trace.trace.id, span.id, span.contentOmitted);
+  if (!span.contentOmitted) return <SpanDetailBody {...props} />;
+  if (full.data) return <SpanDetailBody {...props} span={full.data} />;
+  return (
+    <SpanDetailBody
+      {...props}
+      notice={
+        full.isError ? (
+          <p role="alert" className="flex items-center gap-1.5 text-xs text-bad-fg">
+            <Alert size={12} /> This span's input and output could not be loaded:{' '}
+            {full.error.message}
+          </p>
+        ) : (
+          <p role="status" className="text-xs text-fg-3">
+            Loading this span's input and output (left out of the trace download because the trace
+            is large)…
+          </p>
+        )
+      }
+    />
+  );
+}
+
+function SpanDetailBody({
+  span,
+  trace,
+  evaluation,
+  notice,
+}: SpanDetailProps & { notice?: ReactNode }) {
   const isRoot = span.parentId === null && span.kind !== 'evaluation';
   const tabs: TabDef[] = [];
 
@@ -309,7 +343,8 @@ export function SpanDetail({
             {span.error.hint && <div className="mt-1 text-fg-2">{span.error.hint}</div>}
           </div>
         )}
-        {contentOmitted(span) && (
+        {notice}
+        {captureOff(span) && (
           <p className="flex items-center gap-1.5 text-xs text-fg-3">
             <Alert size={12} /> Content capture is off for this project, so inputs and outputs were
             not stored.

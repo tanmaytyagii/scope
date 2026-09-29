@@ -104,7 +104,7 @@ export function traceSummaryDto(t: TraceSummary): api.TraceSummary {
   };
 }
 
-function spanDto(span: SpanRecord, origin: number): api.Span {
+export function spanDto(span: SpanRecord, origin: number, contentOmitted = false): api.Span {
   return {
     id: span.id,
     parentId: span.parentId,
@@ -130,6 +130,7 @@ function spanDto(span: SpanRecord, origin: number): api.Span {
     inputTokens: span.inputTokens,
     outputTokens: span.outputTokens,
     costUsd: span.costUsd,
+    contentOmitted,
   };
 }
 
@@ -153,7 +154,8 @@ export function evaluationDto(e: EvaluationRecord): api.Evaluation {
 export function traceDetailDto(detail: TraceDetail): api.TraceDetail {
   const t = detail.trace;
   // Offsets are measured from the earliest recorded time, so every span has offset >= 0.
-  const origin = Math.min(t.startTime, ...detail.spans.map((s) => s.startTime));
+  const origin = detail.spans.reduce((min, s) => Math.min(min, s.startTime), t.startTime);
+  const omitted = new Set(detail.omittedContent);
   return {
     trace: {
       id: t.id,
@@ -182,7 +184,7 @@ export function traceDetailDto(detail: TraceDetail): api.TraceDetail {
         }
       : null,
     failingCases: detail.failingCases,
-    spans: detail.spans.map((s) => spanDto(s, origin)),
+    spans: detail.spans.map((s) => spanDto(s, origin, omitted.has(s.id))),
     evaluations: detail.evaluations.map(evaluationDto),
   };
 }

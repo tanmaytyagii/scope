@@ -54,6 +54,9 @@ describe.runIf(url)('API on PostgreSQL', () => {
   it('serves every route with a body that matches its schema', async () => {
     const [first, second] = runs as [Run, Run];
     const list = (await (await app.request(`${API_BASE}/traces?limit=1`)).json()) as TracePage;
+    const detail = (await (
+      await app.request(`${API_BASE}/traces/${list.items[0]?.id}?contentBudget=0`)
+    ).json()) as { spans: Array<{ id: string }> };
     const concrete: Record<string, string> = {
       '/runs/{run}': `/runs/${first.number}`,
       '/runs/{run}/cases': `/runs/${first.id}/cases`,
@@ -61,6 +64,7 @@ describe.runIf(url)('API on PostgreSQL', () => {
       '/comparisons': `/comparisons?base=${first.number}&head=${second.number}`,
       '/comparisons/matrix': `/comparisons/matrix?runs=${first.number},${second.number}`,
       '/traces/{trace}': `/traces/${list.items[0]?.id}`,
+      '/traces/{trace}/spans/{span}': `/traces/${list.items[0]?.id}/spans/${detail.spans[0]?.id}`,
       '/workflows/{workflow}': '/workflows/support',
     };
     for (const route of ROUTES.filter((r) => r.method === 'get')) {

@@ -24,6 +24,7 @@ import {
   type RunSummary,
   type RunTrigger,
   ScopeError,
+  type SpanRecord,
   silentLogger,
   type TraceBundle,
 } from '@scope-ai/core';
@@ -65,6 +66,7 @@ import type {
 } from './records.ts';
 import type { Database } from './schema.ts';
 import {
+  getSpan,
   getTrace,
   listRunCases,
   listTraces,
@@ -72,6 +74,7 @@ import {
   runCaseResults,
   type TraceDetail,
   type TraceFilters,
+  type TraceReadOptions,
   toSnapshots,
   traceNames,
 } from './traces.ts';
@@ -896,8 +899,21 @@ export class Store {
     return listTraces(this.db, projectId, filters);
   }
 
-  getTrace(projectId: string, ref: string): Promise<TraceDetail | null> {
-    return getTrace(this.db, projectId, ref);
+  getTrace(
+    projectId: string,
+    ref: string,
+    options: TraceReadOptions = {},
+  ): Promise<TraceDetail | null> {
+    return getTrace(this.db, this.dialect, projectId, ref, options);
+  }
+
+  /** One span of a trace in full (see `TraceReadOptions.contentBudget`). */
+  getSpan(
+    projectId: string,
+    traceRef: string,
+    spanId: string,
+  ): Promise<{ span: SpanRecord; origin: number } | null> {
+    return getSpan(this.db, projectId, traceRef, spanId);
   }
 
   traceNames(projectId: string): Promise<Array<{ name: string; count: number; lastSeen: number }>> {

@@ -11,6 +11,7 @@ import {
   RunCasesQuery,
   RunMatrixQuery,
   RunsQuery,
+  TraceQuery,
   TracesQuery,
 } from './queries.ts';
 import {
@@ -27,6 +28,7 @@ import {
   RunMatrix,
   RunPage,
   ServerInfo,
+  Span,
   TraceDetail,
   TracePage,
   WorkflowDetail,
@@ -189,7 +191,22 @@ export const ROUTES: readonly RouteDefinition[] = [
     params: [
       { name: 'trace', description: 'Trace id, or a unique prefix of at least 4 characters.' },
     ],
+    query: TraceQuery,
     response: TraceDetail,
+    errors: [400, 404],
+  },
+  {
+    method: 'get',
+    path: '/traces/{trace}/spans/{span}',
+    operationId: 'getSpan',
+    summary: 'One span with its full input and output',
+    tag: 'Traces',
+    access: 'read',
+    params: [
+      { name: 'trace', description: 'Trace id, or a unique prefix of at least 4 characters.' },
+      { name: 'span', description: 'Span id (16 hex characters).' },
+    ],
+    response: Span,
     errors: [400, 404],
   },
   {

@@ -59,6 +59,21 @@ export const TracesQuery = PageQuery.extend({
   sort: z.enum(TRACE_SORTS).optional().describe('Default "newest".'),
 });
 
+/** Largest content budget a trace request may ask for. */
+export const MAX_CONTENT_BUDGET = 64 * 1024 * 1024;
+
+export const TraceQuery = z.object({
+  contentBudget: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_CONTENT_BUDGET)
+    .optional()
+    .describe(
+      'Include span inputs and outputs up to this many bytes in total, in span order; other spans have `contentOmitted: true`. Unset: all content.',
+    ),
+});
+
 export const EvaluationsQuery = PageQuery.extend({
   evaluator: z.string().max(256).optional(),
   status: EvaluationStatus.optional(),
@@ -73,3 +88,4 @@ export type ComparisonQuery = z.output<typeof ComparisonQuery>;
 export type TracesQuery = z.output<typeof TracesQuery>;
 export type TraceSort = (typeof TRACE_SORTS)[number];
 export type EvaluationsQuery = z.output<typeof EvaluationsQuery>;
+export type TraceQuery = z.output<typeof TraceQuery>;

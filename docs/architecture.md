@@ -481,6 +481,7 @@ an unmapped field fails the test.
 | GET | `/api/v1/models` | Calls, tokens, latency, errors and estimated cost per model, with the price used |
 | GET | `/api/v1/project` | Project, storage, privacy policy, pricing table and row counts |
 | GET | `/api/v1/api-keys` | Key metadata (name, prefix, scopes, last use); never secrets or hashes |
+| GET | `/api/v1/traces/{trace}/spans/{span}` | One span in full, for traces read with a `contentBudget` |
 | POST | `/api/v1/ingest` | Batched traces, spans and evaluations from SDKs |
 | POST | `/v1/traces` | OpenTelemetry spans (OTLP/HTTP, protobuf or JSON, optionally gzip) |
 | GET | `/healthz`, `/readyz`, `/metrics` | Liveness, readiness (database ping + migrations), Prometheus metrics |

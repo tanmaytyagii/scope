@@ -45,7 +45,8 @@ The complete contract, generated from the server's own schemas, is at
 | GET | `/api/v1/comparisons?base=&head=` | Metric deltas and changed cases (`includeUnchanged=true` for all) |
 | GET | `/api/v1/comparisons/matrix?runs=` | Two to four runs side by side: metrics per run with the best marked, and the cases whose outcome differs |
 | GET | `/api/v1/traces` | Traces (`run`, `name`, `status`, `eval`, `model`, `case`, `q`, `since`, `until`, `sort`) |
-| GET | `/api/v1/traces/{trace}` | A trace with spans and evaluations, and for run cases where it stands among the run's failing cases (`failingCases`); id or unique prefix |
+| GET | `/api/v1/traces/{trace}` | A trace with spans and evaluations, and for run cases where it stands among the run's failing cases (`failingCases`); id or unique prefix. `contentBudget=<bytes>` bounds the span inputs and outputs returned (see below) |
+| GET | `/api/v1/traces/{trace}/spans/{span}` | One span with its full input and output |
 | GET | `/api/v1/evaluators?window=7d` | Pass rate, mean score and per-run trend of each evaluator |
 | GET | `/api/v1/evaluations` | Evaluation results (`evaluator`, `status`, `kind`, `run`) |
 | GET | `/api/v1/workflows`, `/api/v1/workflows/{name}` | Workflows; one workflow's source, versions and variants |
@@ -53,6 +54,14 @@ The complete contract, generated from the server's own schemas, is at
 | POST | `/api/v1/ingest` | Store traces from SDKs |
 
 Outside `/api/v1`: `GET /healthz`, `GET /readyz`, `GET /metrics` (Prometheus).
+
+**Large traces.** A trace can hold 1,000 spans with up to 64 KiB of input and 64 KiB of output
+each — more than 100 MiB. `GET /api/v1/traces/{trace}?contentBudget=2097152` returns every span's
+structure (names, timing, status, tokens, attributes, errors) but inputs and outputs only until 2
+MiB are used, in span order; the other spans have `"contentOmitted": true` and `null` input and
+output — left out, not empty. Fetch one with `GET /api/v1/traces/{trace}/spans/{span}`. Without
+`contentBudget` the whole trace is returned, as before. The dashboard always asks with a 2 MiB
+budget.
 
 ```bash
 # failing traces of run #12

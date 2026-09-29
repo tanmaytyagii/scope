@@ -16,6 +16,7 @@ import type {
   RunCasePage,
   RunMatrix,
   ServerInfo,
+  Span,
   TimeWindowName,
   TraceDetail,
   TracePage,
@@ -139,12 +140,39 @@ export const useRunMatrix = (runs: readonly string[]) =>
 export const useTraces = (filters: Filters) =>
   usePaged<TracePage['items'][number]>('traces', '/traces', filters);
 
+/**
+ * Span inputs and outputs the explorer loads with a trace. Beyond this, spans arrive without
+ * content (`contentOmitted`) and load one at a time when selected, so a trace of any allowed size
+ * stays a small download.
+ */
+export const TRACE_CONTENT_BUDGET = 2 * 1024 * 1024;
+
+const fetchTrace = (id: string, signal: AbortSignal) =>
+  apiGet<TraceDetail>(
+    `/traces/${encodeURIComponent(id)}`,
+    { contentBudget: TRACE_CONTENT_BUDGET },
+    { signal },
+  );
+
 export const useTrace = (id: string) =>
   useQuery({
     queryKey: ['trace', id],
-    queryFn: ({ signal }) =>
-      apiGet<TraceDetail>(`/traces/${encodeURIComponent(id)}`, {}, { signal }),
+    queryFn: ({ signal }) => fetchTrace(id, signal),
     // A finished trace never changes; its evaluations only change on `scope evaluate`.
+    staleTime: 60_000,
+  });
+
+/** One span in full; only fetched for spans that came without their content. */
+export const useSpan = (traceId: string, spanId: string, enabled: boolean) =>
+  useQuery({
+    queryKey: ['span', traceId, spanId],
+    queryFn: ({ signal }) =>
+      apiGet<Span>(
+        `/traces/${encodeURIComponent(traceId)}/spans/${encodeURIComponent(spanId)}`,
+        {},
+        { signal },
+      ),
+    enabled,
     staleTime: 60_000,
   });
 
@@ -182,8 +210,7 @@ export const useModels = (window: TimeWindowName) =>
 export function prefetchTrace(client: QueryClient, id: string): void {
   void client.prefetchQuery({
     queryKey: ['trace', id],
-    queryFn: ({ signal }) =>
-      apiGet<TraceDetail>(`/traces/${encodeURIComponent(id)}`, {}, { signal }),
+    queryFn: ({ signal }) => fetchTrace(id, signal),
     staleTime: 60_000,
   });
 }

@@ -27,6 +27,7 @@ import {
   type SelectQueryBuilder,
   sql,
 } from 'kysely';
+import type { DialectName } from './dialects.ts';
 import type { CaseEvaluation, Page, RunCase, TraceSummary } from './records.ts';
 import type { Database } from './schema.ts';
 import {
@@ -250,6 +251,132 @@ export interface TraceDetail {
   run: { id: string; number: number; workflowName: string; variant: string | null } | null;
   /** Null for traces outside a run. */
   failingCases: FailingCases | null;
+  /** Spans returned without their input and output because of `contentBudget`. */
+  omittedContent: string[];
+}
+
+export interface TraceReadOptions {
+  /**
+   * Include span inputs and outputs up to this many bytes in total, in span order; spans whose
+   * content does not fit come without it and are listed in `omittedContent`. Unset: all content.
+   * Bounds memory and response size for large traces; `getSpan` returns one span in full.
+   */
+  contentBudget?: number;
+}
+
+/** Every span column except the content (input, output). */
+const SPAN_STRUCTURE = [
+  'trace_id',
+  'id',
+  'project_id',
+  'parent_id',
+  'name',
+  'kind',
+  'status',
+  'status_message',
+  'start_time',
+  'end_time',
+  'duration_ms',
+  'attributes',
+  'events',
+  'error',
+  'provider',
+  'model',
+  'input_tokens',
+  'output_tokens',
+  'cost_usd',
+  'in_evaluation',
+] as const;
+
+/** Serialized size of a JSON column in bytes (0 for null). */
+function jsonBytes(dialect: DialectName, column: 'input' | 'output') {
+  return dialect === 'postgres'
+    ? sql<number>`coalesce(octet_length(${sql.ref(column)}::text), 0)`
+    : sql<number>`coalesce(length(cast(${sql.ref(column)} as blob)), 0)`;
+}
+
+/** The spans of a trace, with content only for spans that fit in `budget` bytes. */
+async function spansWithin(
+  db: Kysely<Database>,
+  dialect: DialectName,
+  traceId: string,
+  budget: number,
+): Promise<{ rows: Selectable<Database['spans']>[]; omitted: string[] }> {
+  const structure = await db
+    .selectFrom('spans')
+    .select([
+      ...SPAN_STRUCTURE,
+      jsonBytes(dialect, 'input').as('input_bytes'),
+      jsonBytes(dialect, 'output').as('output_bytes'),
+    ])
+    .where('trace_id', '=', traceId)
+    .orderBy('start_time')
+    .orderBy('id')
+    .execute();
+  let remaining = budget;
+  const included: string[] = [];
+  const omitted: string[] = [];
+  for (const row of structure) {
+    const bytes = Number(row.input_bytes) + Number(row.output_bytes);
+    if (bytes === 0) continue;
+    if (bytes <= remaining) {
+      remaining -= bytes;
+      included.push(row.id);
+    } else {
+      omitted.push(row.id);
+    }
+  }
+  const content = new Map<string, { input: unknown; output: unknown }>();
+  for (let i = 0; i < included.length; i += 500) {
+    const rows = await db
+      .selectFrom('spans')
+      .select(['id', 'input', 'output'])
+      .where('trace_id', '=', traceId)
+      .where('id', 'in', included.slice(i, i + 500))
+      .execute();
+    for (const row of rows) content.set(row.id, { input: row.input, output: row.output });
+  }
+  return {
+    rows: structure.map(({ input_bytes: _in, output_bytes: _out, ...row }) => ({
+      ...row,
+      input: (content.get(row.id)?.input ?? null) as Selectable<Database['spans']>['input'],
+      output: (content.get(row.id)?.output ?? null) as Selectable<Database['spans']>['output'],
+    })),
+    omitted,
+  };
+}
+
+/** One span of a trace, in full, with the time its trace's offsets are measured from. */
+export async function getSpan(
+  db: Kysely<Database>,
+  projectId: string,
+  traceRef: string,
+  spanId: string,
+): Promise<{ span: SpanRecord; origin: number } | null> {
+  const traceId = await resolveTraceId(db, projectId, traceRef);
+  if (!traceId || !/^[0-9a-f]{16}$/.test(spanId)) return null;
+  const [row, trace, first] = await Promise.all([
+    db
+      .selectFrom('spans')
+      .selectAll()
+      .where('trace_id', '=', traceId)
+      .where('id', '=', spanId)
+      .executeTakeFirst(),
+    db
+      .selectFrom('traces')
+      .select('start_time')
+      .where('project_id', '=', projectId)
+      .where('id', '=', traceId)
+      .executeTakeFirst(),
+    db
+      .selectFrom('spans')
+      .select((eb) => eb.fn.min<number>('start_time').as('start'))
+      .where('trace_id', '=', traceId)
+      .executeTakeFirst(),
+  ]);
+  if (!row || !trace) return null;
+  const origin = Math.min(trace.start_time, Number(first?.start ?? trace.start_time));
+  return { span: mapSpan(row), origin };
 }
 
 export function mapSpan(row: Selectable<Database['spans']>): SpanRecord {
@@ -326,8 +453,10 @@ export async function resolveTraceId(
 
 export async function getTrace(
   db: Kysely<Database>,
+  dialect: DialectName,
   projectId: string,
   ref: string,
+  options: TraceReadOptions = {},
 ): Promise<TraceDetail | null> {
   const id = await resolveTraceId(db, projectId, ref);
   if (!id) return null;
@@ -338,15 +467,17 @@ export async function getTrace(
     .where('id', '=', id)
     .executeTakeFirst();
   if (!row) return null;
-  const [spanRows, evalRows, run, failingCases] = await Promise.all([
-    db
-      .selectFrom('spans')
-      .selectAll()
-      .where('project_id', '=', projectId)
-      .where('trace_id', '=', id)
-      .orderBy('start_time')
-      .orderBy('id')
-      .execute(),
+  const [{ rows: spanRows, omitted }, evalRows, run, failingCases] = await Promise.all([
+    options.contentBudget === undefined
+      ? db
+          .selectFrom('spans')
+          .selectAll()
+          .where('trace_id', '=', id)
+          .orderBy('start_time')
+          .orderBy('id')
+          .execute()
+          .then((rows) => ({ rows, omitted: [] as string[] }))
+      : spansWithin(db, dialect, id, options.contentBudget),
     db
       .selectFrom('evaluations')
       .selectAll()
@@ -405,6 +536,7 @@ export async function getTrace(
       ? { id: run.id, number: run.number, workflowName: run.workflow_name, variant: run.variant }
       : null,
     failingCases,
+    omittedContent: omitted,
   };
 }
 

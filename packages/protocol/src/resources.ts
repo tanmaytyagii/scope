@@ -335,6 +335,11 @@ export const Span = z
     inputTokens: z.number().nullable(),
     outputTokens: z.number().nullable(),
     costUsd: z.number().nullable(),
+    contentOmitted: z
+      .boolean()
+      .describe(
+        'True when input and output were left out to respect `contentBudget`; they are not empty. Fetch the span to read them.',
+      ),
   })
   .register(components, { id: 'Span' });
 

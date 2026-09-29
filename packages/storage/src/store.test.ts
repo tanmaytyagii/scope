@@ -280,6 +280,47 @@ function storeSuite(label: string, url: () => string, reset?: (store: Store) => 
       expect(detail?.trace.caseId).toBe('c1');
     });
 
+    it('bounds the content a trace read returns, and serves omitted spans one by one', async () => {
+      const exporter = new MemoryExporter();
+      const tracer = new Tracer({ exporter });
+      const text = (n: number) => 'x'.repeat(n);
+      await tracer.trace('large', {}, async () => {
+        await tracer.span('small', { input: { q: text(100) } }, () => text(100));
+        await tracer.span('big', { input: { q: text(20_000) } }, () => text(20_000));
+        await tracer.span('empty', {}, () => undefined);
+        await tracer.span('fits-after', { input: { q: text(100) } }, () => text(100));
+      });
+      const [bundle] = exporter.bundles;
+      // Its own project, so the counts other tests assert do not change.
+      const pid = (await store.ensureProject('large-traces')).id;
+      await store.ingest(pid, [bundle as TraceBundle]);
+      const id = (bundle as TraceBundle).trace.id;
+
+      const full = await store.getTrace(pid, id);
+      expect(full?.omittedContent).toEqual([]);
+      expect(full?.spans.find((s) => s.name === 'big')?.output).toBe(text(20_000));
+
+      const bounded = await store.getTrace(pid, id, { contentBudget: 5000 });
+      const byName = new Map(bounded?.spans.map((s) => [s.name, s]));
+      const big = byName.get('big');
+      expect(bounded?.omittedContent).toEqual([big?.id]);
+      expect(big).toMatchObject({
+        input: null,
+        output: null,
+        name: 'big',
+        durationMs: expect.any(Number),
+      });
+      expect(byName.get('small')?.output).toBe(text(100));
+      expect(byName.get('fits-after')?.output).toBe(text(100));
+      expect(bounded?.spans.map((s) => s.name)).toEqual(full?.spans.map((s) => s.name));
+
+      const one = await store.getSpan(pid, id.slice(0, 8), big?.id as string);
+      expect(one?.span).toMatchObject({ name: 'big', output: text(20_000) });
+      expect(one?.origin).toBe(bounded?.trace.startTime);
+      expect(await store.getSpan(otherProjectId, id, big?.id as string)).toBeNull();
+      expect(await store.getSpan(pid, id, 'not-a-span')).toBeNull();
+    });
+
     it('summarizes run cases and supports outcome filters', async () => {
       const results = await store.runCaseResults(projectId, runId);
       expect(results.map((r) => r.caseId)).toEqual(['c1', 'c2', 'c3', 'c4']);
@@ -484,12 +525,14 @@ function storeSuite(label: string, url: () => string, reset?: (store: Store) => 
     });
 
     it('cascades run deletion to traces, spans, evaluations and comparisons', async () => {
+      // Counted in this project: other tests store traces in projects of their own.
       const count = async (table: 'traces' | 'spans' | 'evaluations' | 'run_comparisons') =>
         Number(
           (
             await store.db
               .selectFrom(table)
               .select((eb) => eb.fn.countAll<number>().as('n'))
+              .where('project_id', '=', projectId)
               .executeTakeFirst()
           )?.n,
         );

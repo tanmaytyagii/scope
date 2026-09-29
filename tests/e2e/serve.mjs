@@ -49,9 +49,8 @@ scope(
 );
 scope(['run', 'workflows/support.yaml', '--variant', 'narrow', '--no-baseline', '--quiet']); // #3
 const key = JSON.parse(scope(['keys', 'create', '--name', 'e2e', '--scope', 'read', '--json']));
-writeFileSync(
-  join(import.meta.dirname, '.state.json'),
-  JSON.stringify({ project, readKey: key.secret }),
+const ingestKey = JSON.parse(
+  scope(['keys', 'create', '--name', 'e2e-ingest', '--scope', 'ingest', '--json']),
 );
 
 const children = [];
@@ -79,6 +78,34 @@ async function waitFor(url) {
 
 start(['server', '--host', '127.0.0.1', '--port', '4798']);
 await waitFor('http://127.0.0.1:4798/healthz');
+
+// A large trace, sent over OTLP as an instrumented application would: 30 spans with ~60 KB of
+// input and output each (3.6 MB), more than the explorer downloads with a trace.
+const largeTraceId = 'b1'.repeat(16);
+const text = (n) => `part ${n}: ${'lorem ipsum dolor sit amet '.repeat(2200)}`;
+const start0 = BigInt(Date.now() - 60_000) * 1_000_000n;
+const attr = (key, value) => ({ key, value: { stringValue: value } });
+const spans = Array.from({ length: 31 }, (_, i) => ({
+  traceId: largeTraceId,
+  spanId: (i + 1).toString(16).padStart(16, '0'),
+  ...(i > 0 && { parentSpanId: '1'.padStart(16, '0') }),
+  name: i === 0 ? 'large-trace' : `part-${i}`,
+  startTimeUnixNano: String(start0 + BigInt(i) * 1_000_000n),
+  endTimeUnixNano: String(start0 + BigInt(i) * 1_000_000n + 500_000n),
+  attributes: i === 0 ? [] : [attr('input.value', text(i)), attr('output.value', text(i))],
+}));
+const otlp = await fetch('http://127.0.0.1:4798/v1/traces', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', authorization: `Bearer ${ingestKey.secret}` },
+  body: JSON.stringify({ resourceSpans: [{ resource: {}, scopeSpans: [{ spans }] }] }),
+});
+if (!otlp.ok)
+  throw new Error(`seeding the large trace failed: ${otlp.status} ${await otlp.text()}`);
+
+writeFileSync(
+  join(import.meta.dirname, '.state.json'),
+  JSON.stringify({ project, readKey: key.secret, largeTraceId }),
+);
 start(['ui', '--port', '4799']);
 
 const stop = () => {

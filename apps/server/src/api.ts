@@ -20,6 +20,7 @@ import {
   RunMatrixQuery,
   RunsQuery,
   type TimeWindowName,
+  TraceQuery,
   TracesQuery,
   WINDOW_SPANS,
   WindowQuery,
@@ -37,6 +38,7 @@ import {
   pricingDto,
   runCaseDto,
   runDto,
+  spanDto,
   traceDetailDto,
   traceSummaryDto,
   workflowDetailDto,
@@ -320,7 +322,12 @@ export function registerApi(app: Hono<AppEnv>, deps: Deps): void {
   app.get('/api/v1/traces/:trace', read, async (c) => {
     const project = c.get('project');
     const ref = c.req.param('trace');
-    const detail = await store.getTrace(project.id, ref);
+    const q = parseQuery(c, TraceQuery);
+    const detail = await store.getTrace(
+      project.id,
+      ref,
+      q.contentBudget === undefined ? {} : { contentBudget: q.contentBudget },
+    );
     if (!detail) {
       throw notFound(
         `Trace "${ref}"`,
@@ -330,6 +337,22 @@ export function registerApi(app: Hono<AppEnv>, deps: Deps): void {
       );
     }
     return c.json(traceDetailDto(detail) satisfies api.TraceDetail);
+  });
+
+  app.get('/api/v1/traces/:trace/spans/:span', read, async (c) => {
+    const project = c.get('project');
+    const ref = c.req.param('trace');
+    const spanId = c.req.param('span');
+    const found = await store.getSpan(project.id, ref, spanId);
+    if (!found) {
+      throw notFound(
+        `Span "${spanId}" of trace "${ref}"`,
+        /^[0-9a-f]{16}$/.test(spanId)
+          ? `No such span in a trace of project "${project.slug}".`
+          : 'Span ids are 16 lowercase hexadecimal characters.',
+      );
+    }
+    return c.json(spanDto(found.span, found.origin) satisfies api.Span);
   });
 
   app.get('/api/v1/evaluators', read, async (c) => {

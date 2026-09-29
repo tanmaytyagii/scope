@@ -108,6 +108,9 @@ export async function openSqlite(path: string): Promise<SqliteDatabase> {
     db.exec('PRAGMA busy_timeout = 5000');
     db.exec('PRAGMA foreign_keys = ON');
     db.exec('PRAGMA synchronous = NORMAL');
+    // Up to 64 MiB of pages in memory (the default is 2 MiB): at 200,000 traces this makes
+    // ingestion 40% faster, because index pages stay cached (docs/performance.md).
+    db.exec('PRAGMA cache_size = -65536');
   } catch (error) {
     throw new ScopeError(
       ErrorCodes.storageUnavailable,

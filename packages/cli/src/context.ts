@@ -11,7 +11,7 @@ import {
   workflowJsonSchema,
 } from '@scope-ai/config';
 import { createLogger, type Logger, silentLogger } from '@scope-ai/core';
-import { type Project, Store } from '@scope-ai/storage';
+import { type OpenStoreOptions, type Project, Store } from '@scope-ai/storage';
 import { Output } from './ui/output.ts';
 
 export interface GlobalOptions {
@@ -74,7 +74,11 @@ export class CommandContext {
     return this.#project;
   }
 
-  async store(): Promise<Store> {
+  /**
+   * The project's store, opened on first use. `onQuery` applies only if this call opens it
+   * (`scope server` passes one first, for slow-query warnings).
+   */
+  async store(options: { onQuery?: OpenStoreOptions['onQuery'] } = {}): Promise<Store> {
     if (!this.#store) {
       const project = this.project();
       this.out.debug(
@@ -83,6 +87,7 @@ export class CommandContext {
       this.#store = await Store.open(project.storage.url, {
         logger: this.logger,
         autoMigrate: this.env.SCOPE_AUTO_MIGRATE !== 'false',
+        ...(options.onQuery ? { onQuery: options.onQuery } : {}),
       });
     }
     return this.#store;

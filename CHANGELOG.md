@@ -18,6 +18,13 @@ which are always called out).
   still running are only deleted once they have been running for a day.
 - `scope server` refuses `SCOPE_MAX_INGEST_BYTES` and `SCOPE_MAX_SPANS_PER_TRACE` values that are
   not positive whole numbers, instead of starting with a broken limit.
+- `scope server` logs database queries slower than `SCOPE_SLOW_QUERY_MS` (1000 ms by default)
+  with their SQL — never their values. `Store.open` takes an `onQuery` hook.
+- Performance is guarded in CI. A query-plan test runs the store's hot paths on SQLite and fails
+  when a statement scans a whole table, or every span or evaluation of a project, to find a few
+  (the shape of the v0.3 OTLP slowdown, which it catches). `npm run bench:check` compares
+  ingestion and reads at 2,000 and 50,000 traces on the same machine and fails when one slows
+  down with the database's size; a new CI job runs it.
 
 - Large traces open quickly in the dashboard. `GET /api/v1/traces/{trace}` takes
   `contentBudget=<bytes>`: every span's structure is returned, but inputs and outputs only up to
@@ -37,6 +44,10 @@ which are always called out).
   as too large (413) or names an invalid trace (400 with `details.issues`), the exporter resends
   the rest without it. Before, 50 traces of about 120 KB each made one 6 MB request, and all 50
   were dropped. The queue is bounded by bytes too (`maxQueueBytes`, 32 MiB).
+- A run's case list (`GET /runs/{run}/cases`, the run page) read every evaluation of the project
+  to find those of one page of cases, on SQLite; found by the new query-plan test.
+- SQLite keeps up to 64 MiB of pages in memory (was 2 MiB): at 200,000 traces ingestion is 40%
+  faster because index pages stay cached.
 - Ingestion errors caused by one record (a duplicate trace id, a span or evaluation without its
   trace, an unknown run id) name the record in `details.issues`, as schema errors already did.
 - A streamed model response that a traced handler returns for its web framework to send (the

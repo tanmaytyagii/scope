@@ -89,10 +89,21 @@ import {
   writeJsonOrNull,
 } from './util.ts';
 
+export interface ExecutedQuery {
+  sql: string;
+  parameters: readonly unknown[];
+  durationMs: number;
+}
+
 export interface OpenStoreOptions {
   logger?: Logger;
   /** Run pending migrations on open (default true). */
   autoMigrate?: boolean;
+  /**
+   * Called after every query with its SQL, parameters and duration — for slow-query logging and
+   * for tests that check query plans. Parameters can hold stored content: never log them.
+   */
+  onQuery?: (query: ExecutedQuery) => void;
 }
 
 export interface MigrationState {
@@ -184,7 +195,24 @@ export class Store {
     const target = parseStorageUrl(url);
     const logger = options.logger ?? silentLogger;
     const dialect = await createDialect(target);
-    const db = new Kysely<Database>({ dialect });
+    const onQuery = options.onQuery;
+    const db = new Kysely<Database>({
+      dialect,
+      ...(onQuery && {
+        log: (event) => {
+          if (event.level !== 'query') return;
+          try {
+            onQuery({
+              sql: event.query.sql,
+              parameters: event.query.parameters,
+              durationMs: event.queryDurationMillis,
+            });
+          } catch {
+            // An observer must never fail the query it observes.
+          }
+        },
+      }),
+    });
     const store = new Store(db, target, logger);
     try {
       await store.ping();

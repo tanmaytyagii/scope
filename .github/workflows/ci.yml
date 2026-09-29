@@ -63,6 +63,21 @@ jobs:
       - run: npm ci
       - run: npm test
 
+  performance:
+    name: Performance (size independence)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # Compares timings at 2,000 and 50,000 traces on this runner, never absolute numbers:
+      # fails when ingestion or a read slows down as the database grows (scripts/bench-check.mjs).
+      - run: npm run bench:check
+
   build:
     name: Build & package smoke test
     runs-on: ubuntu-latest

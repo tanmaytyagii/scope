@@ -682,7 +682,8 @@ export async function listRunCases(
     ? await db
         .selectFrom('evaluations')
         .select(['trace_id', 'evaluator', 'type', 'kind', 'status', 'score', 'reason'])
-        .where('project_id', '=', projectId)
+        // The page's traces are this project's; with a project_id condition SQLite walks every
+        // evaluation of the project through its (project_id, evaluator) index.
         .where(
           'trace_id',
           'in',

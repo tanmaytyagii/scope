@@ -226,7 +226,17 @@ export async function serverCommand(ctx: CommandContext, options: ServeOptions):
     write: (line) => ctx.out.stderr.write(`${line}\n`),
   });
   const retentionMs = parseRetention(options.retention ?? ctx.env.SCOPE_RETENTION);
-  const store = await ctx.store();
+  const slowQueryMs = envInteger(ctx.env, 'SCOPE_SLOW_QUERY_MS') ?? 1000;
+  // Statements are parameterized: their text holds no stored content, so it is safe to log.
+  const store = await ctx.store({
+    onQuery: (q) => {
+      if (q.durationMs >= slowQueryMs)
+        logger.warn('slow database query', {
+          durationMs: Math.round(q.durationMs),
+          sql: q.sql.length > 300 ? `${q.sql.slice(0, 300)}…` : q.sql,
+        });
+    },
+  });
   const server = await serve(ctx, {
     auth: { mode: 'api-key' },
     host,

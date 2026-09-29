@@ -5,10 +5,12 @@
  */
 import { execFile } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer, type IncomingMessage } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const RUNNER = join(here, 'run.mjs');
@@ -50,7 +52,10 @@ function exec(file: string, args: string[], cwd: string, env: Record<string, str
   });
 }
 
-async function runAction(inputs: Record<string, string> = {}): Promise<ActionResult> {
+async function runAction(
+  inputs: Record<string, string> = {},
+  extraEnv: Record<string, string> = {},
+): Promise<ActionResult> {
   const dir = mkdtempSync(join(tmpdir(), 'scope-action-gh-'));
   const summary = join(dir, 'summary.md');
   const output = join(dir, 'output.txt');
@@ -65,12 +70,14 @@ async function runAction(inputs: Record<string, string> = {}): Promise<ActionRes
     SCOPE_ACTION_VARIANTS: inputs.variants ?? 'default',
     SCOPE_ACTION_BASELINE: inputs.baseline ?? 'auto',
     SCOPE_ACTION_FAIL_ON_GATES: inputs['fail-on-gates'] ?? 'true',
+    SCOPE_ACTION_COMMENT: inputs.comment ?? 'false',
+    ...extraEnv,
   });
   const outputs = Object.fromEntries(
     readFileSync(output, 'utf8')
       .split('\n')
       .filter(Boolean)
-      .map((line) => line.split('=', 2) as [string, string]),
+      .map((line) => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]),
   );
   return {
     code: result.code,
@@ -136,5 +143,147 @@ describe('GitHub Action runner', () => {
     const r = await runAction({ variants: 'terse', baseline: 'none' });
     expect(r.code).toBe(0);
     expect(r.summary).toContain('terse');
+  });
+});
+
+/** A fake GitHub REST API: records requests and keeps the pull request's comments. */
+function fakeGitHub() {
+  const requests: Array<{ method: string; url: string; auth: string | undefined; body: unknown }> =
+    [];
+  const comments: Array<{ id: number; body: string; user: { type: string }; html_url: string }> = [
+    // Someone else's comment that mentions the marker is never edited.
+    { id: 1, body: '<!-- scope-action:. --> quoted', user: { type: 'User' }, html_url: 'x' },
+  ];
+  let deny = false;
+  const server = createServer((req: IncomingMessage, res) => {
+    let data = '';
+    req.on('data', (chunk) => {
+      data += chunk;
+    });
+    req.on('end', () => {
+      const body = data ? JSON.parse(data) : null;
+      requests.push({
+        method: req.method ?? '',
+        url: req.url ?? '',
+        auth: req.headers.authorization,
+        body,
+      });
+      const send = (status: number, value: unknown) => {
+        res.writeHead(status, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(value));
+      };
+      if (deny && req.method !== 'GET')
+        return send(403, { message: 'Resource not accessible by integration' });
+      if (req.method === 'GET' && req.url?.startsWith('/repos/acme/app/issues/7/comments'))
+        return send(200, comments);
+      if (req.method === 'POST' && req.url === '/repos/acme/app/issues/7/comments') {
+        const id = 100 + comments.length;
+        const comment = {
+          id,
+          body: body.body,
+          user: { type: 'Bot' },
+          html_url: `https://github.test/acme/app/pull/7#issuecomment-${id}`,
+        };
+        comments.push(comment);
+        return send(201, comment);
+      }
+      const patch = /^\/repos\/acme\/app\/issues\/comments\/(\d+)$/.exec(req.url ?? '');
+      if (req.method === 'PATCH' && patch) {
+        const comment = comments.find((c) => c.id === Number(patch[1]));
+        if (!comment) return send(404, { message: 'Not Found' });
+        comment.body = body.body;
+        return send(200, comment);
+      }
+      send(404, { message: 'Not Found' });
+    });
+  });
+  return {
+    requests,
+    comments,
+    deny: (value: boolean) => {
+      deny = value;
+    },
+    listen: () =>
+      new Promise<string>((done) =>
+        server.listen(0, '127.0.0.1', () =>
+          done(`http://127.0.0.1:${(server.address() as AddressInfo).port}`),
+        ),
+      ),
+    close: () => server.close(),
+  };
+}
+
+describe('pull request comments', () => {
+  const api = fakeGitHub();
+  let env: Record<string, string>;
+
+  beforeAll(async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'scope-action-event-'));
+    const event = join(dir, 'event.json');
+    writeFileSync(event, JSON.stringify({ pull_request: { number: 7 } }));
+    env = {
+      GITHUB_API_URL: await api.listen(),
+      GITHUB_EVENT_PATH: event,
+      GITHUB_REPOSITORY: 'acme/app',
+      GITHUB_SERVER_URL: 'https://github.test',
+      GITHUB_RUN_ID: '42',
+      SCOPE_ACTION_GITHUB_TOKEN: 'ghs_test_token',
+    };
+  });
+  afterAll(() => api.close());
+
+  it('posts the report once, then updates the same comment', async () => {
+    const first = await runAction({ comment: 'true' }, env);
+    expect(first.code).toBe(0);
+    const posted = api.comments.filter((c) => c.user.type === 'Bot');
+    expect(posted).toHaveLength(1);
+    expect(posted[0]?.body).toMatch(/^<!-- scope-action:\. -->\n### ✅ SCOPE · support — passed/);
+    expect(posted[0]?.body).toContain(
+      '[workflow run](https://github.test/acme/app/actions/runs/42)',
+    );
+    expect(first.outputs.comment).toBe(posted[0]?.html_url);
+    expect(api.requests.every((r) => r.auth === 'Bearer ghs_test_token')).toBe(true);
+
+    const second = await runAction({ comment: 'true' }, env);
+    expect(second.code).toBe(0);
+    expect(api.comments.filter((c) => c.user.type === 'Bot')).toHaveLength(1);
+    expect(api.requests.at(-1)).toMatchObject({
+      method: 'PATCH',
+      url: `/repos/acme/app/issues/comments/${posted[0]?.id}`,
+    });
+    // The user's comment that quotes the marker is left alone.
+    expect(api.comments[0]?.body).toBe('<!-- scope-action:. --> quoted');
+  });
+
+  it('warns instead of failing when it may not comment', async () => {
+    api.deny(true);
+    try {
+      const r = await runAction({ comment: 'true' }, env);
+      expect(r.code).toBe(0);
+      expect(r.outputs.result).toBe('passed');
+      expect(r.outputs.comment).toBeUndefined();
+      expect(r.stdout).toMatch(
+        /^::warning title=SCOPE::Could not comment on the pull request: .*403/m,
+      );
+      expect(r.stdout).toContain('pull-requests: write');
+    } finally {
+      api.deny(false);
+    }
+  });
+
+  it('comments only when asked, and only on pull requests', async () => {
+    const before = api.requests.length;
+    await runAction({}, env);
+    expect(api.requests.length).toBe(before);
+
+    const dir = mkdtempSync(join(tmpdir(), 'scope-action-push-'));
+    writeFileSync(join(dir, 'event.json'), JSON.stringify({ ref: 'refs/heads/main' }));
+    const push = await runAction(
+      { comment: 'true' },
+      { ...env, GITHUB_EVENT_PATH: join(dir, 'event.json') },
+    );
+    expect(push.code).toBe(0);
+    expect(push.stdout).toContain('not a pull request event');
+    expect(api.requests.length).toBe(before);
   });
 });

@@ -65,7 +65,9 @@ jobs:
 
 The action runs every workflow listed in `scope.yaml`, writes a Markdown report per workflow to
 the job summary, annotates each failed gate, uploads the database and JSON reports as an
-artifact, and fails the job when a gate fails. Inputs and outputs are documented in
+artifact, and fails the job when a gate fails. With `comment: true` (and
+`permissions: pull-requests: write`) it also posts the report on the pull request, updating the
+same comment on every push. Inputs and outputs are documented in
 [the action's README](../../integrations/github-action/README.md).
 
 A report (an excerpt of a real one) looks like this:

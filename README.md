@@ -248,7 +248,7 @@ a self-test of the GitHub Action.
 Not there yet, in [roadmap](docs/roadmap.md) order: a first published release — npm packages, the
 image on GHCR and tagged action releases (the pipeline is ready: [RELEASING.md](RELEASING.md)) — a
 Python SDK, automatic instrumentation of the OpenAI and Anthropic clients, OpenTelemetry (OTLP)
-ingestion, pull-request comments, retention policies, and user accounts.
+ingestion, retention policies, and user accounts.
 
 ## Contributing
 

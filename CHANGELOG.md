@@ -88,6 +88,9 @@ which are always called out).
   marked (values within noise tolerance share it), and the cases where the runs disagree, linked
   to their traces. API: `GET /api/v1/comparisons/matrix?runs=`.
 - Every titled dashboard panel is a named landmark region for screen readers.
+- The GitHub Action's `comment: true` posts the report on the pull request as one comment,
+  updated in place on later pushes; without permission (e.g. fork pull requests) it warns instead
+  of failing. The token never reaches `scope run`.
 - The GitHub Action's `install` input: `auto` installs `scope-ai` from npm at the action's version
   when it is published and builds from source otherwise.
 

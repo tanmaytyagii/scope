@@ -43,6 +43,17 @@ inputs:
       npm; "source" always builds from source.
     required: false
     default: auto
+  comment:
+    description: >
+      Post the report on the pull request as one comment, updated in place on later pushes. Needs
+      `permissions: pull-requests: write`; when commenting is not allowed (e.g. pull requests from
+      forks) the action warns instead of failing.
+    required: false
+    default: 'false'
+  github-token:
+    description: Token used to comment on the pull request.
+    required: false
+    default: ${{ github.token }}
   upload-artifact:
     description: Upload the SQLite database and JSON report as a workflow artifact.
     required: false
@@ -59,6 +70,9 @@ outputs:
   report:
     description: Path of the combined JSON report, relative to the working directory.
     value: ${{ steps.run.outputs.report }}
+  comment:
+    description: URL of the pull request comment, when one was posted or updated.
+    value: ${{ steps.run.outputs.comment }}
 
 runs:
   using: composite
@@ -107,6 +121,9 @@ runs:
         SCOPE_ACTION_VARIANTS: ${{ inputs.variants }}
         SCOPE_ACTION_BASELINE: ${{ inputs.baseline }}
         SCOPE_ACTION_FAIL_ON_GATES: ${{ inputs.fail-on-gates }}
+        SCOPE_ACTION_COMMENT: ${{ inputs.comment }}
+        SCOPE_ACTION_COMMENT_KEY: ${{ inputs.working-directory }}
+        SCOPE_ACTION_GITHUB_TOKEN: ${{ inputs.github-token }}
       run: node "${{ github.action_path }}/run.mjs"
 
     - name: Upload results

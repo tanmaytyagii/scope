@@ -10,7 +10,8 @@ What you get on each run:
 - an error annotation for every failed gate (a warning for `severity: warn` gates);
 - the SQLite database and a JSON report as a workflow artifact, so you can open the exact
   traces locally with `scope ui`;
-- a failed job when a gate fails, and the step outputs `result` and `report`.
+- optionally, the same report as a pull request comment, updated in place on every push;
+- a failed job when a gate fails, and the step outputs `result`, `report` and `comment`.
 
 ## Usage
 
@@ -67,6 +68,8 @@ reviewers can see the new numbers.
 | `fail-on-gates` | `true` | `false` reports gate failures without failing the job |
 | `node-version` | `24` | Node.js used to run SCOPE (22.16 or newer) |
 | `install` | `auto` | `auto` (npm if this version is published, else source), `npm`, or `source` |
+| `comment` | `false` | `true` posts the report on the pull request (one comment, updated in place) |
+| `github-token` | `${{ github.token }}` | Token for the comment |
 | `upload-artifact` | `true` | Upload `.scope/scope.db` and the JSON reports |
 | `artifact-name` | `scope-results` | Name of the uploaded artifact |
 
@@ -76,6 +79,7 @@ reviewers can see the new numbers.
 | --- | --- |
 | `result` | `passed`, `failed` (a gate failed) or `error` (a workflow could not run) |
 | `report` | Path of the combined JSON report (`.scope/action/report.json`) |
+| `comment` | URL of the pull request comment, when one was posted or updated |
 
 ## Exit behaviour
 
@@ -83,6 +87,23 @@ The step fails when a `fail`-severity gate fails (exit 1), or when a workflow ca
 invalid configuration (exit 2) or an execution or storage error (exit 3). Every workflow runs
 even if an earlier one fails, so one report shows everything.
 
-## Not yet supported
+## Pull request comments
 
-Pull-request comments (updated in place) are planned; today the report is in the job summary.
+With `comment: true`, the report is posted on the pull request as one comment and updated in
+place on every later push, instead of piling up. The job needs permission to comment:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+
+steps:
+  - uses: actions/checkout@v4
+  - uses: tanmaytyagii/scope/integrations/github-action@main
+    with:
+      comment: true
+```
+
+Pull requests from forks get a read-only token, so there the action logs a warning and the
+report stays in the job summary; the check itself still passes or fails on the gates. The token is
+used for the comment only — it is not passed to `scope run` or the project code it runs.

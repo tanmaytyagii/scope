@@ -26,13 +26,15 @@ Ordered by expected value to users. Items move up when users ask for them.
 1. **Python SDK** — tracer and HTTP exporter speaking the same ingestion protocol.
 2. **Client auto-instrumentation** — wrappers for the OpenAI and Anthropic SDKs (TS and Python)
    that record model spans with no manual code.
-3. **Published packages and action release** — npm publishing of `@scope-ai/*` through a
-   release workflow, and a tagged GitHub Action.
+3. **Published packages and action release** — the release workflow is in place (0.2:
+   `scope-ai` and `@scope-ai/*` on npm with provenance, the image on GHCR, tagged action
+   releases); what remains is the first published release.
 4. **OTLP/HTTP ingestion** — accept OpenTelemetry GenAI spans directly (the data model already
    matches; see ADR 0003).
 5. **Server-side baselines** — "compare with the latest run on `main`" as an alternative to
    committed baseline files.
-6. **Pull-request comments** from the GitHub Action, updated in place per workflow.
+6. ~~**Pull-request comments** from the GitHub Action, updated in place~~ — done in 0.2
+   (`comment: true`).
 7. **Retention** — `scope prune` and server-side retention policies.
 8. **Dataset tooling** — promote traces to dataset cases from the dashboard; CSV datasets.
 9. **More evaluators** — tool-call correctness, citation verification, NLI-based

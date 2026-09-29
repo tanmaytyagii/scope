@@ -131,6 +131,23 @@ jobs:
           for _ in $(seq 1 30); do curl -sf http://127.0.0.1:4700/readyz && break; sleep 1; done
           curl -sf http://127.0.0.1:4700/ | grep -q 'id="root"'
           docker rm -f scope-ci
+      - name: The production compose deployment serves an application and a dashboard key
+        working-directory: deploy
+        env:
+          SCOPE_IMAGE: scope:ci
+          POSTGRES_PASSWORD: ci${{ github.run_id }}
+        run: |
+          docker compose up -d --no-build --wait --wait-timeout 120
+          key() { docker compose exec -T scope scope keys create --project app --scope "$1" --json | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>console.log(JSON.parse(d).secret))'; }
+          ingest=$(key ingest)
+          read=$(key read)
+          curl -sf -X POST http://127.0.0.1:4700/v1/traces -H "authorization: Bearer $ingest" \
+            -H 'content-type: application/json' \
+            -d '{"resourceSpans":[{"resource":{},"scopeSpans":[{"spans":[{"traceId":"5b8efff798038103d269b633813fc60c","spanId":"eee19b7ec3c1b174","name":"check","startTimeUnixNano":"1900000000000000000","endTimeUnixNano":"1900000000100000000"}]}]}]}'
+          curl -sf http://127.0.0.1:4700/api/v1/traces -H "authorization: Bearer $read" | grep -q 5b8efff798038103d269b633813fc60c
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4700/api/v1/traces -H "authorization: Bearer $ingest")" = 403
+          docker compose exec -T scope scope db status
+          docker compose down -v
 
   security:
     name: Dependency audit

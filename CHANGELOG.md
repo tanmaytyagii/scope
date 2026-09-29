@@ -7,6 +7,8 @@ which are always called out).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-29
+
 ### Changed
 
 - The export condition SCOPE's packages use for their TypeScript sources during development is

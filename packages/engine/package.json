@@ -1,6 +1,6 @@
 {
   "name": "@scope-ai/engine",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "SCOPE workflow engine: executes workflows, traces every step, and evaluates the results.",
   "keywords": [
     "llm",
@@ -40,11 +40,11 @@
     "access": "public"
   },
   "dependencies": {
-    "@scope-ai/core": "0.2.0",
-    "@scope-ai/config": "0.2.0",
-    "@scope-ai/providers": "0.2.0",
-    "@scope-ai/evaluators": "0.2.0",
-    "@scope-ai/sdk": "0.2.0",
+    "@scope-ai/core": "0.3.0",
+    "@scope-ai/config": "0.3.0",
+    "@scope-ai/providers": "0.3.0",
+    "@scope-ai/evaluators": "0.3.0",
+    "@scope-ai/sdk": "0.3.0",
     "zod": "^4.6.5"
   }
 }

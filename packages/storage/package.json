@@ -1,6 +1,6 @@
 {
   "name": "@scope-ai/storage",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "SCOPE storage: SQLite and PostgreSQL persistence for runs, traces and evaluations.",
   "keywords": [
     "llm",
@@ -41,12 +41,12 @@
     "access": "public"
   },
   "dependencies": {
-    "@scope-ai/core": "0.2.0",
+    "@scope-ai/core": "0.3.0",
     "kysely": "^0.29.6",
     "pg": "^8.23.0"
   },
   "devDependencies": {
-    "@scope-ai/sdk": "0.2.0",
+    "@scope-ai/sdk": "0.3.0",
     "@types/pg": "^8.23.1"
   }
 }

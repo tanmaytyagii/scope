@@ -1,0 +1,12 @@
+{"id":"refund-timing","inputs":{"question":"How long does it take to get a refund?"},"expected":["5 to 7 business days"]}
+{"id":"refund-method","inputs":{"question":"Will my refund go back to my credit card?"},"expected":["original payment method"]}
+{"id":"return-window","inputs":{"question":"How many days do I have to return an item?"},"expected":["30 days"]}
+{"id":"gift-card-refund","inputs":{"question":"Can I get a refund on a gift card?"},"expected":["cannot be refunded"]}
+{"id":"free-shipping","inputs":{"question":"Which orders qualify for free shipping?"},"expected":["$50"]}
+{"id":"express-shipping","inputs":{"question":"How fast is express shipping?"},"expected":["1 to 2 business days"]}
+{"id":"international","inputs":{"question":"Do you ship to Canada?"},"expected":["Canada"]}
+{"id":"password-reset","inputs":{"question":"I forgot my password. How do I reset it?"},"expected":["Forgot password"]}
+{"id":"delete-account","inputs":{"question":"How do I delete my account?"},"expected":["Account settings","30 days"]}
+{"id":"warranty-length","inputs":{"question":"How long is the warranty on electronics?"},"expected":["2 years"]}
+{"id":"warranty-damage","inputs":{"question":"Does the warranty cover water damage?"},"expected":["accidental damage"]}
+{"id":"store-hours","inputs":{"question":"What time does the downtown store open on Sundays?"},"expected":["could not find"]}

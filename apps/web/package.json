@@ -1,6 +1,6 @@
 {
   "name": "@scope-ai/web",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "The SCOPE dashboard: a static single-page app served by @scope-ai/server.",
   "keywords": [
     "llm",
@@ -37,8 +37,8 @@
   "devDependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/ibm-plex-sans": "^5.3.0",
-    "@scope-ai/core": "0.2.0",
-    "@scope-ai/protocol": "0.2.0",
+    "@scope-ai/core": "0.3.0",
+    "@scope-ai/protocol": "0.3.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-query": "^5.104.0",
     "@types/react": "^19.3.0",

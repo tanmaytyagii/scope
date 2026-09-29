@@ -1,6 +1,6 @@
 {
   "name": "@scope-ai/sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "SCOPE tracing SDK: record traces and spans from any TypeScript application.",
   "keywords": [
     "llm",
@@ -42,7 +42,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@scope-ai/core": "0.2.0"
+    "@scope-ai/core": "0.3.0"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

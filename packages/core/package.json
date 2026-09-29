@@ -1,6 +1,6 @@
 {
   "name": "@scope-ai/core",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "SCOPE domain model and pure logic: traces, evaluations, run summaries, gates and comparisons.",
   "keywords": [
     "llm",

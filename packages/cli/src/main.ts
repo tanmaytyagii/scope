@@ -7,6 +7,7 @@ import { baselineSaveCommand } from './commands/baseline.ts';
 import { compareManyCommand } from './commands/compare.ts';
 import { doctorCommand } from './commands/doctor.ts';
 import { evaluateCommand } from './commands/evaluate.ts';
+import { exportRunCommand, exportTracesCommand } from './commands/export.ts';
 import { initCommand } from './commands/init.ts';
 import { keysCreateCommand, keysListCommand, keysRevokeCommand } from './commands/keys.ts';
 import { reportCommand } from './commands/report.ts';
@@ -185,7 +186,7 @@ export async function main(argv: string[], options: MainOptions = {}): Promise<n
   program
     .command('report')
     .argument('[run]', 'run number or id (default: latest)')
-    .description('render a run report as text, markdown or json')
+    .description('render a run report as text, markdown, json or junit')
     .option('-f, --format <format>', 'text, markdown, json or junit')
     .option('--baseline <file>', 'compare with this baseline')
     .option('-o, --output <file>', 'write the report to a file')
@@ -196,6 +197,33 @@ export async function main(argv: string[], options: MainOptions = {}): Promise<n
     )
     .action(
       withContext((ctx, ref: string | undefined, opts) => reportCommand(ctx, ref, opts as never)),
+    );
+
+  const exporter = program
+    .command('export')
+    .description('write traces or run results to files, for analysis or as dataset cases');
+  exporter
+    .command('traces')
+    .description('export traces as JSONL, or as dataset cases (--format dataset)')
+    .option('--run <run>', 'only traces from this run')
+    .option('--workflow <name>', 'only traces with this name')
+    .option('--status <status>', 'ok or error')
+    .option('--eval <outcome>', 'passed, failed, errored or none')
+    .option('--since <when>', 'only traces since 30m, 24h, 7d or a date')
+    .option('--limit <n>', 'at most n traces (default: 1000)')
+    .option('-f, --format <format>', 'jsonl (whole traces) or dataset (cases)', 'jsonl')
+    .option('-o, --output <file>', 'write to a file instead of stdout')
+    .action(withContext((ctx, opts) => exportTracesCommand(ctx, opts as never)));
+  exporter
+    .command('run')
+    .argument('[run]', 'run number or id (default: latest)')
+    .description('export the per-case results of a run as CSV or JSONL')
+    .option('-f, --format <format>', 'csv or jsonl', 'csv')
+    .option('-o, --output <file>', 'write to a file instead of stdout')
+    .action(
+      withContext((ctx, ref: string | undefined, opts) =>
+        exportRunCommand(ctx, ref, opts as never),
+      ),
     );
 
   program.commandsGroup('CI and regressions:');

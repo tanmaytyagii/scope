@@ -66,6 +66,8 @@ On GitHub Actions (`GITHUB_ACTIONS=true`), failed gates are also printed as erro
 | `scope compare <base> <head>` | Compare two runs (numbers or ids) or baseline files, metric by metric and case by case |
 | `scope compare <a> <b> <c> [d]` | Up to four side by side: each headline metric per run with the best marked (ties within noise share it), and the cases whose outcome differs |
 | `scope report [run]` | Render a run as `text`, `markdown`, `json` or `junit` (`--format`, `--baseline`, `-o`, `--dashboard-url`) |
+| `scope export traces` | Write traces as JSONL, or as dataset cases with `--format dataset` (`--run`, `--workflow`, `--status`, `--eval`, `--since 7d`, `--limit`, `-o`) |
+| `scope export run [run]` | Write a run's per-case results as `csv` (one row per case, a status and score column per evaluator) or `jsonl` (`--format`, `-o`) |
 
 Runs are referenced by number (`12` or `#12`) or id; traces by id or a unique prefix of at least
 4 characters.

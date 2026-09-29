@@ -140,6 +140,21 @@ await tracer.trace('answer-question', { input: { question } }, async (trace) => 
 });
 ```
 
+## Turn traces into test cases
+
+Traces from your application are the best source of test cases: they are the questions users
+actually ask. Export them as a dataset, review them, add the expected answers your evaluators
+need, and run them:
+
+```bash
+scope export traces --workflow answer-question --since 7d --format dataset -o datasets/from-production.jsonl
+scope run workflows/support.yaml --dataset datasets/from-production.jsonl
+```
+
+Each case's `inputs` is the trace's input (an object as is, anything else as `{ input }`), its id is
+the trace's case id or `trace-<id>`, and `metadata.source_trace` points back to the trace. Traces
+recorded without content capture have no input and are skipped.
+
 ## Configuration
 
 | Variable | Default | Effect |

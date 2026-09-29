@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { SCOPE_VERSION } from '@scope-ai/core';
 import { Store } from '@scope-ai/storage';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { __test as exportTest } from './commands/export.ts';
 
 const BIN = resolve(fileURLToPath(new URL('.', import.meta.url)), 'bin.ts');
 
@@ -406,6 +407,74 @@ describe('scope run → inspect → baseline → regression', () => {
     expect(checks.find((c: { area: string }) => c.area === 'Storage')).toMatchObject({
       status: 'pass',
     });
+  });
+});
+
+describe('scope export', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'scope-cli-export-'));
+  const proj = join(dir, 'exp');
+
+  beforeAll(async () => {
+    expect((await scope(['init', 'exp'], dir)).code).toBe(0);
+    expect((await scope(['run', '-q'], proj)).code).toBe(0);
+  });
+
+  it('turns a run’s traces into dataset cases that run again', async () => {
+    const file = join(proj, 'from-traces.jsonl');
+    const r = await scope(
+      ['export', 'traces', '--run', '1', '--format', 'dataset', '-o', file],
+      proj,
+    );
+    expect(r.code).toBe(0);
+    expect(r.stderr).toContain('Wrote 12 cases');
+    const cases = readFileSync(file, 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
+    expect(cases).toHaveLength(12);
+    expect(cases.find((c) => c.id === 'refund-timing')).toMatchObject({
+      inputs: { question: 'How long does it take to get a refund?' },
+      expected: ['5 to 7 business days'],
+      metadata: { source_trace: expect.stringMatching(/^[0-9a-f]{32}$/) },
+    });
+    const rerun = await scope(
+      ['run', 'workflows/support.yaml', '--dataset', file, '--no-baseline', '-q'],
+      proj,
+    );
+    expect(rerun.code).toBe(0);
+    expect(rerun.stdout).toMatch(/run #2 · 12 cases/);
+  });
+
+  it('exports whole traces and run results', async () => {
+    const jsonl = await scope(['export', 'traces', '--run', '1', '--limit', '3'], proj);
+    const traces = jsonl.stdout
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
+    expect(traces).toHaveLength(3);
+    expect(traces[0]).toMatchObject({
+      trace: { runId: expect.any(String) },
+      spans: expect.any(Array),
+    });
+
+    const csv = await scope(['export', 'run', '1'], proj);
+    expect(csv.code).toBe(0);
+    const [header, ...rows] = csv.stdout.trim().split('\n');
+    expect(header).toBe(
+      'case_id,outcome,duration_ms,total_tokens,cost_usd,grounded.status,grounded.score,no_invented_facts.status,no_invented_facts.score,key_facts.status,key_facts.score,fast.status,fast.score,error,input_preview,output_preview,trace_id',
+    );
+    expect(rows).toHaveLength(12);
+    expect(rows.find((r) => r.startsWith('refund-method,failed,'))).toContain(',failed,0,');
+  });
+
+  it('writes CSV that spreadsheets cannot run, and reads --since', () => {
+    const { cell, parseSince } = exportTest;
+    expect(cell('=HYPERLINK("x")')).toBe(`"'=HYPERLINK(""x"")"`);
+    expect(cell('-1')).toBe("'-1");
+    expect(cell(-1)).toBe('-1');
+    expect(cell('a,b')).toBe('"a,b"');
+    expect(parseSince('7d', 1_000_000_000)).toBe(1_000_000_000 - 7 * 86_400_000);
+    expect(() => parseSince('last week')).toThrow(/not a duration or date/);
   });
 });
 

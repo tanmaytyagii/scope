@@ -50,6 +50,10 @@ which are always called out).
   so `scope run`, reports, the job summary and pull request comment ("Changed since the baseline:
   sentences 2 → 1 · the workflow file"), the run page and `scope compare` show it; the Compare
   page and `GET /api/v1/comparisons` compare two runs' configuration too.
+- `scope export traces` writes traces as JSONL, or as dataset cases (`--format dataset`) —
+  from observed traces back to regression tests; `scope export run` writes a run's per-case
+  results as CSV (a status and score column per evaluator; cells a spreadsheet would run as
+  formulas are escaped) or JSONL.
 - [Privacy and data](docs/guides/privacy.md): what is stored, what leaves the machine, what is
   redacted where, and how to keep content out.
 

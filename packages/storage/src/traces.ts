@@ -184,8 +184,9 @@ export async function listTraces(
         eb
           .selectFrom('spans')
           .select(sql`1`.as('one'))
+          // No spans.project_id condition: the trace is the project's, and with one SQLite walks
+          // every span of the model instead of the trace's few spans.
           .whereRef('spans.trace_id', '=', 'traces.id')
-          .where('spans.project_id', '=', projectId)
           .where((inner) =>
             inner.or([
               inner('spans.model', '=', model),
@@ -630,8 +631,9 @@ export async function runCaseResults(
       .selectFrom('spans')
       .innerJoin('traces', 'traces.id', 'spans.trace_id')
       .select(['spans.trace_id', 'spans.provider', 'spans.model'])
+      // Scoped through the run's traces (indexed), not spans.project_id (every span of the project).
+      .where('traces.project_id', '=', projectId)
       .where('traces.run_id', '=', runId)
-      .where('spans.project_id', '=', projectId)
       .where('spans.kind', '=', 'llm')
       .where('spans.in_evaluation', '=', 0)
       .where('spans.cost_usd', 'is', null)

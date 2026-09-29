@@ -15,23 +15,46 @@ limit).
 | Operation | 20,000 traces | 100,000 traces |
 | --- | ---: | ---: |
 | Ingest a batch of 500 traces (store only) | 24–50 ms | ~100 ms (spikes to ~260 ms at WAL checkpoints) |
-| `GET /traces` first page, search, failed filter | < 1 ms | < 1 ms |
-| `GET /traces?sort=slowest` | 4 ms | 19 ms |
-| `GET /evaluations?status=failed` | 7 ms | 39 ms |
-| `GET /evaluators?window=30d` | 9 ms | 69 ms |
-| `GET /overview?window=30d` | 35 ms | 138 ms |
-| `GET /models?window=30d` | 46 ms | 261 ms |
+| `GET /traces` first page, search, failed filter, model filter | < 3 ms | < 1 ms |
+| `GET /traces?sort=slowest` | 4–7 ms | 16 ms |
+| `GET /evaluations?status=failed` | 7 ms | 37 ms |
+| `GET /evaluators?window=30d` | 9 ms | 55 ms |
+| `GET /overview?window=30d` | 30–37 ms | 117 ms |
+| `GET /models?window=30d` | 46 ms | 220 ms |
 | `GET /traces/{id}` with 1,000 spans (363 KiB) | 4 ms | 4 ms |
 
 Lists are keyset-paginated and indexed, so their cost does not grow with the database. The
 aggregates (overview, evaluators, models) scan the spans in their time window; the models query
 is the slowest because it groups every model call and samples up to 50,000 latencies for
 percentiles — two index scans of about 80 ms each at 100,000 model calls. Ingestion slows about
-four-fold as the database grows from empty to 100,000 traces, which is B-tree growth, not a
-pathology.
+two- to four-fold as the database grows from empty to 100,000 traces, which is B-tree growth, not
+a pathology.
 
-Nothing here needed changing for v0.2. The next step, when a real deployment needs it, is
-pre-aggregated rollups for the dashboard's time-window queries (see the [roadmap](./roadmap.md)).
+The next step, when a real deployment needs it, is pre-aggregated rollups for the dashboard's
+time-window queries (see the [roadmap](./roadmap.md)).
+
+### OpenTelemetry (OTLP) ingestion
+
+`POST /v1/traces` with JSON-encoded requests of 100 traces × 6 spans (222 KiB each; every third
+span a model call with GenAI attributes), measured after the reads above, so on top of the
+20,000- or 100,000-trace database. This is the whole request: decoding, mapping, redaction,
+storage, and recomputing each trace from all of its stored spans.
+
+| Operation | 20,000 traces | 100,000 traces |
+| --- | ---: | ---: |
+| 5,000 traces in 50 requests | 680 ms (7,300 traces/s, ~14 ms a request) | 695 ms (7,200 traces/s) |
+| One 1,000-span trace arriving in 10 requests of 100 spans | 35 ms (3–5 ms a request) | 34 ms |
+
+A request's cost depends on its size, not on the database's. Recomputing a trace reads all of its
+stored spans, so a trace that arrives in many pieces costs a little more with each piece (2.5 ms
+for the first 100 spans, 4.5–5 ms for the tenth).
+
+This benchmark found a real problem, fixed in v0.3: span queries that combined a `project_id`
+condition with a list of trace ids made SQLite choose the `(project_id, model, start_time)` index
+and scan every span of the project. OTLP ingestion fell to 2,200 traces/s at 20,000 traces and
+667 traces/s (150 ms a request) at 100,000, getting slower as the database grew. The same shape
+affected the trace list's model filter and a run's case list. The traces are already known to
+belong to the project, so those queries now select spans by trace id alone (the primary key).
 
 ## Dashboard
 

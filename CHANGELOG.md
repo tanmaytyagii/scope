@@ -69,6 +69,14 @@ which are always called out).
 - [Privacy and data](docs/guides/privacy.md): what is stored, what leaves the machine, what is
   redacted where, and how to keep content out.
 
+### Fixed
+
+- On SQLite, OTLP ingestion scanned every span of the project for each request, because span
+  queries combining a project condition with a list of trace ids used the wrong index: it fell to
+  667 traces/s at 100,000 stored traces. It now stays at about 7,200 traces/s regardless of
+  database size. The trace list's model filter and a run's case list had the same query shape
+  and are fixed too. `npm run bench` measures OTLP ingestion ([performance](docs/performance.md)).
+
 ## [0.2.0] - 2026-09-29
 
 The first published release. Version 0.1.0 was developed in the open but never published, so

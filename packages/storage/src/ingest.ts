@@ -350,12 +350,9 @@ async function recomputeTraces(
   traceIds: readonly string[],
 ): Promise<void> {
   for (const ids of chunk(traceIds, 100)) {
-    const rows = await trx
-      .selectFrom('spans')
-      .selectAll()
-      .where('project_id', '=', projectId)
-      .where('trace_id', 'in', ids)
-      .execute();
+    // The traces are this project's (checked above), so their ids alone select the spans. A
+    // project_id condition here makes SQLite scan every span of the project by its model index.
+    const rows = await trx.selectFrom('spans').selectAll().where('trace_id', 'in', ids).execute();
     const byTrace = new Map<string, typeof rows>();
     for (const row of rows) {
       const list = byTrace.get(row.trace_id) ?? [];

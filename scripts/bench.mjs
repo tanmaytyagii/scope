@@ -7,7 +7,8 @@
  *   node --conditions=scope-source scripts/bench.mjs [--traces 20000] [--spans 1000]
  *
  * Prints ingestion throughput, API timings (median of 5) and response sizes, including one
- * trace with the maximum number of spans.
+ * trace with the maximum number of spans, then OTLP ingestion through POST /v1/traces: whole
+ * traces per request, and one large trace arriving in pieces.
  */
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -114,10 +115,98 @@ await time('traces, first page', '/traces?limit=50');
 await time('traces, search', `/traces?limit=50&q=${pick(3)}`);
 await time('traces, failed evaluations', '/traces?limit=50&eval=failed');
 await time('traces, slowest', '/traces?limit=50&sort=slowest');
+await time('traces, by model', '/traces?limit=50&model=gpt-5');
 await time('evaluators (30d)', '/evaluators?window=30d');
 await time('evaluations, failed', '/evaluations?status=failed&limit=50');
 await time('models (30d)', '/models?window=30d');
 await time(`trace with ${BIG_SPANS} spans`, `/traces/${big.trace.id}`);
+
+// ─── OTLP ingestion ──────────────────────────────────────────────────────────────────────────
+// Through POST /v1/traces as OpenTelemetry exporters send it (JSON encoding), measured after the
+// reads so it does not change them. Spans of one trace can arrive in several requests; each
+// request recomputes the traces it touches from all their stored spans.
+const OTLP_TRACES = Math.min(TRACES, 5000);
+const OTLP_PER_REQUEST = 100;
+const hex = (n, width) => n.toString(16).padStart(width, '0');
+const t0 = BigInt(Date.now() - 3_600_000) * 1_000_000n;
+const text = (key, value) => ({ key, value: { stringValue: value } });
+const int = (key, value) => ({ key, value: { intValue: String(value) } });
+
+/** Spans `from`..`to` of benchmark trace `n`: a root, steps, and every third span a model call. */
+function otlpSpans(n, from, to) {
+  const traceId = `b${hex(n, 31)}`;
+  const spans = [];
+  for (let s = from; s < to; s++) {
+    const llm = s > 0 && s % 3 === 0;
+    const start = t0 + BigInt(n) * 1_000_000_000n + BigInt(s) * 1_000_000n;
+    spans.push({
+      traceId,
+      spanId: hex(s + 1, 16),
+      ...(s > 0 && { parentSpanId: hex(1, 16) }),
+      name: s === 0 ? 'support' : llm ? 'chat gpt-5' : `step-${s}`,
+      startTimeUnixNano: String(start),
+      endTimeUnixNano: String(start + 800_000n),
+      attributes: llm
+        ? [
+            text('gen_ai.operation.name', 'chat'),
+            text('gen_ai.provider.name', 'openai'),
+            text('gen_ai.request.model', 'gpt-5'),
+            int('gen_ai.usage.input_tokens', 800 + (n % 100)),
+            int('gen_ai.usage.output_tokens', 120),
+            text('gen_ai.input.messages', JSON.stringify([{ role: 'user', content: pick(n) }])),
+          ]
+        : [text('input.value', `How does ${pick(n)} work for order ${n}?`)],
+      status: { code: 1 },
+    });
+  }
+  return spans;
+}
+
+async function sendOtlp(spans) {
+  const body = JSON.stringify({
+    resourceSpans: [
+      {
+        resource: { attributes: [text('service.name', 'bench')] },
+        scopeSpans: [{ scope: { name: 'bench' }, spans }],
+      },
+    ],
+  });
+  const res = await app.request('/v1/traces', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body,
+  });
+  const result = await res.text();
+  if (!res.ok || result.includes('rejectedSpans')) throw new Error(`OTLP: ${res.status} ${result}`);
+  return body.length;
+}
+
+console.log('\nOTLP (POST /v1/traces, JSON)');
+started = performance.now();
+let otlpBytes = 0;
+for (let n = 0; n < OTLP_TRACES; n += OTLP_PER_REQUEST) {
+  const spans = [];
+  for (let i = n; i < Math.min(n + OTLP_PER_REQUEST, OTLP_TRACES); i++)
+    spans.push(...otlpSpans(i, 0, 6));
+  otlpBytes += await sendOtlp(spans);
+}
+const otlpMs = ms(started);
+console.log(
+  `ingest   ${OTLP_TRACES} traces × 6 spans, ${OTLP_PER_REQUEST} traces a request, in ${otlpMs} ms ` +
+    `(${Math.round(OTLP_TRACES / (otlpMs / 1000))} traces/s, ${Math.round(otlpBytes / 1024 / (OTLP_TRACES / OTLP_PER_REQUEST))} KiB a request)`,
+);
+
+const PIECE = 100;
+const pieces = [];
+for (let from = 0; from < BIG_SPANS; from += PIECE) {
+  const t = performance.now();
+  await sendOtlp(otlpSpans(OTLP_TRACES, from, Math.min(from + PIECE, BIG_SPANS)));
+  pieces.push(ms(t));
+}
+console.log(
+  `ingest   1 trace × ${BIG_SPANS} spans in ${pieces.length} requests of ${PIECE}: ` +
+    `first ${pieces[0]} ms, last ${pieces.at(-1)} ms, total ${Math.round(pieces.reduce((a, b) => a + b, 0))} ms`,
+);
 
 await store.close();
 rmSync(dir, { recursive: true, force: true });

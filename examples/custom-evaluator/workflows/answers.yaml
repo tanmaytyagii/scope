@@ -1,0 +1,64 @@
+# Support answers, judged by one built-in and two custom evaluators.
+version: 1
+name: answers
+description: Answers questions from the help center; custom evaluators check length and readability.
+
+inputs:
+  question:
+    type: string
+
+params:
+  # An offline, deterministic stand-in (not a language model); see examples/README.md.
+  model: local:extractive
+  top_k: 2
+  sentences: 2
+
+variants:
+  # local:echo answers with its whole prompt, far too long: short_enough fails, and its gate.
+  echo:
+    model: local:echo
+
+steps:
+  - id: retrieve
+    type: retrieve
+    with:
+      query: "{{ inputs.question }}"
+      corpus: ../docs/*.md
+      top_k: "{{ params.top_k }}"
+  - id: answer
+    type: llm
+    with:
+      model: "{{ params.model }}"
+      prompt: |
+        Context:
+        {{ steps.retrieve.output.text }}
+
+        Question: {{ inputs.question }}
+      provider_options:
+        local:
+          sentences: "{{ params.sentences }}"
+
+outputs:
+  answer: "{{ steps.answer.output.text }}"
+
+dataset: ../datasets/questions.jsonl
+
+evaluators:
+  # Built in: the expected facts appear in the answer.
+  - name: key_facts
+    type: contains
+  # Custom, deterministic, with arguments: the answer fits in a support chat bubble.
+  - name: short_enough
+    type: ../evaluators/word-limit.mjs
+    with:
+      max: 45
+  # Custom, heuristic, with a threshold: the answer reads at a plain-English level.
+  - name: readable
+    type: ../evaluators/readability.mjs
+    threshold: 0.45
+
+gates:
+  - metric: evaluator.short_enough.pass_rate
+    min: 1
+  - metric: evaluator.readable.mean_score
+    min: 0.45

@@ -1,0 +1,10 @@
+# SCOPE project: a workflow graded by custom evaluators (evaluators/*.mjs).
+# Docs: https://github.com/tanmaytyagii/scope/blob/main/docs/guides/custom-evaluators.md
+version: 1
+project: custom-evaluator
+
+storage:
+  url: sqlite:.scope/scope.db
+
+workflows:
+  - workflows/*.yaml

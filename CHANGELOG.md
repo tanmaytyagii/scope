@@ -54,6 +54,12 @@ which are always called out).
   from observed traces back to regression tests; `scope export run` writes a run's per-case
   results as CSV (a status and score column per evaluator; cells a spreadsheet would run as
   formulas are escaped) or JSONL.
+- [Custom evaluators](docs/guides/custom-evaluators.md): the contract written down — the module,
+  its inputs and result, thresholds, failures and versioning — with a runnable example
+  ([examples/custom-evaluator](examples/custom-evaluator)).
+- [Integrations](docs/integrations.md) and [extensibility](docs/extensibility.md): how traces get
+  in from each stack and how well each path is tested, and every extension point with its
+  stability.
 - [Privacy and data](docs/guides/privacy.md): what is stored, what leaves the machine, what is
   redacted where, and how to keep content out.
 

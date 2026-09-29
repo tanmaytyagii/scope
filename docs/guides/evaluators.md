@@ -103,36 +103,19 @@ against labelled examples before gating on it, and prefer deterministic checks w
 
 ## Custom evaluators
 
-Point `type` at a module in the project. Its default export declares a kind, a description and
-an `evaluate` function:
-
-```js
-// evaluators/mentions-policy.mjs
-export default {
-  kind: 'deterministic',
-  description: 'The reply cites the refund policy by name.',
-  evaluate({ output }) {
-    const ok = /refund policy/i.test(String(output));
-    return {
-      score: ok ? 1 : 0,
-      reason: ok ? 'Cites the refund policy.' : 'Does not mention the refund policy.',
-    };
-  },
-};
-```
+Point `type` at a module in the project whose default export declares a `kind`, a `description`
+and an `evaluate(input, ctx)` function returning `{ score, reason, passed?, metadata?, skipped? }`:
 
 ```yaml
 evaluators:
-  - name: cites_policy
-    type: ./evaluators/mentions-policy.mjs
+  - name: short_enough
+    type: ../evaluators/word-limit.mjs
+    with: { max: 45 }
 ```
 
-`evaluate(input, ctx)` receives `{ input, output, expected, context, trace, args }` (`args` are the
-`with` values) and returns `{ score, reason, passed?, metadata?, skipped? }`. For model-based
-evaluators, `ctx.models.complete(modelRef, request)` and `ctx.models.embed(modelRef, texts)` make
-traced calls through SCOPE's providers. In TypeScript, `defineEvaluator` from
-`@scope-ai/evaluators` gives full type inference. Declare the kind honestly: it is shown next to
-every result.
+The full contract — inputs, results, thresholds, failures, versioning — is in
+[custom evaluators](./custom-evaluators.md), with a runnable example in
+[examples/custom-evaluator](../../examples/custom-evaluator).
 
 ## Re-scoring a run
 

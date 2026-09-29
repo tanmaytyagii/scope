@@ -453,3 +453,84 @@ describe('instrumentAnthropic', () => {
       });
   });
 });
+
+describe('responses are not trusted', () => {
+  it('keeps nonsense token counts out, so the trace is still accepted', async () => {
+    const { tracer, settled } = setup();
+    const openai = instrumentOpenAI(openaiClient(), { tracer });
+    replies.push({
+      json: {
+        ...completion,
+        usage: {
+          prompt_tokens: 10,
+          completion_tokens: -3,
+          prompt_tokens_details: { cached_tokens: 50 },
+        },
+      },
+    });
+    await openai.chat.completions.create({ model: 'gpt-5', messages: [] });
+    replies.push({
+      json: { ...completion, usage: { prompt_tokens: 1.5, completion_tokens: '7' } },
+    });
+    await openai.chat.completions.create({ model: 'gpt-5', messages: [] });
+    const [first, second] = await settled(2);
+    // Cached tokens cannot exceed the prompt, and a negative count is no count (recorded as 0
+    // beside a known input count, as for any partial usage).
+    expect(first?.spans[0]).toMatchObject({ inputTokens: 0, outputTokens: 0 });
+    expect(second?.spans[0]).toMatchObject({ inputTokens: null, outputTokens: null });
+  });
+
+  it('does not hang on a stream event with a huge block index', async () => {
+    const { tracer, settled } = setup();
+    const anthropic = instrumentAnthropic(anthropicClient(), { tracer });
+    replies.push({
+      sse: [
+        {
+          event: 'message_start',
+          data: {
+            type: 'message_start',
+            message: {
+              id: 'msg_1',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-sonnet-5',
+              content: [],
+              stop_reason: null,
+              usage: { input_tokens: 5, output_tokens: 1 },
+            },
+          },
+        },
+        {
+          event: 'content_block_start',
+          data: {
+            type: 'content_block_start',
+            index: 4e9,
+            content_block: { type: 'text', text: '' },
+          },
+        },
+        {
+          event: 'content_block_delta',
+          data: {
+            type: 'content_block_delta',
+            index: 4e9,
+            delta: { type: 'text_delta', text: 'Hi.' },
+          },
+        },
+        { event: 'message_stop', data: { type: 'message_stop' } },
+      ],
+    });
+    const started = performance.now();
+    const stream = await anthropic.messages.create({
+      model: 'claude-sonnet-5',
+      max_tokens: 20,
+      messages: [{ role: 'user', content: 'Hi' }],
+      stream: true,
+    });
+    for await (const _ of stream) {
+      // consume
+    }
+    const [bundle] = await settled(1);
+    expect(performance.now() - started).toBeLessThan(2000);
+    expect(bundle?.spans[0]?.output).toEqual({ text: 'Hi.' });
+  });
+});

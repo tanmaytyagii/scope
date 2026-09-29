@@ -133,6 +133,17 @@ describe('trace rollups', () => {
     expect(rollup.unpricedModels).toEqual(['acme:x']);
   });
 
+  it('counts cache tokens only from whole, non-negative attribute values', () => {
+    const cached = (value: unknown) =>
+      span('llm', null, 'llm', {
+        inputTokens: 10,
+        outputTokens: 1,
+        attributes: { 'gen_ai.usage.cache_read_input_tokens': value as number },
+      });
+    const rollup = rollupSpans([cached(-1e12), cached(2.5), cached(Number.NaN), cached(40)]);
+    expect(rollup.usage).toMatchObject({ cacheReadTokens: 40, totalTokens: 84 });
+  });
+
   it('builds an ordered tree', () => {
     const flat = flattenSpanTree(buildSpanTree(spans));
     expect(flat.map((n) => [n.span.id, n.depth])).toEqual([

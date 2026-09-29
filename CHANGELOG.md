@@ -26,6 +26,18 @@ which are always called out).
   `http.request.header.authorization` are masked, not only exact names like `api_key`.
 - Evaluation evidence follows the content policy in `scope run` as it already did on the server:
   with `capture_content: false` it is no longer stored.
+- The Markdown report (pull request comment, job summary) renders case ids, evaluation reasons,
+  gate messages and workflow names as plain text. Reasons can quote model output or dataset
+  text; before, an `@mention` in one pinged that person or team, and Markdown images and links
+  rendered in the pull request. Case ids are code spans that backticks cannot end.
+- Client instrumentation (unreleased until now) does not trust response numbers: token counts
+  must be whole and non-negative (a negative count would have made the server reject the whole
+  batch), and an Anthropic stream event with a huge block index no longer blocks the application
+  (it made the accumulator walk a sparse array for about a minute).
+- OTLP ingestion (unreleased until now) ignores token counts that are not whole, non-negative
+  numbers (which gave negative costs), and bounds span status messages, error fields, provider
+  and model names as the SDK ingestion schema does. Trace rollups count cache tokens from span
+  attributes only when they are such counts.
 
 ### Added
 

@@ -47,6 +47,11 @@ export interface MappedBatch {
 const ZERO_TRACE = '0'.repeat(32);
 const ZERO_SPAN = '0'.repeat(16);
 const MAX_NAME = 256;
+/** The limits the SDK ingestion schema enforces (packages/protocol), applied by truncating. */
+const MAX_MESSAGE = 16_384;
+const MAX_STACK = 32_768;
+const MAX_PROVIDER = 128;
+const MAX_MODEL = 256;
 const MAX_METADATA_KEYS = 64;
 
 const LLM_OPERATIONS = new Set([
@@ -85,10 +90,11 @@ function num(v: OtlpValue | undefined): number | null {
   return null;
 }
 
-function firstNum(attrs: OtlpAttributes, keys: readonly string[]): number | null {
+/** The first of `keys` holding a token count: a whole number, not negative. */
+function firstCount(attrs: OtlpAttributes, keys: readonly string[]): number | null {
   for (const key of keys) {
     const v = num(attrs[key]);
-    if (v !== null) return v;
+    if (v !== null && Number.isSafeInteger(v) && v >= 0) return v;
   }
   return null;
 }
@@ -408,12 +414,14 @@ export function mapSpan(span: OtlpSpan, scope: string, pricing: PriceTable): Ing
   if (exception || failed) {
     const ex = exception?.attributes ?? {};
     error = {
-      type: str(ex['exception.type']) ?? 'Error',
-      message:
-        str(ex['exception.message']) ?? (span.status.message || 'The span ended with an error'),
+      type: (str(ex['exception.type']) ?? 'Error').slice(0, MAX_NAME),
+      message: (
+        str(ex['exception.message']) ??
+        (span.status.message || 'The span ended with an error')
+      ).slice(0, MAX_MESSAGE),
     };
     const stack = str(ex['exception.stacktrace']);
-    if (stack) error.stack = stack;
+    if (stack) error.stack = stack.slice(0, MAX_STACK);
   }
 
   let provider: string | null = null;
@@ -426,31 +434,32 @@ export function mapSpan(span: OtlpSpan, scope: string, pricing: PriceTable): Ing
   );
   if (scope) attributes['otel.scope.name'] = scope;
   if (kind === 'llm') {
-    provider = providerName(a);
-    model = firstStr(a, [
-      'gen_ai.request.model',
-      'gen_ai.response.model',
-      'llm.model_name',
-      'ai.model.id',
-    ]);
+    provider = providerName(a)?.slice(0, MAX_PROVIDER) ?? null;
+    model =
+      firstStr(a, [
+        'gen_ai.request.model',
+        'gen_ai.response.model',
+        'llm.model_name',
+        'ai.model.id',
+      ])?.slice(0, MAX_MODEL) ?? null;
     const cacheRead =
-      firstNum(a, [
+      firstCount(a, [
         'gen_ai.usage.cache_read.input_tokens',
         'gen_ai.usage.cache_read_input_tokens',
       ]) ?? 0;
     const cacheWrite =
-      firstNum(a, [
+      firstCount(a, [
         'gen_ai.usage.cache_creation.input_tokens',
         'gen_ai.usage.cache_creation_input_tokens',
       ]) ?? 0;
-    const reportedInput = firstNum(a, [
+    const reportedInput = firstCount(a, [
       'gen_ai.usage.input_tokens',
       'gen_ai.usage.prompt_tokens',
       'llm.token_count.prompt',
       'ai.usage.inputTokens',
       'ai.usage.promptTokens',
     ]);
-    outputTokens = firstNum(a, [
+    outputTokens = firstCount(a, [
       'gen_ai.usage.output_tokens',
       'gen_ai.usage.completion_tokens',
       'llm.token_count.completion',
@@ -496,7 +505,7 @@ export function mapSpan(span: OtlpSpan, scope: string, pricing: PriceTable): Ing
     name: (span.name || 'span').slice(0, MAX_NAME),
     kind,
     status: failed || exception ? 'error' : 'ok',
-    statusMessage: span.status.message || null,
+    statusMessage: span.status.message ? span.status.message.slice(0, MAX_MESSAGE) : null,
     startTime,
     endTime,
     durationMs: Math.round((endTime - startTime) * 1000) / 1000,

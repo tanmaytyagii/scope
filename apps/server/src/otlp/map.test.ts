@@ -173,6 +173,60 @@ describe('GenAI conventions', () => {
     expect(s).toMatchObject({ kind: 'llm', provider: 'acme', costUsd: null, inputTokens: 10 });
   });
 
+  it('ignores token counts that are not whole, non-negative numbers', () => {
+    const s = mapSpan(
+      span({
+        'gen_ai.operation.name': 'chat',
+        'gen_ai.provider.name': 'openai',
+        'gen_ai.request.model': 'gpt-5',
+        'gen_ai.usage.input_tokens': -500,
+        'gen_ai.usage.output_tokens': 2.5,
+        'gen_ai.usage.cache_read.input_tokens': -100,
+      }),
+      '',
+      {},
+    );
+    expect(s).toMatchObject({ kind: 'llm', inputTokens: null, outputTokens: null, costUsd: null });
+    expect(s.attributes['gen_ai.usage.cache_read_input_tokens']).toBeUndefined();
+  });
+
+  it('bounds names, messages and model fields as the SDK ingestion schema does', () => {
+    const long = 'x'.repeat(100_000);
+    const s = mapSpan(
+      span(
+        {
+          'gen_ai.operation.name': 'chat',
+          'gen_ai.provider.name': long,
+          'gen_ai.request.model': long,
+        },
+        {
+          name: long,
+          status: { code: 2, message: long },
+          events: [
+            {
+              name: 'exception',
+              timeUnixNano: 1_700_000_000_100_000_000n,
+              attributes: {
+                'exception.type': long,
+                'exception.message': long,
+                'exception.stacktrace': long,
+              },
+            },
+          ],
+        },
+      ),
+      '',
+      {},
+    );
+    expect(s.name).toHaveLength(256);
+    expect(s.provider).toHaveLength(128);
+    expect(s.model).toHaveLength(256);
+    expect(s.statusMessage).toHaveLength(16_384);
+    expect(s.error?.type).toHaveLength(256);
+    expect(s.error?.message).toHaveLength(16_384);
+    expect(s.error?.stack).toHaveLength(32_768);
+  });
+
   it('records exceptions as the span error', () => {
     const s = mapSpan(
       span(

@@ -9,6 +9,9 @@ export interface TraceRollup {
   unpricedModels: string[];
 }
 
+const tokenCount = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+
 /**
  * Computes token, cost and count rollups for a trace.
  *
@@ -47,12 +50,11 @@ export function rollupSpans(spans: readonly SpanRecord[]): TraceRollup {
     llmCallCount++;
     usage.inputTokens += span.inputTokens ?? 0;
     usage.outputTokens += span.outputTokens ?? 0;
-    const cacheRead = span.attributes['gen_ai.usage.cache_read_input_tokens'];
-    const cacheWrite = span.attributes['gen_ai.usage.cache_creation_input_tokens'];
-    if (typeof cacheRead === 'number')
-      usage.cacheReadTokens = (usage.cacheReadTokens ?? 0) + cacheRead;
-    if (typeof cacheWrite === 'number')
-      usage.cacheWriteTokens = (usage.cacheWriteTokens ?? 0) + cacheWrite;
+    // Attributes arrive from applications and OpenTelemetry exporters: only counts are counted.
+    const cacheRead = tokenCount(span.attributes['gen_ai.usage.cache_read_input_tokens']);
+    const cacheWrite = tokenCount(span.attributes['gen_ai.usage.cache_creation_input_tokens']);
+    if (cacheRead !== null) usage.cacheReadTokens = (usage.cacheReadTokens ?? 0) + cacheRead;
+    if (cacheWrite !== null) usage.cacheWriteTokens = (usage.cacheWriteTokens ?? 0) + cacheWrite;
     if (span.attributes['scope.usage.estimated'] === true) usage.estimated = true;
     if (span.costUsd === null) {
       costKnown = false;

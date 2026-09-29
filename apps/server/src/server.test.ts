@@ -760,6 +760,25 @@ describe('operations', () => {
     for (const origin of ['http://localhost:4700', 'http://127.0.0.1:4700', 'http://[::1]:4700']) {
       expect((await local.request(`${origin}/api/v1/info`)).status, origin).toBe(200);
     }
+    // Both ingestion endpoints, whatever the payload.
+    for (const path of ['/api/v1/ingest', '/v1/traces']) {
+      const res = await local.request(`http://attacker.example:4700${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      });
+      expect(res.status, path).toBe(403);
+    }
+    // A page on another site can send a "simple" cross-origin request without a preflight
+    // (text/plain, form encodings); OTLP accepts neither, so it cannot write traces that way.
+    for (const type of ['text/plain', 'application/x-www-form-urlencoded', 'multipart/form-data']) {
+      const res = await local.request('http://127.0.0.1:4700/v1/traces', {
+        method: 'POST',
+        headers: { 'content-type': type },
+        body: '{"resourceSpans":[]}',
+      });
+      expect(res.status, type).toBe(415);
+    }
   });
 
   it('reports a port that is already in use', async () => {

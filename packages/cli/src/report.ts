@@ -286,8 +286,28 @@ export function describeCaseChange(c: CaseChange): string {
 
 const MD_ICON = { passed: '✅', failed: '❌', warned: '⚠️', skipped: '➖', none: 'ℹ️' } as const;
 
-function mdEscape(text: string): string {
-  return text.replace(/\|/g, '\\|').replace(/\n/g, ' ').replace(/</g, '&lt;');
+/**
+ * Text shown as written in a Markdown report (a pull request comment or job summary): no
+ * formatting, links, images, HTML or @-mentions. Reasons can hold model output and dataset text,
+ * which must not be able to ping people or put images and links in a pull request.
+ */
+export function mdText(text: string): string {
+  return text.replace(/(?<![\w.])@[\w-]+(?:\/[\w.-]+)?|[\\`*_[\]!|~<>&#]|\s+/g, (m) => {
+    if (m.startsWith('@')) return `\`${m}\``; // mentions are not made in code
+    if (m === '<') return '&lt;';
+    if (m === '>') return '&gt;';
+    if (m === '&') return '&amp;';
+    if (/^\s+$/.test(m)) return ' ';
+    return `\\${m}`;
+  });
+}
+
+/** Text as inline code in a Markdown table cell, whatever backticks it contains. */
+export function mdCode(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').replace(/\|/g, '\\|');
+  const longest = Math.max(0, ...(flat.match(/`+/g) ?? []).map((run) => run.length));
+  const fence = '`'.repeat(longest + 1);
+  return longest ? `${fence} ${flat} ${fence}` : `${fence}${flat}${fence}`;
 }
 
 export function renderMarkdown(input: ReportInput): string {
@@ -302,7 +322,7 @@ export function renderMarkdown(input: ReportInput): string {
           : '✅';
   const lines: string[] = [];
   lines.push(
-    `### ${icon} SCOPE · ${run.workflowName}${run.variant ? ` · \`${run.variant}\`` : ''} — ${resultLabel(run).toLowerCase()}`,
+    `### ${icon} SCOPE · ${mdText(run.workflowName)}${run.variant ? ` · ${mdCode(run.variant)}` : ''} — ${resultLabel(run).toLowerCase()}`,
   );
   const facts = [
     `Run #${run.number}`,
@@ -318,15 +338,12 @@ export function renderMarkdown(input: ReportInput): string {
   if (failedGates.length) {
     lines.push(`**${failedGates.length === 1 ? 'Reason' : 'Reasons'}:**`);
     for (const g of failedGates)
-      lines.push(`- ${g.severity === 'warn' ? '⚠️' : '❌'} ${mdEscape(g.message)}`);
+      lines.push(`- ${g.severity === 'warn' ? '⚠️' : '❌'} ${mdText(g.message)}`);
     lines.push('');
   }
   const changed = describeConfig(comparison?.config);
   if (changed.length)
-    lines.push(
-      `**Changed since the baseline:** ${changed.map((c) => mdEscape(c)).join(' · ')}`,
-      '',
-    );
+    lines.push(`**Changed since the baseline:** ${changed.map((c) => mdText(c)).join(' · ')}`, '');
 
   // Metrics table (with baseline column when comparing).
   const metricRows: Array<{
@@ -413,13 +430,13 @@ export function renderMarkdown(input: ReportInput): string {
     for (const m of metricRows) {
       const trend = m.change === 'improved' ? ' ↑' : m.change === 'regressed' ? ' ↓' : '';
       lines.push(
-        `| ${mdEscape(m.label)} | ${formatMetric(m.base, m.unit)} | ${formatMetric(m.head, m.unit)} | ${formatDelta(m.base, m.head, m.unit)}${trend} | ${gateFor(m.id)} |`,
+        `| ${mdText(m.label)} | ${formatMetric(m.base, m.unit)} | ${formatMetric(m.head, m.unit)} | ${formatDelta(m.base, m.head, m.unit)}${trend} | ${gateFor(m.id)} |`,
       );
     }
   } else {
     lines.push('| Metric | Value | Gate |', '| --- | ---: | :---: |');
     for (const m of metricRows)
-      lines.push(`| ${mdEscape(m.label)} | ${formatMetric(m.head, m.unit)} | ${gateFor(m.id)} |`);
+      lines.push(`| ${mdText(m.label)} | ${formatMetric(m.head, m.unit)} | ${gateFor(m.id)} |`);
   }
   lines.push('');
 
@@ -440,7 +457,7 @@ export function renderMarkdown(input: ReportInput): string {
               ? MD_ICON.warned
               : MD_ICON.failed;
       lines.push(
-        `| ${status} | \`${g.metric}\` | ${mdEscape(g.expectation)} | ${g.status === 'skipped' ? mdEscape(g.message) : formatMetric(g.actual, g.unit)} |`,
+        `| ${status} | ${mdCode(g.metric)} | ${mdText(g.expectation)} | ${g.status === 'skipped' ? mdText(g.message) : formatMetric(g.actual, g.unit)} |`,
       );
     }
     lines.push('', '</details>', '');
@@ -455,7 +472,7 @@ export function renderMarkdown(input: ReportInput): string {
     lines.push('| Case | Change |', '| --- | --- |');
     for (const c of moved.slice(0, 50))
       lines.push(
-        `| \`${mdEscape(c.caseId)}\` | ${c.kind === 'regressed' ? '❌' : '✅'} ${mdEscape(describeCaseChange(c))} |`,
+        `| ${mdCode(c.caseId)} | ${c.kind === 'regressed' ? '❌' : '✅'} ${mdText(describeCaseChange(c))} |`,
       );
     if (moved.length > 50) lines.push(`| … | ${moved.length - 50} more |`);
     lines.push('', '</details>', '');
@@ -469,9 +486,9 @@ export function renderMarkdown(input: ReportInput): string {
     lines.push('| Case | Outcome | Why |', '| --- | --- | --- |');
     for (const f of input.failures) {
       const link = input.dashboardUrl
-        ? `[\`${mdEscape(f.caseId)}\`](${input.dashboardUrl}/traces/${f.traceId})`
-        : `\`${mdEscape(f.caseId)}\``;
-      lines.push(`| ${link} | ${f.outcome} | ${mdEscape(f.reasons.join('; ').slice(0, 300))} |`);
+        ? `[${mdCode(f.caseId)}](${input.dashboardUrl}/traces/${encodeURIComponent(f.traceId)})`
+        : mdCode(f.caseId);
+      lines.push(`| ${link} | ${f.outcome} | ${mdText(f.reasons.join('; ').slice(0, 300))} |`);
     }
     lines.push('', '</details>', '');
   }

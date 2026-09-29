@@ -33,6 +33,9 @@ const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null;
 const num = (v: unknown): number | undefined =>
   typeof v === 'number' && Number.isFinite(v) ? v : undefined;
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+/** A token count or stream index: responses are not trusted to send sensible numbers. */
+const count = (v: unknown): number | undefined =>
+  typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 ? v : undefined;
 
 /** What a finished call reports. */
 interface CallResult {
@@ -296,17 +299,17 @@ export function instrumentOpenAI<T>(client: T, options: InstrumentOptions): T {
             const choice = Array.isArray(r.choices) && isObj(r.choices[0]) ? r.choices[0] : {};
             const usage = isObj(r.usage) ? r.usage : {};
             const cached =
-              num(
+              count(
                 isObj(usage.prompt_tokens_details)
                   ? usage.prompt_tokens_details.cached_tokens
                   : undefined,
               ) ?? 0;
-            const prompt = num(usage.prompt_tokens);
+            const prompt = count(usage.prompt_tokens);
             return {
               output: chatOutput(isObj(choice.message) ? choice.message : undefined),
               model: str(r.model),
-              inputTokens: prompt === undefined ? undefined : prompt - cached,
-              outputTokens: num(usage.completion_tokens),
+              inputTokens: prompt === undefined ? undefined : Math.max(0, prompt - cached),
+              outputTokens: count(usage.completion_tokens),
               cacheReadTokens: cached || undefined,
               finishReason: str(choice.finish_reason),
               requestId: str(r._request_id) ?? str(r.id),
@@ -329,7 +332,7 @@ export function instrumentOpenAI<T>(client: T, options: InstrumentOptions): T {
                 if (delta && typeof delta.content === 'string') text += delta.content;
                 for (const t of Array.isArray(delta?.tool_calls) ? delta.tool_calls : []) {
                   if (!isObj(t)) continue;
-                  const index = num(t.index) ?? 0;
+                  const index = count(t.index) ?? 0;
                   const entry = tools.get(index) ?? { name: '', arguments: '' };
                   const fn = isObj(t.function) ? t.function : {};
                   entry.name += str(fn.name) ?? '';
@@ -342,16 +345,16 @@ export function instrumentOpenAI<T>(client: T, options: InstrumentOptions): T {
                 if (isObj(chunk.usage)) {
                   const u = chunk.usage;
                   const cached =
-                    num(
+                    count(
                       isObj(u.prompt_tokens_details)
                         ? u.prompt_tokens_details.cached_tokens
                         : undefined,
                     ) ?? 0;
-                  const prompt = num(u.prompt_tokens);
+                  const prompt = count(u.prompt_tokens);
                   result = {
                     ...result,
-                    inputTokens: prompt === undefined ? undefined : prompt - cached,
-                    outputTokens: num(u.completion_tokens),
+                    inputTokens: prompt === undefined ? undefined : Math.max(0, prompt - cached),
+                    outputTokens: count(u.completion_tokens),
                     cacheReadTokens: cached || undefined,
                   };
                 }
@@ -434,7 +437,7 @@ export function instrumentOpenAI<T>(client: T, options: InstrumentOptions): T {
             return {
               output: { embeddings: data.length, dimensions: first.length },
               model: str(r.model),
-              inputTokens: num(isObj(r.usage) ? r.usage.prompt_tokens : undefined),
+              inputTokens: count(isObj(r.usage) ? r.usage.prompt_tokens : undefined),
               outputTokens: 0,
             };
           },
@@ -447,14 +450,15 @@ export function instrumentOpenAI<T>(client: T, options: InstrumentOptions): T {
 function responsesResult(r: Obj): CallResult {
   const usage = isObj(r.usage) ? r.usage : {};
   const cached =
-    num(isObj(usage.input_tokens_details) ? usage.input_tokens_details.cached_tokens : undefined) ??
-    0;
-  const input = num(usage.input_tokens);
+    count(
+      isObj(usage.input_tokens_details) ? usage.input_tokens_details.cached_tokens : undefined,
+    ) ?? 0;
+  const input = count(usage.input_tokens);
   return {
     output: { text: responsesText(r) },
     model: str(r.model),
-    inputTokens: input === undefined ? undefined : input - cached,
-    outputTokens: num(usage.output_tokens),
+    inputTokens: input === undefined ? undefined : Math.max(0, input - cached),
+    outputTokens: count(usage.output_tokens),
     cacheReadTokens: cached || undefined,
     finishReason: str(r.status),
     requestId: str(r._request_id) ?? str(r.id),
@@ -499,10 +503,10 @@ function anthropicResult(message: Obj): CallResult {
   return {
     output: toolCalls.length ? { text, toolCalls } : { text },
     model: str(message.model),
-    inputTokens: num(usage.input_tokens),
-    outputTokens: num(usage.output_tokens),
-    cacheReadTokens: num(usage.cache_read_input_tokens) || undefined,
-    cacheWriteTokens: num(usage.cache_creation_input_tokens) || undefined,
+    inputTokens: count(usage.input_tokens),
+    outputTokens: count(usage.output_tokens),
+    cacheReadTokens: count(usage.cache_read_input_tokens) || undefined,
+    cacheWriteTokens: count(usage.cache_creation_input_tokens) || undefined,
     finishReason: str(message.stop_reason),
     requestId: str(message._request_id) ?? str(message.id),
   };
@@ -526,21 +530,23 @@ export function instrumentAnthropic<T>(client: T, options: InstrumentOptions): T
           fromResponse: anthropicResult,
           fromStream: () => {
             let message: Obj = { content: [] };
-            const blocks: Obj[] = [];
+            // Keyed by the event's index; an array would let one huge index hang the app.
+            const blocks = new Map<number, Obj>();
             return {
               onEvent(event) {
                 if (!isObj(event)) return;
                 if (event.type === 'message_start' && isObj(event.message))
                   message = { ...event.message };
                 if (event.type === 'content_block_start' && isObj(event.content_block))
-                  blocks[num(event.index) ?? blocks.length] = { ...event.content_block };
+                  blocks.set(count(event.index) ?? blocks.size, { ...event.content_block });
                 if (event.type === 'content_block_delta' && isObj(event.delta)) {
-                  const block = blocks[num(event.index) ?? 0] ?? { type: 'text', text: '' };
+                  const index = count(event.index) ?? 0;
+                  const block = blocks.get(index) ?? { type: 'text', text: '' };
                   if (event.delta.type === 'text_delta')
                     block.text = `${str(block.text) ?? ''}${str(event.delta.text) ?? ''}`;
                   if (event.delta.type === 'input_json_delta')
                     block.partial = `${str(block.partial) ?? ''}${str(event.delta.partial_json) ?? ''}`;
-                  blocks[num(event.index) ?? 0] = block;
+                  blocks.set(index, block);
                 }
                 if (event.type === 'message_delta') {
                   if (isObj(event.delta) && typeof event.delta.stop_reason === 'string')
@@ -553,14 +559,16 @@ export function instrumentAnthropic<T>(client: T, options: InstrumentOptions): T
                 }
               },
               result() {
-                const content = blocks.filter(Boolean).map((b) => {
-                  if (b.type !== 'tool_use' || typeof b.partial !== 'string') return b;
-                  try {
-                    return { ...b, input: JSON.parse(b.partial) };
-                  } catch {
-                    return { ...b, input: b.partial };
-                  }
-                });
+                const content = [...blocks.entries()]
+                  .sort(([a], [b]) => a - b)
+                  .map(([, b]) => {
+                    if (b.type !== 'tool_use' || typeof b.partial !== 'string') return b;
+                    try {
+                      return { ...b, input: JSON.parse(b.partial) };
+                    } catch {
+                      return { ...b, input: b.partial };
+                    }
+                  });
                 return anthropicResult({ ...message, content });
               },
             };

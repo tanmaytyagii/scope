@@ -95,6 +95,8 @@ export function buildComparison(
         params: baseline.config?.params ?? null,
         workflow: baseline.config?.workflowHash ?? null,
         datasetHash: baseline.dataset?.hash ?? null,
+        files: baseline.config?.files ?? null,
+        scope: baseline.config?.scope ?? null,
       },
       head,
     );
@@ -208,6 +210,19 @@ function showValue(value: unknown): string {
   return text.length > 40 ? `${text.slice(0, 39)}…` : text;
 }
 
+const FILE_KINDS: Record<string, string> = {
+  corpus: 'the retrieval corpus',
+  module: 'the function module',
+  evaluator: 'the evaluator module',
+};
+
+/** "corpus ../docs/*.md" → "the retrieval corpus ../docs/*.md". */
+export function describeFile(key: string): string {
+  const space = key.indexOf(' ');
+  const kind = FILE_KINDS[key.slice(0, space)];
+  return kind ? `${kind} ${key.slice(space + 1)}` : key;
+}
+
 /**
  * What changed in configuration, as short phrases: "sentences 2 → 1", "the workflow file",
  * "the dataset". Empty when nothing is known to have changed.
@@ -217,6 +232,8 @@ export function describeConfig(config: ConfigDiff | undefined): string[] {
   const out = config.params.map((p) => `${p.key} ${showValue(p.base)} → ${showValue(p.head)}`);
   if (config.workflowChanged) out.push('the workflow file');
   if (config.datasetChanged) out.push('the dataset');
+  for (const key of config.files ?? []) out.push(describeFile(key));
+  if (config.scope) out.push(`SCOPE ${config.scope.base} → ${config.scope.head}`);
   return out;
 }
 
@@ -519,6 +536,8 @@ export function reportJson(input: ReportInput) {
       durationMs: input.run.durationMs,
       git: input.run.git,
       dataset: input.run.dataset,
+      params: input.run.params,
+      manifest: input.run.manifest,
     },
     summary: input.summary,
     gates: input.gates,

@@ -133,6 +133,47 @@ export interface GitInfo {
   repository: string | null;
 }
 
+/** A file the workflow names, fingerprinted when the run started. */
+export interface ManifestFile {
+  /** `module`: a function step's code; `evaluator`: a custom evaluator; `corpus`: retrieval documents. */
+  kind: 'module' | 'evaluator' | 'corpus';
+  /** As written in the workflow (a path, or a corpus pattern). */
+  ref: string;
+  /** SHA-256 of the file, or of every matched file (paths and contents) for a corpus. */
+  sha256: string;
+  /** Files matched (corpus only). */
+  files?: number;
+}
+
+/**
+ * What produced a run, beyond its workflow version, dataset, parameters and git state (recorded
+ * on the run itself): SCOPE and its runtime, the files the workflow names, how each evaluator
+ * judges, and which models were actually called.
+ */
+export interface RunManifest {
+  scope: string;
+  node: string;
+  platform: string;
+  files: ManifestFile[];
+  evaluators: Array<{
+    name: string;
+    type: string;
+    kind: EvaluatorKind;
+    /** Model-graded evaluators: the judge model and the judge prompt's version. */
+    judgeModel?: string;
+    promptVersion?: string;
+  }>;
+  /** Models called, with the exact models the providers reported (e.g. dated snapshots). */
+  models: Array<{
+    provider: string;
+    model: string;
+    responseModels: string[];
+    calls: number;
+    /** Calls made by evaluators (a judge) rather than by the workflow. */
+    forEvaluation: boolean;
+  }>;
+}
+
 export interface DatasetInfo {
   name: string;
   source: string | null;

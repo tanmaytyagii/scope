@@ -85,10 +85,12 @@ as evaluator cost, not workflow cost.
 
 ## Versions and reproducibility
 
-A run records the workflow file's hash, not the evaluator module's. When you change **what** an
-evaluator measures, give it a new `name` (`readable_v2`): results under the old name stay
-comparable, and a comparison shows the old evaluator as removed and the new one as added rather
-than silently mixing the two. `scope evaluate <run>` re-scores a stored run with the current
+A run records the SHA-256 of each custom evaluator module (SCOPE 0.4+; not of what the module
+imports), so a comparison with a baseline says when an evaluator's code changed: *the evaluator
+module ./evaluators/readability.mjs*. When you change **what** an evaluator measures, also give it
+a new `name` (`readable_v2`): results under the old name stay comparable, and a comparison shows
+the old evaluator as removed and the new one as added rather than mixing the two. See
+[reproducibility](./workflows.md#reproducibility). `scope evaluate <run>` re-scores a stored run with the current
 evaluators, without re-running the workflow.
 
 ## Trust

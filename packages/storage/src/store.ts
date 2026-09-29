@@ -20,6 +20,7 @@ import {
   type JsonObject,
   type Logger,
   newId,
+  type RunManifest,
   type RunStatus,
   type RunSummary,
   type RunTrigger,
@@ -126,6 +127,7 @@ export interface CreateRunInput {
   baseline: BaselineRef | null;
   caseCount: number;
   startedAt?: number;
+  manifest?: RunManifest | null;
 }
 
 export interface CompleteRunInput {
@@ -135,6 +137,8 @@ export interface CompleteRunInput {
   gateStatus: GateStatus;
   error?: ErrorInfo | null;
   endedAt?: number;
+  /** Replaces the manifest recorded at creation (with the models the run called). */
+  manifest?: RunManifest | null;
 }
 
 type RunRow = Selectable<Database['runs']>;
@@ -166,6 +170,7 @@ function mapRun(row: RunRow): Run {
     startedAt: row.started_at,
     endedAt: row.ended_at,
     durationMs: row.duration_ms,
+    manifest: readJsonOrNull<RunManifest>(row.manifest),
   };
 }
 
@@ -673,6 +678,7 @@ export class Store {
               started_at: startedAt,
               ended_at: null,
               duration_ms: null,
+              manifest: writeJsonOrNull(input.manifest ?? null),
             })
             .execute();
         });
@@ -685,6 +691,42 @@ export class Store {
     throw new ScopeError(
       ErrorCodes.internal,
       'Could not allocate a run number after several attempts',
+    );
+  }
+
+  /**
+   * The models a run's traces called, with the exact models the providers reported, from its
+   * model-call spans (evaluation calls counted apart).
+   */
+  async runModels(projectId: string, runId: string): Promise<RunManifest['models']> {
+    const rows = await this.db
+      .selectFrom('spans')
+      .innerJoin('traces', 'traces.id', 'spans.trace_id')
+      .select(['spans.provider', 'spans.model', 'spans.attributes', 'spans.in_evaluation'])
+      .where('traces.project_id', '=', projectId)
+      .where('traces.run_id', '=', runId)
+      .where('spans.kind', '=', 'llm')
+      .execute();
+    const models = new Map<string, RunManifest['models'][number]>();
+    for (const row of rows) {
+      if (!row.model) continue;
+      const forEvaluation = Number(row.in_evaluation) === 1;
+      const key = `${row.provider ?? ''}\0${row.model}\0${forEvaluation}`;
+      const entry = models.get(key) ?? {
+        provider: row.provider ?? 'unknown',
+        model: row.model,
+        responseModels: [],
+        calls: 0,
+        forEvaluation,
+      };
+      entry.calls++;
+      const reported = readJson<Record<string, unknown>>(row.attributes)['gen_ai.response.model'];
+      if (typeof reported === 'string' && !entry.responseModels.includes(reported))
+        entry.responseModels.push(reported);
+      models.set(key, entry);
+    }
+    return [...models.values()].sort(
+      (a, b) => Number(a.forEvaluation) - Number(b.forEvaluation) || b.calls - a.calls,
     );
   }
 
@@ -706,6 +748,7 @@ export class Store {
         pass_rate: input.summary?.passRate ?? null,
         ended_at: endedAt,
         duration_ms: endedAt - row.started_at,
+        ...(input.manifest !== undefined ? { manifest: writeJsonOrNull(input.manifest) } : {}),
       })
       .where('id', '=', runId)
       .execute();

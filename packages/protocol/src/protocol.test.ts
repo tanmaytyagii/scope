@@ -20,6 +20,7 @@ describe('domain schemas mirror @scope-ai/core', () => {
     expectTypeOf<core.MetricDelta>().toExtend<Out<typeof domain.MetricDelta>>();
     expectTypeOf<core.MetricRow>().toExtend<Out<typeof domain.MetricRow>>();
     expectTypeOf<core.ConfigDiff>().toExtend<Out<typeof domain.ConfigDiff>>();
+    expectTypeOf<core.RunManifest>().toExtend<Out<typeof domain.RunManifest>>();
     expectTypeOf<core.CaseSnapshot>().toExtend<Out<typeof domain.CaseSnapshot>>();
     expectTypeOf<core.CaseChange>().toExtend<Out<typeof domain.CaseChange>>();
     expectTypeOf<core.SpanKind>().toEqualTypeOf<Out<typeof domain.SpanKind>>();

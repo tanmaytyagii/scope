@@ -83,6 +83,9 @@ export const BaselineSchema = z.object({
     .object({
       params: z.record(z.string(), z.json()),
       workflowHash: z.string().nullable(),
+      // SCOPE 0.4+: fingerprints of the files the workflow names, and the SCOPE version.
+      files: z.record(z.string(), z.string()).optional(),
+      scope: z.string().optional(),
     })
     .optional(),
   summary: SummarySchema,

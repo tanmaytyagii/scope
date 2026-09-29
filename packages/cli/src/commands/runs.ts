@@ -144,6 +144,20 @@ async function showRun(
     out.print(
       s.dim(`  compared with baseline ${run.baseline.file} (run #${run.baseline.runNumber})`),
     );
+  const m = run.manifest;
+  if (m) {
+    const files = m.files.length
+      ? `${m.files.length} ${m.files.length === 1 ? 'file' : 'files'} fingerprinted (${m.files.map((f) => f.ref).join(', ')})`
+      : 'no module or corpus files';
+    out.print(s.dim(`  made by SCOPE ${m.scope} on Node.js ${m.node} · ${files}`));
+    const models = m.models
+      .filter((x) => !x.forEvaluation)
+      .map((x) => {
+        const reported = x.responseModels.filter((r) => r !== x.model);
+        return `${x.provider}:${x.model}${reported.length ? ` (reported as ${reported.join(', ')})` : ''}`;
+      });
+    if (models.length) out.print(s.dim(`  models ${models.join(', ')}`));
+  }
   out.print('');
   if (run.summary) {
     out.print(s.bold('Summary'));

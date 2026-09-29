@@ -345,6 +345,10 @@ export interface BaselineConfig {
   params: JsonObject;
   /** SHA-256 of the workflow file; identical files have identical hashes on any machine. */
   workflowHash: string | null;
+  /** Fingerprints of the files the workflow names, by `<kind> <ref>` (SCOPE 0.4+). */
+  files?: Record<string, string>;
+  /** SCOPE version that made the run (0.4+). */
+  scope?: string;
 }
 
 // ─── Configuration differences ───────────────────────────────────────────────────────────────
@@ -355,6 +359,14 @@ export interface ConfigSnapshot {
   /** Anything that identifies the workflow version (a file hash, or a stored version id). */
   workflow: string | null;
   datasetHash: string | null;
+  /** Fingerprints of the files the workflow names, by `<kind> <ref>`; null when not recorded. */
+  files?: Record<string, string> | null;
+  scope?: string | null;
+}
+
+/** The key a manifest file is compared under: "corpus ../docs/*.md". */
+export function fileKey(file: { kind: string; ref: string }): string {
+  return `${file.kind} ${file.ref}`;
 }
 
 export interface ParamChange {
@@ -374,6 +386,14 @@ export interface ConfigDiff {
   datasetChanged: boolean | null;
   /** False when the base side predates configuration records (parameters unknown). */
   paramsKnown: boolean;
+  /**
+   * Files the workflow names (function modules, custom evaluators, retrieval corpora) whose
+   * contents differ, or that only one side has, as `<kind> <ref>`. Empty when either side does
+   * not record them. (Absent in comparisons stored before SCOPE 0.4.)
+   */
+  files: string[];
+  /** The SCOPE versions, when both are known and differ. */
+  scope: { base: string; head: string } | null;
 }
 
 export function compareConfig(base: ConfigSnapshot, head: ConfigSnapshot): ConfigDiff {
@@ -389,10 +409,21 @@ export function compareConfig(base: ConfigSnapshot, head: ConfigSnapshot): Confi
   }
   const differ = (a: string | null, b: string | null) =>
     a === null || b === null ? null : a !== b;
+  const files: string[] = [];
+  if (base.files && head.files) {
+    const keys = [...new Set([...Object.keys(base.files), ...Object.keys(head.files)])].sort();
+    for (const key of keys) if (base.files[key] !== head.files[key]) files.push(key);
+  }
+  const scope =
+    base.scope && head.scope && base.scope !== head.scope
+      ? { base: base.scope, head: head.scope }
+      : null;
   return {
     params,
     workflowChanged: differ(base.workflow, head.workflow),
     datasetChanged: differ(base.datasetHash, head.datasetHash),
     paramsKnown,
+    files,
+    scope,
   };
 }

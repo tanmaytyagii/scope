@@ -8,6 +8,7 @@ import {
   BASELINE_SCHEMA,
   type Baseline,
   ErrorCodes,
+  fileKey,
   formatPercent,
   formatRelativeTime,
   ScopeError,
@@ -64,6 +65,12 @@ export async function baselineSaveCommand(
     config: {
       params: run.params,
       workflowHash: await store.workflowVersionHash(project.id, run.workflowVersionId),
+      ...(run.manifest
+        ? {
+            files: Object.fromEntries(run.manifest.files.map((f) => [fileKey(f), f.sha256])),
+            scope: run.manifest.scope,
+          }
+        : {}),
     },
     summary: run.summary,
     cases,

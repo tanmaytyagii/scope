@@ -21,6 +21,7 @@ import {
   caseOutcome,
   ErrorCodes,
   evaluateGates,
+  fileKey,
   formatDuration,
   formatPercent,
   formatRelativeTime,
@@ -30,11 +31,18 @@ import {
   gateStatus,
   type JsonObject,
   type RunSummary,
+  SCOPE_VERSION,
   ScopeError,
   snapshotCase,
   summarizeRun,
 } from '@scope-ai/core';
-import { type CaseExecution, Engine, type PreparedWorkflow, toCaseResult } from '@scope-ai/engine';
+import {
+  type CaseExecution,
+  Engine,
+  type PreparedWorkflow,
+  runManifest,
+  toCaseResult,
+} from '@scope-ai/engine';
 import type { Run } from '@scope-ai/storage';
 import type { CommandContext } from '../context.ts';
 import { ExitCode, type ExitCodeValue, ExitError } from '../errors.ts';
@@ -416,6 +424,8 @@ async function executeVariant(
   const s = out.style;
   const store = await ctx.store();
   const model = typeof p.prepared.params.model === 'string' ? p.prepared.params.model : null;
+  // What produced the run: versions, the workflow's files, evaluators; models once it has run.
+  const manifest = runManifest(p.prepared, SCOPE_VERSION);
   let run = await store.createRun({
     projectId: p.projectId,
     workflowId: p.workflowId,
@@ -441,6 +451,7 @@ async function executeVariant(
         }
       : null,
     caseCount: p.cases.length,
+    manifest,
   });
 
   const facts = [
@@ -498,6 +509,7 @@ async function executeVariant(
     summary,
     gates,
     gateStatus: cancelled ? 'none' : status,
+    manifest: { ...manifest, models: await store.runModels(p.projectId, run.id) },
   });
 
   const snapshots = Object.fromEntries(caseResults.map((r) => [r.caseId, snapshotCase(r)]));
@@ -505,6 +517,8 @@ async function executeVariant(
     params: p.prepared.params,
     workflow: p.workflowHash,
     datasetHash: p.dataset.hash,
+    files: Object.fromEntries(manifest.files.map((f) => [fileKey(f), f.sha256])),
+    scope: manifest.scope,
   });
   // Kept with the run, so the dashboard shows what the gates compared against — the baseline
   // file may come from another machine, and its run may not be in this database.

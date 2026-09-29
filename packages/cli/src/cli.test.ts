@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   writeFileSync,
 } from 'node:fs';
@@ -894,5 +895,42 @@ describe('scope db', () => {
     });
     expect(r.code).toBeGreaterThan(0);
     expect(r.stderr).toMatch(/pg_dump|Unable to connect to PostgreSQL/);
+  });
+});
+
+describe('what produced a run', () => {
+  const dir = join(root, 'manifest');
+
+  beforeAll(async () => {
+    await scope(['init', 'manifest'], root);
+  });
+
+  it('records versions, file fingerprints and models, and names changed files', async () => {
+    expect((await scope(['run', '-q'], dir)).code).toBe(0);
+    const shown = JSON.parse((await scope(['runs', '1', '--json'], dir)).stdout).run;
+    expect(shown.manifest).toMatchObject({
+      scope: SCOPE_VERSION,
+      node: process.versions.node,
+      files: [{ kind: 'corpus', ref: expect.any(String), files: expect.any(Number) }],
+      models: [{ provider: 'local', calls: expect.any(Number), forEvaluation: false }],
+    });
+    expect((await scope(['baseline', 'save', '1'], dir)).code).toBe(0);
+    const saved = JSON.parse(readFileSync(join(dir, 'baselines', 'support.json'), 'utf8')) as {
+      config: { files: Record<string, string>; scope: string };
+    };
+    expect(Object.keys(saved.config.files)[0]).toMatch(/^corpus /);
+    expect(saved.config.scope).toBe(SCOPE_VERSION);
+
+    // Edit one retrieval document: the next run says the corpus changed.
+    const docs = join(dir, 'docs');
+    const [first] = readdirSync(docs);
+    writeFileSync(
+      join(docs, first as string),
+      `${readFileSync(join(docs, first as string), 'utf8')}\nEdited.\n`,
+    );
+    const next = await scope(['run'], dir);
+    expect(next.stdout).toMatch(/Changed\s+the retrieval corpus /);
+    const md = await scope(['report', '2', '--format', 'markdown'], dir);
+    expect(md.stdout).toContain('**Changed since the baseline:** the retrieval corpus');
   });
 });

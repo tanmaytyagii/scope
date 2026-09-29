@@ -3,7 +3,7 @@
  * path from every failing case to its trace.
  */
 import type { GateResult, Run, RunCase } from '@scope-ai/protocol';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { allItems, useBaselineComparison, useRun, useRunCases, useRuns } from '../api/queries.ts';
 import { useTitle, useUrlState } from '../app/hooks.ts';
@@ -480,6 +480,157 @@ function Summary({ run }: { run: Run }) {
   );
 }
 
+const FILE_KIND: Record<string, string> = {
+  module: 'Function module',
+  evaluator: 'Evaluator module',
+  corpus: 'Retrieval corpus',
+};
+
+/**
+ * What produced the run: enough to understand, and as far as possible repeat, a result. Model
+ * outputs themselves can differ between calls; the models the providers reported are listed so a
+ * silent model update shows.
+ */
+function Provenance({ run }: { run: Run }) {
+  const m = run.manifest;
+  const facts: Array<[ReactNode, ReactNode]> = [
+    ['Run id', <IdChip key="id" id={run.id} length={10} />],
+    ['Workflow version', <IdChip key="v" id={run.workflowVersionId} length={10} />],
+    [
+      'Commit',
+      run.git?.commit ? (
+        <span key="c">
+          <code className="text-xs">{run.git.commit.slice(0, 12)}</code>
+          {run.git.branch ? ` on ${run.git.branch}` : ''}
+          {run.git.dirty ? ' · uncommitted changes' : ''}
+        </span>
+      ) : (
+        'not recorded'
+      ),
+    ],
+    ['Dataset', run.dataset ? `${run.dataset.name} · ${run.dataset.caseCount} cases` : '—'],
+    [
+      'Dataset hash',
+      run.dataset ? (
+        <code key="h" className="text-xs">
+          {run.dataset.hash.slice(0, 16)}
+        </code>
+      ) : (
+        '—'
+      ),
+    ],
+    [
+      'Baseline',
+      run.baseline ? (
+        <span key="b">
+          <code className="text-xs">{run.baseline.file}</code> · run #{run.baseline.runNumber}
+          {run.baseline.commit ? ` @ ${run.baseline.commit.slice(0, 7)}` : ''}
+        </span>
+      ) : (
+        'none'
+      ),
+    ],
+    ['Finished', formatDateTime(run.endedAt)],
+  ];
+  if (m) facts.push(['SCOPE', m.scope], ['Runtime', `Node.js ${m.node} · ${m.platform}`]);
+  return (
+    <Panel
+      title="What produced this run"
+      description="Everything recorded to understand this result and run it again"
+    >
+      <div className="grid grid-cols-1 gap-6 p-4 lg:grid-cols-2">
+        <Facts items={facts} />
+        <CodeBlock label="Parameters" value={run.params} collapse={false} />
+      </div>
+      {m ? (
+        <div className="grid grid-cols-1 gap-6 border-t border-line p-4 lg:grid-cols-2">
+          <div className="space-y-2">
+            <h3 className="text-xs font-medium text-fg-3">Files the workflow names</h3>
+            {m.files.length ? (
+              <table className="w-full text-sm">
+                <caption className="sr-only">
+                  Files the workflow names, with their fingerprints
+                </caption>
+                <thead className="text-left text-xs text-fg-3">
+                  <tr>
+                    <th className="py-1 font-medium">Kind</th>
+                    <th className="py-1 font-medium">File</th>
+                    <th className="py-1 font-medium">SHA-256</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {m.files.map((f) => (
+                    <tr key={`${f.kind} ${f.ref}`} className="border-t border-line">
+                      <td className="py-1 pr-3 text-fg-2">{FILE_KIND[f.kind] ?? f.kind}</td>
+                      <td className="py-1 pr-3">
+                        <code className="text-xs">{f.ref}</code>
+                        {f.files !== undefined && (
+                          <span className="text-fg-3"> · {f.files} files</span>
+                        )}
+                      </td>
+                      <td className="py-1">
+                        <code className="text-xs text-fg-2">{f.sha256.slice(0, 12)}</code>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-sm text-fg-2">
+                No function modules, custom evaluators or retrieval corpora.
+              </p>
+            )}
+            <h3 className="pt-2 text-xs font-medium text-fg-3">Evaluators</h3>
+            <ul className="space-y-1 text-sm">
+              {m.evaluators.map((e) => (
+                <li key={e.name}>
+                  <span className="text-fg">{e.name}</span>{' '}
+                  <span className="text-fg-3">
+                    {e.type} · {e.kind}
+                    {e.judgeModel ? ` · judged by ${e.judgeModel}` : ''}
+                    {e.promptVersion ? ` (${e.promptVersion})` : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-xs font-medium text-fg-3">Models called</h3>
+            {m.models.length ? (
+              <ul className="space-y-1 text-sm">
+                {m.models.map((model) => (
+                  <li key={`${model.provider}:${model.model}:${model.forEvaluation}`}>
+                    <code className="text-xs">
+                      {model.provider}:{model.model}
+                    </code>{' '}
+                    <span className="text-fg-3">
+                      {model.calls} {model.calls === 1 ? 'call' : 'calls'}
+                      {model.forEvaluation ? ' · by evaluators' : ''}
+                      {model.responseModels.length > 0 &&
+                        model.responseModels.join(', ') !== model.model &&
+                        ` · reported as ${model.responseModels.join(', ')}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-fg-2">No model calls were recorded.</p>
+            )}
+            <p className="pt-2 text-xs text-fg-3">
+              Model outputs can differ between calls, even with the same model and parameters; a
+              different reported model means the provider changed what an alias points to.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className="border-t border-line px-4 py-3 text-sm text-fg-2">
+          Runs made before SCOPE 0.4 do not record versions, file fingerprints or models called.
+        </p>
+      )}
+    </Panel>
+  );
+}
+
 export function RunDetail() {
   const { run: ref = '' } = useParams();
   const run = useRun(ref);
@@ -555,41 +706,7 @@ export function RunDetail() {
         }}
       />
       <Cases run={r} />
-      <Panel title="Details">
-        <div className="grid grid-cols-1 gap-6 p-4 lg:grid-cols-2">
-          <Facts
-            items={[
-              ['Run id', <IdChip key="id" id={r.id} length={10} />],
-              ['Workflow version', <IdChip key="v" id={r.workflowVersionId} length={10} />],
-              ['Dataset', r.dataset ? `${r.dataset.name} · ${r.dataset.caseCount} cases` : '—'],
-              ['Dataset file', r.dataset?.source ?? '—'],
-              [
-                'Dataset hash',
-                r.dataset ? (
-                  <code key="h" className="text-xs">
-                    {r.dataset.hash.slice(0, 16)}
-                  </code>
-                ) : (
-                  '—'
-                ),
-              ],
-              [
-                'Baseline',
-                r.baseline ? (
-                  <span key="b">
-                    <code className="text-xs">{r.baseline.file}</code> · run #{r.baseline.runNumber}
-                    {r.baseline.commit ? ` @ ${r.baseline.commit.slice(0, 7)}` : ''}
-                  </span>
-                ) : (
-                  'none'
-                ),
-              ],
-              ['Finished', formatDateTime(r.endedAt)],
-            ]}
-          />
-          <CodeBlock label="Parameters" value={r.params} collapse={false} />
-        </div>
-      </Panel>
+      <Provenance run={r} />
     </div>
   );
 }

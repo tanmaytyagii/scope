@@ -71,6 +71,8 @@ export interface RunsTable {
   started_at: number;
   ended_at: number | null;
   duration_ms: number | null;
+  /** What produced the run (migration 0003); null before SCOPE 0.4. */
+  manifest: NullableJsonColumn;
 }
 
 export interface TracesTable {

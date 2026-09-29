@@ -36,7 +36,7 @@ export interface ValidationContext {
 const STATIC_ROOTS = new Set(['params', 'variant']);
 
 /** Renders templates that only depend on params/variant; returns whether templates remain. */
-function renderStatic(
+export function renderStatic(
   value: unknown,
   scope: Record<string, unknown>,
 ): { value: unknown; dynamic: boolean } {

@@ -281,6 +281,23 @@ function migration0002(dialect: DialectName): Migration {
   };
 }
 
+/**
+ * What produced a run (SCOPE and Node.js versions, fingerprints of the files the workflow names,
+ * evaluator identities, models called). A few kilobytes, so it lives on the run. Null for runs
+ * made before SCOPE 0.4.
+ */
+function migration0003(dialect: DialectName): Migration {
+  const json = jsonType(dialect);
+  return {
+    async up(db: AnyDb) {
+      await db.schema.alterTable('runs').addColumn('manifest', json).execute();
+    },
+    async down(db: AnyDb) {
+      await db.schema.alterTable('runs').dropColumn('manifest').execute();
+    },
+  };
+}
+
 export class ScopeMigrations implements MigrationProvider {
   readonly #dialect: DialectName;
   constructor(dialect: DialectName) {
@@ -290,8 +307,9 @@ export class ScopeMigrations implements MigrationProvider {
     return {
       '0001_initial': migration0001(this.#dialect),
       '0002_run_comparisons': migration0002(this.#dialect),
+      '0003_run_manifest': migration0003(this.#dialect),
     };
   }
 }
 
-export const LATEST_MIGRATION = '0002_run_comparisons';
+export const LATEST_MIGRATION = '0003_run_manifest';

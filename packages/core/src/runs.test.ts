@@ -289,6 +289,8 @@ describe('compareConfig', () => {
       workflowChanged: true,
       datasetChanged: false,
       paramsKnown: true,
+      files: [],
+      scope: null,
     });
   });
 
@@ -298,7 +300,48 @@ describe('compareConfig', () => {
         { params: null, workflow: null, datasetHash: 'd' },
         { params: { a: 1 }, workflow: 'h', datasetHash: 'd' },
       ),
-    ).toEqual({ params: [], workflowChanged: null, datasetChanged: false, paramsKnown: false });
+    ).toEqual({
+      params: [],
+      workflowChanged: null,
+      datasetChanged: false,
+      paramsKnown: false,
+      files: [],
+      scope: null,
+    });
+  });
+
+  it('names the files whose contents changed, and a change of SCOPE version', () => {
+    const base = {
+      params: {},
+      workflow: 'h',
+      datasetHash: 'd',
+      files: {
+        'corpus ../docs/*.md': 'a1',
+        'evaluator ./evaluators/readable.mjs': 'b1',
+        'module ./classify.mjs': 'c1',
+      },
+      scope: '0.4.0',
+    };
+    const diff = compareConfig(base, {
+      ...base,
+      files: {
+        'corpus ../docs/*.md': 'a2',
+        'evaluator ./evaluators/readable.mjs': 'b1',
+        'module ./route.mjs': 'd1',
+      },
+      scope: '0.5.0',
+    });
+    expect(diff.files).toEqual([
+      'corpus ../docs/*.md',
+      'module ./classify.mjs',
+      'module ./route.mjs',
+    ]);
+    expect(diff.scope).toEqual({ base: '0.4.0', head: '0.5.0' });
+    // A side without records (a baseline from before 0.4) says nothing about files.
+    expect(compareConfig({ ...base, files: null, scope: null }, base)).toMatchObject({
+      files: [],
+      scope: null,
+    });
   });
 });
 

@@ -9,6 +9,17 @@ which are always called out).
 
 ### Added
 
+- Runs record what produced them (a *manifest*, stored by migration `0003_run_manifest`): the
+  SCOPE and Node.js versions and platform; SHA-256 fingerprints of every file the workflow names
+  (`function` step modules, custom evaluator modules, retrieval corpora — each matched file's path
+  and content); each evaluator's type and kind, with the judge model and prompt version of
+  model-graded ones; and the models called, with the exact models the providers reported. The run
+  page shows it under *What produced this run*, `scope runs <run>` summarizes it, and the API,
+  `--json` and the JSON report include it (`manifest`, null for older runs). Baseline files keep
+  the file fingerprints and SCOPE version (new optional `config.files` and `config.scope`), so
+  comparisons name changed files — *the retrieval corpus ../docs/\*.md* — and a change of SCOPE
+  version; `ConfigDiff` gains `files` and `scope`.
+
 - `scope db status` shows where the database is, whether its schema is current (or was migrated
   by a newer SCOPE), its size and what each project holds; `scope db migrate` applies pending
   migrations (for `SCOPE_AUTO_MIGRATE=false`); `scope db backup <file>` writes a consistent copy

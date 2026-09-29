@@ -219,6 +219,19 @@ function showValue(value: JsonValue | null): string {
   return text.length > 60 ? `${text.slice(0, 59)}…` : text;
 }
 
+const FILE_KINDS: Record<string, string> = {
+  corpus: 'the retrieval corpus',
+  module: 'the function module',
+  evaluator: 'the evaluator module',
+};
+
+/** "corpus ../docs/*.md" → "the retrieval corpus ../docs/*.md". */
+function describeFile(key: string): string {
+  const space = key.indexOf(' ');
+  const kind = FILE_KINDS[key.slice(0, space)];
+  return kind ? `${kind} ${key.slice(space + 1)}` : key;
+}
+
 /** "sentences 2 → 1", "the workflow file", "the dataset": what changed, in short phrases. */
 export function describeConfig(config: ConfigDiff | null | undefined): string[] {
   if (!config) return [];
@@ -226,10 +239,15 @@ export function describeConfig(config: ConfigDiff | null | undefined): string[] 
     ...config.params.map((p) => `${p.key} ${showValue(p.base)} → ${showValue(p.head)}`),
     ...(config.workflowChanged ? ['the workflow file'] : []),
     ...(config.datasetChanged ? ['the dataset'] : []),
+    ...config.files.map(describeFile),
+    ...(config.scope ? [`SCOPE ${config.scope.base} → ${config.scope.head}`] : []),
   ];
 }
 
-/** The configuration two runs differ in: parameters side by side, and workflow and dataset. */
+/**
+ * The configuration two runs differ in: parameters side by side; the workflow, dataset and the
+ * files the workflow names (function modules, custom evaluators, retrieval corpora).
+ */
 export function ConfigChanges({
   config,
   baseLabel,
@@ -278,6 +296,14 @@ export function ConfigChanges({
         <Pill tone={config.datasetChanged ? 'info' : 'neutral'}>
           {same(config.datasetChanged, 'dataset')}
         </Pill>
+        {config.files.map((key) => (
+          <Pill key={key} tone="info">
+            {`${describeFile(key).replace(/^the /, '')} changed`}
+          </Pill>
+        ))}
+        {config.scope && (
+          <Pill tone="info">{`SCOPE ${config.scope.base} → ${config.scope.head}`}</Pill>
+        )}
       </div>
     </div>
   );

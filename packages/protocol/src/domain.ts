@@ -76,6 +76,48 @@ export const DatasetInfo = z
   })
   .register(components, { id: 'DatasetInfo' });
 
+export const RunManifest = z
+  .strictObject({
+    scope: z.string().describe('SCOPE version that made the run.'),
+    node: z.string(),
+    platform: z.string().describe('e.g. "linux-x64".'),
+    files: z
+      .array(
+        z.strictObject({
+          kind: z.enum(['module', 'evaluator', 'corpus']),
+          ref: z.string().describe('As written in the workflow: a path or a corpus pattern.'),
+          sha256: z.string(),
+          files: z.number().int().optional().describe('Files the corpus pattern matched.'),
+        }),
+      )
+      .describe(
+        'The files the workflow names, fingerprinted when the run started: function step modules, custom evaluators, retrieval corpora.',
+      ),
+    evaluators: z.array(
+      z.strictObject({
+        name: z.string(),
+        type: z.string(),
+        kind: EvaluatorKind,
+        judgeModel: z.string().optional(),
+        promptVersion: z.string().optional(),
+      }),
+    ),
+    models: z
+      .array(
+        z.strictObject({
+          provider: z.string(),
+          model: z.string(),
+          responseModels: z
+            .array(z.string())
+            .describe('The exact models the provider reported, e.g. dated snapshots.'),
+          calls: z.number().int(),
+          forEvaluation: z.boolean(),
+        }),
+      )
+      .describe('Models the run called.'),
+  })
+  .register(components, { id: 'RunManifest' });
+
 export const EvaluatorSummary = z
   .strictObject({
     name: z.string(),
@@ -204,6 +246,15 @@ export const ConfigDiff = z
     paramsKnown: z
       .boolean()
       .describe('False when the base predates configuration records, so parameters are unknown.'),
+    files: z
+      .array(z.string())
+      .describe(
+        'Files the workflow names whose contents differ, as "<kind> <ref>" (kind: module, evaluator or corpus). Empty when a side does not record them (before SCOPE 0.4).',
+      ),
+    scope: z
+      .strictObject({ base: z.string(), head: z.string() })
+      .nullable()
+      .describe('The SCOPE versions that made the two sides, when both are known and differ.'),
   })
   .register(components, { id: 'ConfigDiff' });
 
@@ -237,6 +288,7 @@ export const CaseChange = z
 
 export type MetricRow = z.output<typeof MetricRow>;
 export type ConfigDiff = z.output<typeof ConfigDiff>;
+export type RunManifest = z.output<typeof RunManifest>;
 export type SpanKind = z.output<typeof SpanKind>;
 export type SpanStatus = z.output<typeof SpanStatus>;
 export type EvaluatorKind = z.output<typeof EvaluatorKind>;

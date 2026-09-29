@@ -4,6 +4,7 @@
  */
 import {
   BUILTIN_PRICES,
+  type ConfigDiff,
   type EvaluationRecord,
   type JsonValue,
   lookupPrice,
@@ -52,6 +53,7 @@ export function runDto(run: Run): api.Run {
     startedAt: iso(run.startedAt),
     endedAt: isoOrNull(run.endedAt),
     durationMs: run.durationMs,
+    manifest: run.manifest,
   };
 }
 
@@ -131,6 +133,19 @@ export function spanDto(span: SpanRecord, origin: number, contentOmitted = false
     outputTokens: span.outputTokens,
     costUsd: span.costUsd,
     contentOmitted,
+  };
+}
+
+/** A configuration diff as the API shows it; comparisons stored before SCOPE 0.4 lack files. */
+export function configDiffDto(diff: ConfigDiff): api.ConfigDiff {
+  return {
+    params: diff.params,
+    workflowChanged: diff.workflowChanged,
+    datasetChanged: diff.datasetChanged,
+    paramsKnown: diff.paramsKnown,
+    // Comparisons stored before SCOPE 0.4 have neither.
+    files: (diff.files as string[] | undefined) ?? [],
+    scope: (diff.scope as ConfigDiff['scope'] | undefined) ?? null,
   };
 }
 

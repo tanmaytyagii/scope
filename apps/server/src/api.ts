@@ -6,8 +6,10 @@ import {
   compareMany,
   compareRuns,
   ErrorCodes,
+  fileKey,
   headlineMetrics,
   MAX_COMPARED_RUNS,
+  type RunManifest,
   SCOPE_VERSION,
   ScopeError,
 } from '@scope-ai/core';
@@ -29,6 +31,7 @@ import type { Hono } from 'hono';
 import { requireAccess } from './auth.ts';
 import {
   apiKeyDto,
+  configDiffDto,
   evaluationListItemDto,
   evaluatorHealthDto,
   iso,
@@ -48,6 +51,11 @@ import { notFound } from './errors.ts';
 import { handleIngest } from './ingest.ts';
 import type { AppContext, AppEnv, Deps } from './types.ts';
 import { isoToMs, parseQuery, resolveRun } from './validate.ts';
+
+/** File fingerprints of a run's manifest, keyed as comparisons expect; null before SCOPE 0.4. */
+function manifestFiles(manifest: RunManifest | null): Record<string, string> | null {
+  return manifest ? Object.fromEntries(manifest.files.map((f) => [fileKey(f), f.sha256])) : null;
+}
 
 function window(deps: Deps, name: TimeWindowName | undefined) {
   const span = WINDOW_SPANS[name ?? '7d'];
@@ -96,17 +104,23 @@ async function comparison(c: AppContext, deps: Deps): Promise<api.Comparison> {
         ? result.cases
         : result.cases.filter((change) => change.kind !== 'unchanged'),
     // Versions are stored once per content hash, so equal version ids mean an identical file.
-    config: compareConfig(
-      {
-        params: base.params,
-        workflow: base.workflowVersionId,
-        datasetHash: base.dataset?.hash ?? null,
-      },
-      {
-        params: head.params,
-        workflow: head.workflowVersionId,
-        datasetHash: head.dataset?.hash ?? null,
-      },
+    config: configDiffDto(
+      compareConfig(
+        {
+          params: base.params,
+          workflow: base.workflowVersionId,
+          datasetHash: base.dataset?.hash ?? null,
+          files: manifestFiles(base.manifest),
+          scope: base.manifest?.scope ?? null,
+        },
+        {
+          params: head.params,
+          workflow: head.workflowVersionId,
+          datasetHash: head.dataset?.hash ?? null,
+          files: manifestFiles(head.manifest),
+          scope: head.manifest?.scope ?? null,
+        },
+      ),
     ),
   };
 }
@@ -270,7 +284,7 @@ export function registerApi(app: Hono<AppEnv>, deps: Deps): void {
       counts: stored.counts,
       cases: stored.cases,
       omittedCases: stored.omittedCases,
-      config: stored.config ?? null,
+      config: stored.config ? configDiffDto(stored.config) : null,
     } satisfies api.BaselineComparison);
   });
 

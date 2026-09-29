@@ -291,3 +291,36 @@ Skipped evaluations (for example `exact_match` on a case without `expected`) do 
 - Model calls retry on rate limits and transient errors (honouring `Retry-After`).
 - Exit codes: `0` passed, `1` gates failed, `2` usage or configuration error, `3` execution or
   storage error, `130` interrupted. `--no-fail` exits 0 when gates fail.
+
+## Reproducibility
+
+Every run records what produced it, so a result can be understood — and repeated — later:
+
+| Recorded | Where it comes from |
+| --- | --- |
+| The workflow file, exactly (its text and SHA-256) | the workflow version the run points to |
+| Parameters after the variant was applied, and the variant | the run |
+| The dataset: name, file, case count, SHA-256 of its content | the run |
+| Git commit, branch, uncommitted changes, pull request | the run |
+| The baseline file the gates compared against | the run |
+| SCOPE and Node.js versions, platform | the run's manifest (SCOPE 0.4+) |
+| SHA-256 of every file the workflow names: `function` step modules, custom evaluator modules, retrieval corpora (paths and contents of every matched file) | the manifest |
+| Each evaluator's type and kind; for model-graded ones, the judge model and prompt version | the manifest |
+| The models called, how often, and the exact models the providers reported (dated snapshots behind an alias) | the manifest, when the run ends |
+
+The run page shows all of it under **What produced this run**; `scope runs <run>` prints a
+summary and `scope runs <run> --json` all of it. Baseline files keep the file fingerprints and
+the SCOPE version, so a comparison says what changed besides the results — *the retrieval corpus
+../docs/\*.md*, *the function module ./triage.mjs*, *SCOPE 0.4.0 → 0.5.0* — next to parameter and
+workflow changes.
+
+What SCOPE cannot make reproducible:
+
+- **Model outputs.** The same prompt to the same model can return different text, even at
+  temperature 0, and a provider can change the model behind an alias (the reported model shows
+  when that happens). Deterministic stand-ins (`local:*`) and cached fixtures are the way to
+  exactly repeatable runs.
+- **What your modules import.** Only the files the workflow names are fingerprinted, not the
+  modules they import, installed packages, or data they read at run time.
+- **Arguments decided per case** (templates over inputs or earlier steps), and anything outside
+  the project: environment variables, network services, the clock.

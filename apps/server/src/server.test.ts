@@ -205,6 +205,8 @@ describe('runs', () => {
       workflowChanged: false,
       datasetChanged: false,
       paramsKnown: true,
+      files: [],
+      scope: null,
     });
     const counts = body.counts as Record<string, number>;
     const cases = body.cases as Array<{ kind: string }>;
@@ -360,6 +362,8 @@ describe('traces', () => {
       workflowChanged: false,
       datasetChanged: false,
       paramsKnown: true,
+      files: [],
+      scope: null,
     });
     expect(data.headline[0]).toBe('pass_rate');
     // Every case is counted; only the changed ones are listed.

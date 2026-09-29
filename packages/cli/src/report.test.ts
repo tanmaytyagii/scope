@@ -69,6 +69,7 @@ describe('renderMarkdown', () => {
       startedAt: 0,
       endedAt: 1,
       durationMs: 1,
+      manifest: null,
     };
     const md = renderMarkdown({
       run,

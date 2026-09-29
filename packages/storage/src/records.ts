@@ -15,6 +15,7 @@ import type {
   GitInfo,
   JsonObject,
   MetricDelta,
+  RunManifest,
   RunStatus,
   RunSummary,
   RunTrigger,
@@ -89,6 +90,8 @@ export interface Run {
   startedAt: number;
   endedAt: number | null;
   durationMs: number | null;
+  /** What produced the run; null for runs made before SCOPE 0.4. */
+  manifest: RunManifest | null;
 }
 
 export interface TraceSummary {

@@ -19,6 +19,7 @@ import {
   GitInfo,
   MetricDelta,
   MetricRow,
+  RunManifest,
   RunStatus,
   RunSummary,
   RunTrigger,
@@ -159,6 +160,9 @@ export const Run = z
     startedAt: Timestamp,
     endedAt: Timestamp.nullable(),
     durationMs: z.number().nullable(),
+    manifest: RunManifest.nullable().describe(
+      'What produced the run beyond its workflow version, dataset, parameters and git state; null before SCOPE 0.4.',
+    ),
   })
   .register(components, { id: 'Run' });
 

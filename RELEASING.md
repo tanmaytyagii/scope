@@ -98,3 +98,19 @@ If publishing failed half-way, fix the cause and re-run the failed jobs: version
 are skipped and the GitHub release is updated rather than duplicated. A published version is
 never changed or unpublished — fix forward with a patch release, and mark a broken version with
 `npm deprecate scope-ai@<version> "<reason>"` (likewise for the `@scope-ai/*` packages).
+
+## Supply chain
+
+- **Third-party GitHub Actions are pinned to commit SHAs** (with the version as a comment) in
+  every workflow and in the composite action users run. A tag can be moved; a commit cannot. The
+  release workflow is where this matters most: it holds `id-token: write` (npm provenance) and
+  `packages: write` (GHCR).
+- **Dependabot** (`.github/dependabot.yml`) proposes updates to those pins and to npm
+  dependencies weekly, as grouped pull requests that CI checks like any other change. Major
+  version updates of actions arrive as their own pull requests; read their release notes before
+  merging.
+- **npm packages** are published with provenance from the release workflow only, so each version
+  links to the commit and workflow run that built it (`npm view scope-ai --json` → `dist.attestations`).
+- **The Docker image** is built by the release workflow with SLSA provenance (`mode=max`) and an
+  SBOM attached.
+

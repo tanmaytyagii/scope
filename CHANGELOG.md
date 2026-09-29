@@ -15,6 +15,8 @@ which are always called out).
 
 ### Security
 
+- Third-party GitHub Actions are pinned to commit SHAs in every workflow and in the composite
+  action, and Dependabot keeps the pins and npm dependencies current.
 - Redaction now covers everything a trace stores, in the process that records it: span
   attributes, event attributes, status messages, error stacks, trace metadata, and evaluation
   reasons and evidence. Before, the SDK and `scope run` redacted only inputs, outputs and error

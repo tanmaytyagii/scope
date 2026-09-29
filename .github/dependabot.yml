@@ -1,0 +1,27 @@
+# Keeps pinned GitHub Actions (commit SHAs) and npm dependencies current. Updates arrive as pull
+# requests, grouped to keep them few, and go through CI like any other change.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ['*']
+  # The composite action users run (integrations/github-action/action.yml).
+  - package-ecosystem: github-actions
+    directory: /integrations/github-action
+    schedule:
+      interval: weekly
+    groups:
+      github-action:
+        patterns: ['*']
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]

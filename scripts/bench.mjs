@@ -4,7 +4,7 @@
  * not guessed. Data is generated with the real tracer (clearly benchmark data, in a temporary
  * database), ingested through the store, and read through the HTTP API as the dashboard does.
  *
- *   node --conditions=source scripts/bench.mjs [--traces 20000] [--spans 1000]
+ *   node --conditions=scope-source scripts/bench.mjs [--traces 20000] [--spans 1000]
  *
  * Prints ingestion throughput, API timings (median of 5) and response sizes, including one
  * trace with the maximum number of spans.

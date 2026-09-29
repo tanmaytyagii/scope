@@ -17,7 +17,7 @@ const env = { ...process.env, NO_COLOR: '1', CI: 'true', SCOPE_DATABASE_URL: '' 
 
 const scope = (args, { allowFailure = false } = {}) => {
   try {
-    return execFileSync(process.execPath, ['--conditions=source', bin, ...args], {
+    return execFileSync(process.execPath, ['--conditions=scope-source', bin, ...args], {
       cwd: args[0] === 'init' ? work : project,
       env,
       encoding: 'utf8',
@@ -56,7 +56,7 @@ writeFileSync(
 
 const children = [];
 const start = (args) => {
-  const child = spawn(process.execPath, ['--conditions=source', bin, ...args], {
+  const child = spawn(process.execPath, ['--conditions=scope-source', bin, ...args], {
     cwd: project,
     env: { ...env, SCOPE_LOG_LEVEL: 'warn' },
     stdio: ['ignore', 'inherit', 'inherit'],

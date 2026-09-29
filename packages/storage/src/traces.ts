@@ -251,7 +251,7 @@ export interface TraceDetail {
   failingCases: FailingCases | null;
 }
 
-function mapSpan(row: Selectable<Database['spans']>): SpanRecord {
+export function mapSpan(row: Selectable<Database['spans']>): SpanRecord {
   return {
     traceId: row.trace_id,
     id: row.id,

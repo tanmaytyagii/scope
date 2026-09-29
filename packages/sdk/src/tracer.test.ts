@@ -279,7 +279,7 @@ describe('HttpExporter shutdown', () => {
     const result = await new Promise<{ code: number; stdout: string; stderr: string }>((done) => {
       execFile(
         process.execPath,
-        ['--conditions=source', '--input-type=module', '-e', script],
+        ['--conditions=scope-source', '--input-type=module', '-e', script],
         { timeout: 20_000 },
         (error, stdout, stderr) =>
           done({

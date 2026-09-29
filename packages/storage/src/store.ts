@@ -48,7 +48,7 @@ import {
   parseStorageUrl,
   type StorageTarget,
 } from './dialects.ts';
-import { ingestBundles, summarizeEvalStatus } from './ingest.ts';
+import { ingestBundles, ingestSpans, type SpanBatch, summarizeEvalStatus } from './ingest.ts';
 import { LATEST_MIGRATION, ScopeMigrations } from './migrations.ts';
 import type {
   ApiKey,
@@ -813,6 +813,18 @@ export class Store {
   // ─── ingestion ─────────────────────────────────────────────────────────────────────────────
 
   /** Stores finished traces with their spans and evaluations. Idempotent per id. */
+  /**
+   * Adds spans to traces that may arrive over several calls (OpenTelemetry), recomputing each
+   * touched trace from all of its spans.
+   */
+  async ingestSpans(
+    projectId: string,
+    batches: readonly SpanBatch[],
+    maxSpansPerTrace: number,
+  ): Promise<{ traces: number; spans: number; rejectedSpans: number; dropped: number }> {
+    return ingestSpans(this.db, projectId, batches, maxSpansPerTrace);
+  }
+
   async ingest(
     projectId: string,
     bundles: readonly TraceBundle[],

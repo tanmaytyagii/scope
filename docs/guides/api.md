@@ -63,6 +63,16 @@ curl -s -H "Authorization: Bearer $SCOPE_API_KEY" \
   "https://scope.example.com/api/v1/comparisons?base=11&head=12"
 ```
 
+## OpenTelemetry (OTLP/HTTP)
+
+`POST /v1/traces` accepts OpenTelemetry trace exports (`application/x-protobuf` or
+`application/json`, optionally `Content-Encoding: gzip`), at the path the OTLP specification
+defines, so `OTEL_EXPORTER_OTLP_ENDPOINT=http://<scope-server>` is all an exporter needs. It
+authenticates like `/api/v1/ingest` (an API key with the `ingest` scope on `scope server`) and
+answers with an OTLP `ExportTraceServiceResponse`, reporting rejected spans as a partial success.
+It is not in the OpenAPI document: its contract is the OTLP specification. What is mapped and how:
+[integrations](../integrations.md#opentelemetry-otlphttp).
+
 ## Ingestion
 
 `POST /api/v1/ingest` stores finished traces. It is how `@scope-ai/sdk` exports, and the contract

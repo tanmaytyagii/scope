@@ -39,7 +39,7 @@ function exec(file: string, args: string[], cwd: string, env: Record<string, str
           CI: 'true',
           SCOPE_DATABASE_URL: '',
           // The runner starts the CLI with this Node; run it from TypeScript sources.
-          NODE_OPTIONS: '--conditions=source',
+          NODE_OPTIONS: '--conditions=scope-source',
           ...env,
         },
         timeout: 60_000,
@@ -88,10 +88,10 @@ async function runAction(
 }
 
 const cli = (args: string[]) =>
-  exec(process.execPath, ['--conditions=source', CLI, ...args], project, {});
+  exec(process.execPath, ['--conditions=scope-source', CLI, ...args], project, {});
 
 beforeAll(async () => {
-  await exec(process.execPath, ['--conditions=source', CLI, 'init', 'demo'], root, {});
+  await exec(process.execPath, ['--conditions=scope-source', CLI, 'init', 'demo'], root, {});
   // These tests are about the action, not timing: on a busy CI runner the starter's latency
   // warning gate (p95 +50% over a millisecond-scale baseline) is noise, and flipped "passed" to
   // "passed with warnings" (CI on fc5398e).

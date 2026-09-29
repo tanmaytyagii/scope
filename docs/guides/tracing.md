@@ -137,8 +137,19 @@ Privacy rules apply before anything leaves the process: secrets are redacted and
 bounded as described in [configuration](./configuration.md#privacy), and the server applies its
 own policy again on arrival.
 
-## Other languages
+## Other languages and frameworks
 
-The ingestion endpoint is language-neutral: `POST /api/v1/ingest` with
-`{ traces, spans, evaluations }` in the format of the [HTTP API](./api.md#ingestion). A Python SDK
-is the first item on the [roadmap](../roadmap.md).
+Applications instrumented with OpenTelemetry — in any language, or through the Vercel AI SDK,
+OpenLLMetry or OpenInference for LangChain, LlamaIndex and vendor SDKs — send traces to SCOPE
+by pointing their OTLP exporter at the server:
+
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4700
+```
+
+Model calls that follow the OpenTelemetry GenAI conventions show their model, tokens, estimated
+cost, prompt and response like SCOPE's own. Setup per framework, and exactly what is mapped:
+[integrations](../integrations.md).
+
+Without OpenTelemetry, the ingestion endpoint is language-neutral: `POST /api/v1/ingest` with
+`{ traces, spans, evaluations }` in the format of the [HTTP API](./api.md#ingestion).

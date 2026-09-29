@@ -60,7 +60,7 @@ SCOPE_TEST_DATABASE_URL=postgres://… npm test   # also run storage/server test
 To look at the dashboard: `npm run build -w @scope-ai/web`, then `npm run scope -- ui` in a
 project (e.g. one made with `scope init`). Screenshot pages with Playwright to review design.
 
-Sources run directly on Node (`--conditions=source`, erasable TS only). Tests live next to
+Sources run directly on Node (`--conditions=scope-source`, erasable TS only). Tests live next to
 code as `*.test.ts` under `packages/*/src` and `apps/server/src`.
 
 ## Conventions

@@ -16,8 +16,10 @@ contract. Most of SCOPE's users write Python; a large and growing share write Ty
   `erasableSyntaxOnly`). Only erasable syntax is allowed, so Node can run the sources directly.
 - **npm workspaces** for package management. No additional package manager or task runner.
 - Packages compile with `tsc -b` (TypeScript 7, project references) to `dist/`. During
-  development, packages resolve to their TypeScript sources through a `source` export
-  condition, so tests and the CLI run without a build step.
+  development, packages resolve to their TypeScript sources through a `scope-source` export
+  condition, so tests and the CLI run without a build step. (It was named `source` until v0.3;
+  some third-party packages publish a `source` condition pointing at TypeScript files in
+  `node_modules`, which Node refuses to run, so the name is SCOPE's own.)
 - **Biome** for formatting and linting (one tool, one config).
 - **Vitest** for unit and integration tests; **Playwright** for end-to-end tests.
 - Node.js `>= 22.16` (active LTS lines at the time of writing) — required for `node:sqlite`

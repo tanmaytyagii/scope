@@ -96,4 +96,54 @@ describe.runIf(url)('API on PostgreSQL', () => {
     } while (cursor);
     expect(seen.size).toBe(10);
   });
+
+  it('assembles an OTLP trace that arrives in pieces', async () => {
+    const traceId = '9'.repeat(32);
+    const send = (spans: unknown[]) =>
+      app.request('/v1/traces', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ resourceSpans: [{ scopeSpans: [{ spans }] }] }),
+      });
+    const llm = {
+      traceId,
+      spanId: '2'.repeat(16),
+      parentSpanId: '1'.repeat(16),
+      name: 'chat gpt-5',
+      startTimeUnixNano: '1700000000100000000',
+      endTimeUnixNano: '1700000000400000000',
+      attributes: [
+        { key: 'gen_ai.operation.name', value: { stringValue: 'chat' } },
+        { key: 'gen_ai.provider.name', value: { stringValue: 'openai' } },
+        { key: 'gen_ai.request.model', value: { stringValue: 'gpt-5' } },
+        { key: 'gen_ai.usage.input_tokens', value: { intValue: '100' } },
+        { key: 'gen_ai.usage.output_tokens', value: { intValue: '20' } },
+      ],
+    };
+    const root = {
+      traceId,
+      spanId: '1'.repeat(16),
+      name: 'handle-request',
+      startTimeUnixNano: '1700000000000000000',
+      endTimeUnixNano: '1700000000500000000',
+    };
+    expect((await send([llm])).status).toBe(200);
+    expect((await send([root])).status).toBe(200);
+    const detail = (await (await app.request(`${API_BASE}/traces/${traceId}`)).json()) as {
+      trace: {
+        name: string;
+        spanCount: number;
+        llmCallCount: number;
+        durationMs: number;
+        usage: object;
+      };
+    };
+    expect(detail.trace).toMatchObject({
+      name: 'handle-request',
+      spanCount: 2,
+      llmCallCount: 1,
+      durationMs: 500,
+      usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+    });
+  });
 });

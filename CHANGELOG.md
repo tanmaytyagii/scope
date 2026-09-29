@@ -7,6 +7,12 @@ which are always called out).
 
 ## [Unreleased]
 
+### Changed
+
+- The export condition SCOPE's packages use for their TypeScript sources during development is
+  now `scope-source` (was `source`). Third-party packages that publish a `source` condition broke
+  tests and `npm run scope`. Only affects working on SCOPE itself.
+
 ### Security
 
 - Redaction now covers everything a trace stores, in the process that records it: span
@@ -21,6 +27,12 @@ which are always called out).
 
 ### Added
 
+- OpenTelemetry ingestion: `POST /v1/traces` accepts OTLP/HTTP (protobuf or JSON, optionally
+  gzip), so any OpenTelemetry SDK — and through it the Vercel AI SDK, OpenLLMetry and OpenInference
+  instrumentations for LangChain, LlamaIndex and vendor SDKs — can send traces with
+  `OTEL_EXPORTER_OTLP_ENDPOINT`. GenAI semantic conventions become model calls with provider,
+  model, tokens, estimated cost, prompt and response; spans of one trace may arrive over several
+  requests. Tested with the OpenTelemetry JS exporters and the AI SDK's `@ai-sdk/otel`.
 - [Privacy and data](docs/guides/privacy.md): what is stored, what leaves the machine, what is
   redacted where, and how to keep content out.
 

@@ -2,7 +2,7 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
-    "customConditions": ["source"]
+    "customConditions": ["scope-source"]
   },
   "include": [
     "packages/*/src",

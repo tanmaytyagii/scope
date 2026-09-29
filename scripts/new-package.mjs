@@ -24,7 +24,11 @@ const pkg = {
   type: 'module',
   sideEffects: false,
   exports: {
-    '.': { source: './src/index.ts', types: './dist/index.d.ts', default: './dist/index.js' },
+    '.': {
+      'scope-source': './src/index.ts',
+      types: './dist/index.d.ts',
+      default: './dist/index.js',
+    },
   },
   files: ['dist'],
   engines: { node: '>=22.16.0' },
@@ -38,7 +42,7 @@ const depth = dir.split('/').length;
 const up = '../'.repeat(depth);
 writeFileSync(
   `${dir}/tsconfig.json`,
-  `${JSON.stringify({ extends: `${up}tsconfig.base.json`, compilerOptions: { noEmit: true, customConditions: ['source'] }, include: ['src'] }, null, 2)}\n`,
+  `${JSON.stringify({ extends: `${up}tsconfig.base.json`, compilerOptions: { noEmit: true, customConditions: ['scope-source'] }, include: ['src'] }, null, 2)}\n`,
 );
 const references = refs
   .split(',')

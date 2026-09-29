@@ -7,7 +7,7 @@ import { defaultClientConditions, defineConfig } from 'vite';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   // Workspace packages resolve to their TypeScript sources (docs/decisions/0001).
-  resolve: { conditions: ['source', ...defaultClientConditions] },
+  resolve: { conditions: ['scope-source', ...defaultClientConditions] },
   server: {
     port: 5173,
     proxy: { '/api': process.env.SCOPE_API_URL ?? 'http://127.0.0.1:4700' },

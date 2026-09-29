@@ -57,7 +57,7 @@ function content(value: JsonValue | null, policy: PrivacyPolicy): JsonValue | nu
 }
 
 /** Structure (metadata, attributes, messages): always kept, always redacted and bounded. */
-function structure(value: JsonValue, policy: PrivacyPolicy): JsonValue {
+export function structure(value: JsonValue, policy: PrivacyPolicy): JsonValue {
   return capture(value, { ...policy, captureContent: true }).value ?? null;
 }
 
@@ -84,7 +84,7 @@ function asObject(value: JsonValue | null): JsonObject {
 
 // ─── preparation ─────────────────────────────────────────────────────────────────────────────
 
-function prepareSpan(span: IngestSpan, traceId: string, policy: PrivacyPolicy): SpanRecord {
+export function prepareSpan(span: IngestSpan, traceId: string, policy: PrivacyPolicy): SpanRecord {
   const attributes = redactAttributes(span.attributes, policy);
   if (!policy.captureContent && (span.input !== null || span.output !== null))
     attributes['scope.content.omitted'] = true;
@@ -141,7 +141,10 @@ function prepareEvaluation(
 }
 
 /** Keeps at most `limit` spans: root spans first, then the earliest. */
-function limitSpans(spans: IngestSpan[], limit: number): { kept: IngestSpan[]; dropped: number } {
+export function limitSpans(
+  spans: IngestSpan[],
+  limit: number,
+): { kept: IngestSpan[]; dropped: number } {
   if (spans.length <= limit) return { kept: spans, dropped: 0 };
   const ordered = [...spans].sort(
     (a, b) =>
@@ -263,7 +266,7 @@ async function readBody(c: AppContext): Promise<unknown> {
   }
 }
 
-async function targetProject(
+export async function targetProject(
   c: AppContext,
   deps: Deps,
   named: string | undefined,

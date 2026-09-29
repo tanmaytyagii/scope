@@ -16,7 +16,7 @@
     "resolveJsonModule": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "customConditions": ["source"],
+    "customConditions": ["scope-source"],
     "types": ["vite/client"]
   },
   "include": ["src"]

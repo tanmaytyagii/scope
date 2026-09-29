@@ -81,7 +81,7 @@ function targets(m) {
     if (typeof node === 'string') out.add(node);
     else if (node && typeof node === 'object')
       for (const [condition, value] of Object.entries(node))
-        if (condition !== 'source') walk(value);
+        if (condition !== 'scope-source') walk(value);
   };
   walk(m.exports);
   if (typeof m.bin === 'string') out.add(m.bin);

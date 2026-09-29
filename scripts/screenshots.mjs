@@ -22,7 +22,7 @@ const PORT = 4797;
 
 const scope = (args, cwd = project) => {
   try {
-    execFileSync(process.execPath, ['--conditions=source', bin, ...args], {
+    execFileSync(process.execPath, ['--conditions=scope-source', bin, ...args], {
       cwd,
       env,
       stdio: 'ignore',
@@ -42,11 +42,15 @@ scope(['run']); // #2: answers keep one sentence and fail the regression gate
 writeFileSync(workflow, original);
 scope(['run', '--all-variants', '--no-baseline']); // #3 defaults, #4 terse, #5 narrow
 
-const ui = spawn(process.execPath, ['--conditions=source', bin, 'ui', '--port', String(PORT)], {
-  cwd: project,
-  env,
-  stdio: 'ignore',
-});
+const ui = spawn(
+  process.execPath,
+  ['--conditions=scope-source', bin, 'ui', '--port', String(PORT)],
+  {
+    cwd: project,
+    env,
+    stdio: 'ignore',
+  },
+);
 const base = `http://127.0.0.1:${PORT}`;
 for (let i = 0; i < 100; i++) {
   try {

@@ -22,7 +22,7 @@
   "sideEffects": false,
   "exports": {
     ".": {
-      "source": "./src/index.ts",
+      "scope-source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }
@@ -41,17 +41,24 @@
     "access": "public"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.1",
     "@scope-ai/core": "0.2.0",
     "@scope-ai/protocol": "0.2.0",
     "@scope-ai/storage": "0.2.0",
-    "@hono/node-server": "^2.1.1",
+    "@scope-ai/web": "0.2.0",
     "hono": "^4.13.10",
-    "zod": "^4.6.5",
-    "@scope-ai/web": "0.2.0"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@ai-sdk/otel": "^1.0.122",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.222.0",
+    "@opentelemetry/resources": "^2.11.0",
+    "@opentelemetry/sdk-trace-base": "^2.11.0",
     "@scope-ai/config": "0.2.0",
     "@scope-ai/engine": "0.2.0",
-    "@scope-ai/sdk": "0.2.0"
+    "@scope-ai/sdk": "0.2.0",
+    "ai": "^7.0.122"
   }
 }

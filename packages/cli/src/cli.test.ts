@@ -28,7 +28,7 @@ function scope(args: string[], cwd: string, env: Record<string, string> = {}): P
   return new Promise((done) => {
     execFile(
       process.execPath,
-      ['--conditions=source', BIN, ...args],
+      ['--conditions=scope-source', BIN, ...args],
       {
         cwd,
         env: {
@@ -533,7 +533,7 @@ interface Served {
 /** Starts a long-running command and waits for the JSON document it prints once listening. */
 function serve(args: string[], cwd: string, env: Record<string, string> = {}): Promise<Served> {
   return new Promise((ready, fail) => {
-    const child = spawn(process.execPath, ['--conditions=source', BIN, ...args, '--json'], {
+    const child = spawn(process.execPath, ['--conditions=scope-source', BIN, ...args, '--json'], {
       cwd,
       env: { ...process.env, NO_COLOR: '1', SCOPE_DATABASE_URL: '', ...env },
     });

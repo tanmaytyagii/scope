@@ -16,8 +16,10 @@ import { bodyLimit } from 'hono/body-limit';
 import { requestId } from 'hono/request-id';
 import { secureHeaders } from 'hono/secure-headers';
 import { registerApi } from './api.ts';
+import { requireAccess } from './auth.ts';
 import { errorBody, sendError, toScopeError } from './errors.ts';
 import { ServerMetrics } from './metrics.ts';
+import { handleOtlpTraces } from './otlp/route.ts';
 import { registerDashboard } from './static.ts';
 import type { AppEnv, AppOptions, Deps } from './types.ts';
 
@@ -117,22 +119,21 @@ export function createApp(options: AppOptions): ScopeApp {
     });
   }
 
-  app.use(
-    '/api/v1/ingest',
-    bodyLimit({
-      maxSize: deps.maxIngestBytes,
-      onError: () => {
-        metrics.ingestRejected.inc({ reason: 'too_large' });
-        throw new ScopeError(
-          ErrorCodes.payloadTooLarge,
-          `Request body exceeds ${deps.maxIngestBytes.toLocaleString('en-US')} bytes`,
-          {
-            hint: 'Send fewer traces per request. The server limit is set by SCOPE_MAX_INGEST_BYTES.',
-          },
-        );
-      },
-    }),
-  );
+  const ingestLimit = bodyLimit({
+    maxSize: deps.maxIngestBytes,
+    onError: () => {
+      metrics.ingestRejected.inc({ reason: 'too_large' });
+      throw new ScopeError(
+        ErrorCodes.payloadTooLarge,
+        `Request body exceeds ${deps.maxIngestBytes.toLocaleString('en-US')} bytes`,
+        {
+          hint: 'Send fewer traces per request. The server limit is set by SCOPE_MAX_INGEST_BYTES.',
+        },
+      );
+    },
+  });
+  app.use('/api/v1/ingest', ingestLimit);
+  app.use('/v1/traces', ingestLimit);
 
   app.get('/healthz', (c) => c.json({ status: 'ok' }));
 
@@ -164,6 +165,8 @@ export function createApp(options: AppOptions): ScopeApp {
   });
 
   registerApi(app, deps);
+  // OTLP/HTTP, at the path the OpenTelemetry specification defines for traces.
+  app.post('/v1/traces', requireAccess(deps, 'ingest'), (c) => handleOtlpTraces(c, deps));
 
   app.all('/api/*', (c) =>
     c.json(

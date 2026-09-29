@@ -27,7 +27,7 @@ jobs:
   evaluate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: tanmaytyagii/scope/integrations/github-action@main
         env:
           # Only needed for workflows that call hosted models.
@@ -98,7 +98,7 @@ permissions:
   pull-requests: write
 
 steps:
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@v5
   - uses: tanmaytyagii/scope/integrations/github-action@main
     with:
       comment: true

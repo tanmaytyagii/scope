@@ -16,7 +16,12 @@ which are always called out).
 ### Security
 
 - Third-party GitHub Actions are pinned to commit SHAs in every workflow and in the composite
-  action, and Dependabot keeps the pins and npm dependencies current.
+  action, and Dependabot keeps the pins and npm dependencies current. They are the first
+  releases that run on Node.js 24 (Node.js 20, which the previous majors used, is past end of
+  life): `actions/checkout` v5, `setup-node` v5, `upload-artifact` v6, `download-artifact` v7,
+  `github-script` v8, `dependency-review-action` v5, and the Docker actions' current majors. The
+  composite action disables `setup-node`'s new automatic dependency caching, which would otherwise
+  cache the calling repository's packages.
 - Redaction now covers everything a trace stores, in the process that records it: span
   attributes, event attributes, status messages, error stacks, trace metadata, and evaluation
   reasons and evidence. Before, the SDK and `scope run` redacted only inputs, outputs and error

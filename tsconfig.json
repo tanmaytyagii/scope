@@ -8,6 +8,7 @@
     "packages/*/src",
     "apps/server/src",
     "integrations/**/*.ts",
+    "examples/**/*.ts",
     "tests/**/*.ts",
     "vitest.config.ts",
     "scripts/**/*.ts"

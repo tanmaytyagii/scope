@@ -2,22 +2,24 @@
   "schema": "scope.baseline/v1",
   "workflow": "support",
   "variant": null,
-  "createdAt": "2026-09-28T16:05:31.581Z",
+  "createdAt": "2026-09-29T15:14:57.852Z",
   "source": {
-    "runId": "run_01M3MC7451RDFHSM0C2WH90BHN",
+    "runId": "run_01M3PVQDYS84AXXAV408N39RRP",
     "runNumber": 1,
-    "git": {
-      "commit": "ac2f615e6253eeb326ba3a00091c982542bc0187",
-      "branch": "main",
-      "dirty": false,
-      "pullRequest": null,
-      "repository": "tanmaytyagii/scope"
-    }
+    "git": null
   },
   "dataset": {
     "name": "support",
     "caseCount": 12,
     "hash": "ca130ba52c3d3ac896133ac13d3d08289e9a4813e0da2e541155d55d91e68b44"
+  },
+  "config": {
+    "params": {
+      "model": "local:extractive",
+      "top_k": 3,
+      "sentences": 2
+    },
+    "workflowHash": "31ede6ccc4cd3166bd44a1a1ba06021d1f9e2ac3f1bb45410f48f8e09de9e824"
   },
   "summary": {
     "cases": {
@@ -29,10 +31,10 @@
     "passRate": 0.8333333333333334,
     "errorRate": 0,
     "latency": {
-      "p50Ms": 0.367,
-      "p95Ms": 4.010699999999999,
-      "meanMs": 1.4524166666666662,
-      "maxMs": 4.52
+      "p50Ms": 0.395,
+      "p95Ms": 4.337999999999999,
+      "meanMs": 1.5655833333333333,
+      "maxMs": 4.844
     },
     "tokens": {
       "input": 1438,
@@ -101,8 +103,8 @@
   "cases": {
     "delete-account": {
       "outcome": "failed",
-      "durationMs": 0.338,
-      "traceId": "c440824f998b6f72f8d5c0f51efb3f58",
+      "durationMs": 0.351,
+      "traceId": "9e7d12ac11d226251e46ad0383774da9",
       "evaluators": {
         "fast": {
           "status": "passed",
@@ -124,22 +126,22 @@
     },
     "express-shipping": {
       "outcome": "passed",
-      "durationMs": 0.318,
-      "traceId": "1fc682f05f7b46825ddc07f4024d9613",
+      "durationMs": 0.444,
+      "traceId": "bb27de8106be13ef82c9bc471ed64d4e",
       "evaluators": {
-        "fast": {
-          "status": "passed",
-          "score": 1
-        },
         "grounded": {
           "status": "passed",
           "score": 1
         },
-        "key_facts": {
+        "no_invented_facts": {
           "status": "passed",
           "score": 1
         },
-        "no_invented_facts": {
+        "fast": {
+          "status": "passed",
+          "score": 1
+        },
+        "key_facts": {
           "status": "passed",
           "score": 1
         }
@@ -147,22 +149,22 @@
     },
     "free-shipping": {
       "outcome": "passed",
-      "durationMs": 0.402,
-      "traceId": "929d53fe4a44f9621ca2f47acc9ed300",
+      "durationMs": 0.428,
+      "traceId": "ea779dd8a53bdb21584a60fbfa99b0d4",
       "evaluators": {
-        "fast": {
-          "status": "passed",
-          "score": 1
-        },
         "grounded": {
           "status": "passed",
           "score": 1
         },
-        "key_facts": {
+        "no_invented_facts": {
           "status": "passed",
           "score": 1
         },
-        "no_invented_facts": {
+        "fast": {
+          "status": "passed",
+          "score": 1
+        },
+        "key_facts": {
           "status": "passed",
           "score": 1
         }
@@ -170,14 +172,14 @@
     },
     "gift-card-refund": {
       "outcome": "passed",
-      "durationMs": 3.329,
-      "traceId": "c2a271945a121415b01257fcd80155b3",
+      "durationMs": 3.601,
+      "traceId": "a4027ad513106eb9a2a26f95eb37b051",
       "evaluators": {
-        "grounded": {
+        "fast": {
           "status": "passed",
           "score": 1
         },
-        "fast": {
+        "grounded": {
           "status": "passed",
           "score": 1
         },
@@ -193,22 +195,22 @@
     },
     "international": {
       "outcome": "passed",
-      "durationMs": 0.304,
-      "traceId": "99aceadd5c6e557bbfa323ae90438902",
+      "durationMs": 0.362,
+      "traceId": "32dd14ba2dccac34e27a7589bd37cb24",
       "evaluators": {
-        "grounded": {
-          "status": "passed",
-          "score": 1
-        },
-        "no_invented_facts": {
-          "status": "passed",
-          "score": 1
-        },
         "fast": {
           "status": "passed",
           "score": 1
         },
+        "grounded": {
+          "status": "passed",
+          "score": 1
+        },
         "key_facts": {
+          "status": "passed",
+          "score": 1
+        },
+        "no_invented_facts": {
           "status": "passed",
           "score": 1
         }
@@ -216,8 +218,8 @@
     },
     "password-reset": {
       "outcome": "passed",
-      "durationMs": 0.266,
-      "traceId": "af41880ebd237c7c4af5dbbb1c8fa945",
+      "durationMs": 0.29,
+      "traceId": "856221cd578d1495f776cb14b4d79191",
       "evaluators": {
         "fast": {
           "status": "passed",
@@ -239,14 +241,14 @@
     },
     "refund-method": {
       "outcome": "failed",
-      "durationMs": 3.594,
-      "traceId": "81b01d1b09151bbca81bb522512cb886",
+      "durationMs": 3.924,
+      "traceId": "87940c239610923a4bd24727a1051c3c",
       "evaluators": {
-        "grounded": {
+        "fast": {
           "status": "passed",
           "score": 1
         },
-        "fast": {
+        "grounded": {
           "status": "passed",
           "score": 1
         },
@@ -262,8 +264,8 @@
     },
     "refund-timing": {
       "outcome": "passed",
-      "durationMs": 4.52,
-      "traceId": "d50bb9a787b231e9c02b0295bd63f187",
+      "durationMs": 4.844,
+      "traceId": "17d03487df012f43bdd4e4132613be12",
       "evaluators": {
         "grounded": {
           "status": "passed",
@@ -285,14 +287,14 @@
     },
     "return-window": {
       "outcome": "passed",
-      "durationMs": 3.427,
-      "traceId": "3f5d7254bfb2dd5b1553ac05da3b47fb",
+      "durationMs": 3.729,
+      "traceId": "0c1129e4e50e8a92aff13f3c30319e3b",
       "evaluators": {
-        "grounded": {
+        "fast": {
           "status": "passed",
           "score": 1
         },
-        "fast": {
+        "grounded": {
           "status": "passed",
           "score": 1
         },
@@ -308,22 +310,22 @@
     },
     "store-hours": {
       "outcome": "passed",
-      "durationMs": 0.237,
-      "traceId": "776b56c83ddc744cccb3ad80398e3772",
+      "durationMs": 0.245,
+      "traceId": "c5b23a4e1adf6deab8ddcdc20b4b15cc",
       "evaluators": {
-        "grounded": {
-          "status": "skipped",
-          "score": null
-        },
-        "no_invented_facts": {
-          "status": "passed",
-          "score": 1
-        },
         "fast": {
           "status": "passed",
           "score": 1
         },
+        "grounded": {
+          "status": "skipped",
+          "score": null
+        },
         "key_facts": {
+          "status": "passed",
+          "score": 1
+        },
+        "no_invented_facts": {
           "status": "passed",
           "score": 1
         }
@@ -331,8 +333,8 @@
     },
     "warranty-damage": {
       "outcome": "passed",
-      "durationMs": 0.298,
-      "traceId": "b84597f8e38d904617e67ccd79973ad7",
+      "durationMs": 0.26,
+      "traceId": "c906928e5d529503725a32ce26a0e22c",
       "evaluators": {
         "fast": {
           "status": "passed",
@@ -354,8 +356,8 @@
     },
     "warranty-length": {
       "outcome": "passed",
-      "durationMs": 0.396,
-      "traceId": "6201c52e6663526c10cf701de6f15398",
+      "durationMs": 0.309,
+      "traceId": "a54267daca13fecd809dc5eaaac147bf",
       "evaluators": {
         "fast": {
           "status": "passed",

@@ -10,6 +10,7 @@ open in the dashboard. Run them from the repository root after `npm ci && npm ru
 | [triage](./triage) | Application code as a `function` step: traced tool calls, retrieval and model calls, structured output checked by JSON Schema and per-field evaluators |
 | [custom-evaluator](./custom-evaluator) | Two evaluators written for the project — a deterministic one with arguments and a heuristic one with a threshold — gating a workflow |
 | [sdk-tracing](./sdk-tracing) | Instrumenting an existing app with `@scope-ai/sdk` and sending traces to `scope ui` |
+| [instrument-openai](./instrument-openai) | An application using the OpenAI SDK, traced with one line (`instrumentOpenAI`) — against OpenAI or a local model through Ollama; needs a model endpoint |
 
 The workflow examples use `local:extractive`, a deterministic offline stand-in that answers with
 the context sentences that best match the question. It is not a language model; change

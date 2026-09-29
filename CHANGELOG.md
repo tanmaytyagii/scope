@@ -60,6 +60,10 @@ which are always called out).
 - [Integrations](docs/integrations.md) and [extensibility](docs/extensibility.md): how traces get
   in from each stack and how well each path is tested, and every extension point with its
   stability.
+- Every example runs in CI (`examples/examples.test.ts`) with the commands its README documents.
+  New: [instrument-openai](examples/instrument-openai), an OpenAI SDK application traced with one
+  line, against OpenAI or a local model through Ollama. The committed example baselines record
+  their configuration.
 - [Privacy and data](docs/guides/privacy.md): what is stored, what leaves the machine, what is
   redacted where, and how to keep content out.
 

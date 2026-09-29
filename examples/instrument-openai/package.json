@@ -1,0 +1,9 @@
+{
+  "name": "scope-example-instrument-openai",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@scope-ai/sdk": "^0.2.0",
+    "openai": "^7.23.0"
+  }
+}

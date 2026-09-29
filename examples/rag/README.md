@@ -15,6 +15,7 @@ the dataset expects.
 
 ```bash
 npm run scope -- run workflows/support.yaml --variant terse --baseline baselines/support.json --cwd examples/rag
+#   Changed  sentences 2 → 1
 # FAILED — Pass rate 83.3% → 75.0% (−8.3 pp); dropped more than the allowed 5.0 pp
 ```
 

@@ -2,22 +2,29 @@
   "schema": "scope.baseline/v1",
   "workflow": "triage",
   "variant": null,
-  "createdAt": "2026-09-28T16:07:28.545Z",
+  "createdAt": "2026-09-29T15:14:58.319Z",
   "source": {
-    "runId": "run_01M3MCAN8PJ4H8PG453ZJQDB6H",
+    "runId": "run_01M3PVQED6ZYEAW71AZ7GGAKCZ",
     "runNumber": 1,
-    "git": {
-      "commit": "ac2f615e6253eeb326ba3a00091c982542bc0187",
-      "branch": "main",
-      "dirty": true,
-      "pullRequest": null,
-      "repository": "tanmaytyagii/scope"
-    }
+    "git": null
   },
   "dataset": {
     "name": "tickets",
     "caseCount": 10,
     "hash": "ccd9d0863a7ad1ce99e1a4a54ab0c593b536d98d5d82bf6fae0269c1a8e65bce"
+  },
+  "config": {
+    "params": {
+      "model": "local:extractive",
+      "urgent_words": [
+        "urgent",
+        "asap",
+        "immediately",
+        "charged twice",
+        "lost"
+      ]
+    },
+    "workflowHash": "22e12d8549155030632219931d36143a65e2df02864ac6d3bfbc5226c7f0f271"
   },
   "summary": {
     "cases": {
@@ -29,10 +36,10 @@
     "passRate": 1,
     "errorRate": 0,
     "latency": {
-      "p50Ms": 6.334,
-      "p95Ms": 22.580449999999992,
-      "meanMs": 8.476600000000001,
-      "maxMs": 25.829
+      "p50Ms": 6.179,
+      "p95Ms": 21.247499999999995,
+      "meanMs": 8.271800000000002,
+      "maxMs": 23.997
     },
     "tokens": {
       "input": 1080,
@@ -101,8 +108,8 @@
   "cases": {
     "change-email": {
       "outcome": "passed",
-      "durationMs": 0.271,
-      "traceId": "099a715dee6fed2a782c0806735d4470",
+      "durationMs": 0.296,
+      "traceId": "9f6e0cbeffb6a31f45e98218d87f0adf",
       "evaluators": {
         "grounded_reply": {
           "status": "passed",
@@ -124,8 +131,8 @@
     },
     "double-charge": {
       "outcome": "passed",
-      "durationMs": 25.829,
-      "traceId": "0d5d79c70979f77a1d774957d37a839f",
+      "durationMs": 17.175,
+      "traceId": "289550f309011bf1d26a9a05edb7cfa5",
       "evaluators": {
         "grounded_reply": {
           "status": "passed",
@@ -147,8 +154,8 @@
     },
     "lost-package": {
       "outcome": "passed",
-      "durationMs": 9.752,
-      "traceId": "c1f2d67b23ffd49655cf0962e0c0c408",
+      "durationMs": 10.163,
+      "traceId": "5bfbc70c2d49d9d50e12a93e45e08f12",
       "evaluators": {
         "grounded_reply": {
           "status": "passed",
@@ -170,8 +177,8 @@
     },
     "password-reset": {
       "outcome": "passed",
-      "durationMs": 0.222,
-      "traceId": "55f3b6ef5dd659bbcd60c65378cf509f",
+      "durationMs": 0.278,
+      "traceId": "cb4ef5d9216e6b6192b6cd4bba1847de",
       "evaluators": {
         "grounded_reply": {
           "status": "passed",
@@ -193,8 +200,8 @@
     },
     "refund-timing": {
       "outcome": "passed",
-      "durationMs": 3.975,
-      "traceId": "d1e218e2a5da2350072abaa9e911de9b",
+      "durationMs": 3.148,
+      "traceId": "09697b8a6eb4231d219a7e3b09b876a3",
       "evaluators": {
         "schema": {
           "status": "passed",
@@ -216,8 +223,8 @@
     },
     "return-window": {
       "outcome": "passed",
-      "durationMs": 16.957,
-      "traceId": "c25ca677b4c1279c97e3fb3744886514",
+      "durationMs": 17.887,
+      "traceId": "d4de333760851bd4024b1a2d9447bea2",
       "evaluators": {
         "grounded_reply": {
           "status": "passed",
@@ -239,22 +246,22 @@
     },
     "store-question": {
       "outcome": "passed",
-      "durationMs": 0.206,
-      "traceId": "123ef0dcf253bfeb5517d342c819b58e",
+      "durationMs": 0.258,
+      "traceId": "1356c1c012aecd49428b5d0c841de0a8",
       "evaluators": {
-        "intent": {
-          "status": "passed",
-          "score": 1
-        },
-        "schema": {
-          "status": "passed",
-          "score": 1
-        },
         "grounded_reply": {
           "status": "skipped",
           "score": null
         },
+        "intent": {
+          "status": "passed",
+          "score": 1
+        },
         "priority": {
+          "status": "passed",
+          "score": 1
+        },
+        "schema": {
           "status": "passed",
           "score": 1
         }
@@ -262,8 +269,8 @@
     },
     "urgent-delivery": {
       "outcome": "passed",
-      "durationMs": 8.693,
-      "traceId": "8c23f862f9034244e60b856472a88f0e",
+      "durationMs": 9.21,
+      "traceId": "2e8676b87b419b7ad4adf4b622d4632b",
       "evaluators": {
         "grounded_reply": {
           "status": "passed",
@@ -285,8 +292,8 @@
     },
     "urgent-login": {
       "outcome": "passed",
-      "durationMs": 0.251,
-      "traceId": "8fa73a6224d8a4a307c93acb72a80ff5",
+      "durationMs": 0.306,
+      "traceId": "dc3d8054c32e363d83b77a4b998342b5",
       "evaluators": {
         "grounded_reply": {
           "status": "skipped",
@@ -308,8 +315,8 @@
     },
     "where-is-order": {
       "outcome": "passed",
-      "durationMs": 18.61,
-      "traceId": "85f4ac96387c63318121b2084416bcc2",
+      "durationMs": 23.997,
+      "traceId": "929ed723fd1d8de6ac91834a9cb449da",
       "evaluators": {
         "grounded_reply": {
           "status": "passed",

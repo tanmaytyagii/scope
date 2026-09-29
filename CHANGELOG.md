@@ -40,6 +40,10 @@ which are always called out).
   is unchanged (`withResponse()`, stream helpers, errors). OpenAI-compatible servers are recorded
   under the provider name you give. Tested against the real `openai` and `@anthropic-ai/sdk`
   packages.
+- JUnit XML reports for CI systems other than GitHub: `scope run --junit-file <file>` and
+  `scope report --format junit`. Every case is a test case (failed or errored, with reasons and
+  the trace), each run's gates a second suite; GitLab, Jenkins, CircleCI and Azure Pipelines show
+  them as test results. The CI guide has GitLab, Jenkins, CircleCI and Azure setups.
 - [Privacy and data](docs/guides/privacy.md): what is stored, what leaves the machine, what is
   redacted where, and how to keep content out.
 

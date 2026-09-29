@@ -18,6 +18,7 @@ import {
 import {
   type Baseline,
   type CaseResult,
+  caseOutcome,
   ErrorCodes,
   evaluateGates,
   formatDuration,
@@ -38,6 +39,7 @@ import type { Run } from '@scope-ai/storage';
 import type { CommandContext } from '../context.ts';
 import { ExitCode, type ExitCodeValue, ExitError } from '../errors.ts';
 import { collectGitInfo, detectTrigger } from '../git.ts';
+import { type JUnitRun, renderJUnit } from '../junit.ts';
 import {
   buildComparison,
   renderComparisonText,
@@ -68,6 +70,7 @@ export interface RunCommandOptions {
   fail?: boolean;
   summaryFile?: string;
   reportFile?: string;
+  junitFile?: string;
 }
 
 function parseInputs(pairs: string[] | undefined, json: string | undefined): JsonObject | null {
@@ -219,6 +222,7 @@ export async function runCommand(
   const results: VariantResult[] = [];
   const reports: unknown[] = [];
   const markdown: string[] = [];
+  const junit: JUnitRun[] = [];
   try {
     for (const plan of plans) {
       if (controller.signal.aborted) break;
@@ -263,6 +267,7 @@ export async function runCommand(
         variantResults.push(result.variant);
         reports.push(result.report);
         markdown.push(result.markdown);
+        junit.push(result.junit);
       }
       if (variantResults.length > 1) printVariantComparison(ctx, variantResults);
       results.push(...variantResults);
@@ -280,6 +285,13 @@ export async function runCommand(
   if (options.reportFile) {
     const { writeFileSync } = await import('node:fs');
     writeFileSync(resolve(ctx.cwd, options.reportFile), `${JSON.stringify(report, null, 2)}\n`);
+  }
+  if (options.junitFile) {
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(
+      resolve(ctx.cwd, options.junitFile),
+      renderJUnit(junit, ctx.env.SCOPE_DASHBOARD_URL ?? null),
+    );
   }
   ctx.out.emitJson(report);
   const exitCode = results.reduce<ExitCodeValue>(
@@ -396,7 +408,7 @@ interface ExecuteParams {
 async function executeVariant(
   ctx: CommandContext,
   p: ExecuteParams,
-): Promise<{ variant: VariantResult; report: unknown; markdown: string }> {
+): Promise<{ variant: VariantResult; report: unknown; markdown: string; junit: JUnitRun }> {
   const out = ctx.out;
   const s = out.style;
   const store = await ctx.store();
@@ -581,10 +593,27 @@ async function executeVariant(
   let exitCode: ExitCodeValue = ExitCode.ok;
   if (cancelled) exitCode = ExitCode.interrupted;
   else if (status === 'failed' && p.failOnGates) exitCode = ExitCode.gatesFailed;
+  const junit: JUnitRun = {
+    run,
+    gates,
+    cases: executions.map((e, i) => ({
+      caseId: e.caseId,
+      outcome: caseOutcome(caseResults[i] as CaseResult),
+      durationMs: e.durationMs,
+      reasons:
+        e.status === 'error'
+          ? [e.error?.message ?? 'execution failed']
+          : e.evaluations
+              .filter((x) => x.status === 'failed' || x.status === 'error')
+              .map((x) => `${x.evaluator}: ${x.reason}`),
+      traceId: e.traceId,
+    })),
+  };
   return {
     variant: { run, summary, exitCode },
     report: reportJson(input),
     markdown: renderMarkdown(input),
+    junit,
   };
 }
 

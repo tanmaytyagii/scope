@@ -353,6 +353,38 @@ describe('scope run → inspect → baseline → regression', () => {
     expect(readFileSync(out, 'utf8')).toContain('SCOPE · support');
   });
 
+  it('writes JUnit reports for CI systems other than GitHub', async () => {
+    const file = join(project, 'junit.xml');
+    const r = await scope(['run', 'workflows/support.yaml', '--junit-file', file, '-q'], project);
+    expect(r.code).toBe(1);
+    const xml = readFileSync(file, 'utf8');
+    expect(xml).toMatch(
+      /^<\?xml version="1.0" encoding="UTF-8"\?>\n<testsuites name="SCOPE" tests="\d+" failures="[1-9]\d*" errors="0"/,
+    );
+    expect(xml).toMatch(/<testsuite name="support \(run #\d+\)" tests="12" failures="3"/);
+    expect(xml).toContain(
+      '<failure type="evaluation" message="key_facts: Missing: &quot;5 to 7 business days&quot;.">',
+    );
+    expect(xml).toContain('<testcase classname="support" name="store-hours"');
+    expect(xml).toMatch(
+      /<testcase classname="support.gates" name="pass_rate drop ≤ 5.0 pp vs baseline" time="0.000">\s*<failure type="gate"/,
+    );
+    // Well-formed: every element closes, in order.
+    const stack: string[] = [];
+    for (const [tag, closing, name, selfClosing] of xml.matchAll(/<(\/?)([a-z-]+)[^>]*?(\/?)>/g)) {
+      if (tag.startsWith('<?')) continue;
+      if (selfClosing) continue;
+      if (closing) expect(stack.pop()).toBe(name);
+      else stack.push(name as string);
+    }
+    expect(stack).toEqual([]);
+
+    const stored = await scope(['report', '1', '--format', 'junit'], project);
+    expect(stored.code).toBe(0);
+    expect(stored.stdout).toMatch(/<testsuite name="support \(run #1\)" tests="12" failures="2"/);
+    expect(stored.stdout).toContain('<property name="scope.run" value="1"/>');
+  });
+
   it('re-scores a stored run with the current evaluators', async () => {
     const r = await scope(['evaluate', '1'], project);
     expect(r.code).toBe(0);

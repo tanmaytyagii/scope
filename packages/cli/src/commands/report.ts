@@ -7,6 +7,7 @@ import { readBaseline } from '@scope-ai/config';
 import { type Baseline, type Comparison, ErrorCodes, ScopeError } from '@scope-ai/core';
 import type { Run, Store } from '@scope-ai/storage';
 import type { CommandContext } from '../context.ts';
+import { type JUnitCase, renderJUnit } from '../junit.ts';
 import {
   buildComparison,
   type ReportBaseline,
@@ -103,9 +104,9 @@ export async function reportCommand(
   options: ReportOptions,
 ): Promise<void> {
   const format = options.format ?? (ctx.out.json ? 'json' : 'text');
-  if (!['text', 'markdown', 'md', 'json'].includes(format)) {
+  if (!['text', 'markdown', 'md', 'json', 'junit'].includes(format)) {
     throw new ScopeError(ErrorCodes.usage, `Unknown report format "${format}"`, {
-      hint: 'Use text, markdown or json.',
+      hint: 'Use text, markdown, json or junit.',
     });
   }
   const store = await ctx.store();
@@ -121,7 +122,30 @@ export async function reportCommand(
   );
 
   let content: string;
-  if (format === 'json') content = `${JSON.stringify(reportJson(input), null, 2)}\n`;
+  if (format === 'junit') {
+    const cases: JUnitCase[] = [];
+    let cursor: string | null = null;
+    do {
+      const page = await store.listRunCases(project.id, run.id, { limit: 200, cursor });
+      for (const c of page.items)
+        cases.push({
+          caseId: c.caseId,
+          outcome: c.outcome,
+          durationMs: c.durationMs,
+          reasons: c.error
+            ? [c.error.message]
+            : c.evaluations
+                .filter((e) => e.status === 'failed' || e.status === 'error')
+                .map((e) => `${e.evaluator}: ${e.reason}`),
+          traceId: c.traceId,
+        });
+      cursor = page.nextCursor;
+    } while (cursor);
+    content = renderJUnit(
+      [{ run, gates: run.gates, cases }],
+      options.dashboardUrl ?? ctx.env.SCOPE_DASHBOARD_URL ?? null,
+    );
+  } else if (format === 'json') content = `${JSON.stringify(reportJson(input), null, 2)}\n`;
   else if (format === 'markdown' || format === 'md') content = renderMarkdown(input);
   else {
     // Files get plain text; terminals get color.

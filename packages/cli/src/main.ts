@@ -137,6 +137,7 @@ export async function main(argv: string[], options: MainOptions = {}): Promise<n
       ).env('SCOPE_SUMMARY_FILE'),
     )
     .option('--report-file <file>', 'write the JSON report to this file (as --json prints it)')
+    .option('--junit-file <file>', 'write a JUnit XML report (GitLab, Jenkins, CircleCI, Azure)')
     .action(
       withContext((ctx, workflows: string[], opts) => runCommand(ctx, workflows, opts as never)),
     );
@@ -185,7 +186,7 @@ export async function main(argv: string[], options: MainOptions = {}): Promise<n
     .command('report')
     .argument('[run]', 'run number or id (default: latest)')
     .description('render a run report as text, markdown or json')
-    .option('-f, --format <format>', 'text, markdown or json')
+    .option('-f, --format <format>', 'text, markdown, json or junit')
     .option('--baseline <file>', 'compare with this baseline')
     .option('-o, --output <file>', 'write the report to a file')
     .addOption(

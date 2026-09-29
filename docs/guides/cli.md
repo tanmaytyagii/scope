@@ -48,6 +48,7 @@
 | `--no-fail` | Exit 0 even when gates fail |
 | `--summary-file <file>` | Append the Markdown report (e.g. `$GITHUB_STEP_SUMMARY`; also `SCOPE_SUMMARY_FILE`) |
 | `--report-file <file>` | Write the JSON report |
+| `--junit-file <file>` | Write a JUnit XML report: a test case per case, a suite of gates ([CI](./ci.md#other-ci-systems)) |
 
 With several workflows, every workflow is loaded and checked before any of them runs, a table
 at the end shows each run's result, and `--json` / `--report-file` produce `{ "runs": [...] }`.
@@ -64,7 +65,7 @@ On GitHub Actions (`GITHUB_ACTIONS=true`), failed gates are also printed as erro
 | `scope traces [trace]` | List traces (`--run`, `--workflow`, `--status`, `--eval`, `--search`, `--model`, `--limit`), or show one as a span tree with evaluations (`--full` for complete inputs and outputs) |
 | `scope compare <base> <head>` | Compare two runs (numbers or ids) or baseline files, metric by metric and case by case |
 | `scope compare <a> <b> <c> [d]` | Up to four side by side: each headline metric per run with the best marked (ties within noise share it), and the cases whose outcome differs |
-| `scope report [run]` | Render a run as `text`, `markdown` or `json` (`--format`, `--baseline`, `-o`, `--dashboard-url`) |
+| `scope report [run]` | Render a run as `text`, `markdown`, `json` or `junit` (`--format`, `--baseline`, `-o`, `--dashboard-url`) |
 
 Runs are referenced by number (`12` or `#12`) or id; traces by id or a unique prefix of at least
 4 characters.
@@ -102,6 +103,6 @@ Runs are referenced by number (`12` or `#12`) or id; traces by id or a unique pr
 | `SCOPE_CAPTURE_CONTENT` | `false` to store no inputs or outputs |
 | `SCOPE_PORT`, `SCOPE_HOST` | `scope ui`, `scope server` |
 | `SCOPE_SUMMARY_FILE` | `scope run --summary-file` |
-| `SCOPE_DASHBOARD_URL` | `scope report --dashboard-url` (links failing cases to the dashboard) |
+| `SCOPE_DASHBOARD_URL` | `scope report --dashboard-url`, and trace links in `--junit-file` reports |
 | `SCOPE_AUTO_MIGRATE` | `false` to never migrate the database automatically |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | Hosted model providers |

@@ -108,18 +108,66 @@ SCOPE_DATABASE_URL=sqlite:/path/to/scope-results/scope.db scope ui --open
 
 ## Other CI systems
 
-Everything the action does is available from the CLI:
+Everything the action does is a `scope` command, so any CI system that runs Node.js 22.16+ can
+run it:
 
 ```bash
-scope run workflows/support.yaml \
-  --summary-file report.md \        # append the Markdown report
-  --report-file report.json         # write the JSON report
-echo "exit code: $?"                # 0 passed · 1 gates failed · 2 config error · 3 execution error
+scope run --junit-file scope-junit.xml --summary-file scope-report.md --report-file scope-report.json
 ```
 
-`scope report <run> --format markdown|json` renders a stored run; `scope compare <base> <head>`
-compares runs or baseline files. Runs record the commit, branch and (on GitHub) the pull request
-number from the CI environment.
+- **The exit code decides the job:** 0 passed · 1 a gate failed · 2 configuration error ·
+  3 execution or storage error.
+- **`--junit-file`** writes a JUnit XML report, which GitLab, Jenkins, CircleCI and Azure
+  Pipelines display as test results. Every case is a test case (failed when an evaluator failed,
+  errored when execution failed, with the reasons and the trace id); each run's gates are a
+  second suite. GitLab's merge request widget then lists the cases that started failing.
+- **`--summary-file`** appends the Markdown report (the same one the GitHub Action posts);
+  **`--report-file`** writes the JSON report.
+- `scope report <run> --format markdown|json|junit` renders a stored run later;
+  `scope compare <base> <head>` compares runs or baseline files.
+- Set `SCOPE_DASHBOARD_URL` to a shared dashboard (`scope server`) to turn trace ids in reports
+  into links.
+
+Runs record the commit and branch from git, and the pull request number on GitHub. These examples
+install SCOPE from npm, available from the first release; until then, install it from source as in
+the [quickstart](./quickstart.md).
+
+### GitLab CI
+
+```yaml
+# .gitlab-ci.yml
+scope:
+  image: node:24
+  script:
+    - npm install -g scope-ai
+    - scope run --junit-file scope-junit.xml --summary-file scope-report.md
+  artifacts:
+    when: always
+    reports:
+      junit: scope-junit.xml
+    paths:
+      - scope-report.md
+      - .scope/scope.db
+```
+
+### Jenkins
+
+```groovy
+stage('SCOPE') {
+  steps {
+    sh 'npm install -g scope-ai'
+    sh 'scope run --junit-file scope-junit.xml'
+  }
+  post {
+    always { junit 'scope-junit.xml' }
+  }
+}
+```
+
+### CircleCI and Azure Pipelines
+
+Run the same two commands, then publish the file: `store_test_results` with the directory holding
+`scope-junit.xml` (CircleCI), or `PublishTestResults@2` with `testResultsFormat: JUnit` (Azure).
 
 ## Keeping CI costs predictable
 

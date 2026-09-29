@@ -186,7 +186,7 @@ intentionally changes quality shows the new numbers in its diff. On GitLab, Jenk
 Azure Pipelines, `scope run --junit-file` reports every case as a test result. Guide:
 [CI and regressions](docs/guides/ci.md).
 
-![Comparing two runs: direction-aware metric deltas and the cases that changed](docs/images/compare.png)
+![Comparing two runs: the parameter that changed, direction-aware metric deltas, and the case that regressed](docs/images/compare.png)
 
 ## Trace your application
 

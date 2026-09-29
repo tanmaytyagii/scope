@@ -85,6 +85,25 @@ Read [docs/architecture.md](docs/architecture.md) before larger changes. Decisio
 alternatives are recorded in [docs/decisions](docs/decisions/); propose a new ADR when you want
 to change one.
 
+## Good first contributions
+
+Self-contained gaps that exist today, each with a clear place in the code and tests to copy from.
+Open an issue before starting so two people don't build the same thing.
+
+- **CSV datasets.** `parseFile` in `packages/config/src/dataset.ts` reads JSONL, JSON and YAML;
+  CSV (a header row, one column per input, an optional `expected` column) is on the
+  [roadmap](docs/roadmap.md). Tests go next to the dataset tests in
+  `packages/config/src/workflow.test.ts`; diagnostics should name the row and column.
+- **Current prices.** `packages/core/src/pricing.ts` records every model's price with the date
+  and the page it came from. Adding a model or correcting a changed price — with the source — is a
+  one-file change covered by `packages/core/src/runs.test.ts`.
+- **Provider recipes.** `docs/guides/configuration.md` shows an Ollama endpoint. Configurations
+  for vLLM, LM Studio or OpenRouter, verified against a running server with `scope doctor
+  --network`, help the next person.
+- **A refusal evaluator.** "Refusal detection" is on the roadmap's evaluator list: a heuristic
+  evaluator that flags answers declining the question. See [Adding an evaluator](#adding-an-evaluator);
+  its documentation must say how it can be wrong.
+
 ## Common contributions
 
 ### Adding an evaluator

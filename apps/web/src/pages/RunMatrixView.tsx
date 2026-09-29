@@ -165,7 +165,7 @@ function Cases({ data }: { data: RunMatrix }) {
   return (
     <Panel
       title="Cases where the runs disagree"
-      description={`${differing} of ${pluralize(data.caseCount, 'case')} have different outcomes`}
+      description={`The outcome differs in ${differing} of ${pluralize(data.caseCount, 'case')}`}
     >
       {data.cases.length === 0 ? (
         <p className="px-4 py-6 text-sm text-fg-2">

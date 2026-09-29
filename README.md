@@ -25,7 +25,8 @@ next to your code.
   with inputs, outputs, tokens, latency and estimated cost. Instrument existing apps with the SDK.
 - **Evaluate** every output with evaluators that say how they judge: deterministic rules,
   heuristic signals, or a model's opinion. Custom evaluators are plain modules.
-- **Compare** prompts, models and parameters as variants, metric by metric and case by case.
+- **Compare** prompts, models and parameters as variants — two runs case by case, or up to four
+  side by side with the parameters that differ and the cases where they disagree.
 - **Gate** quality in CI: a pull request that lowers groundedness below your threshold fails,
   with a report of exactly which cases regressed.
 - **Keep your data**: SQLite on your laptop or PostgreSQL on your server, secrets redacted before
@@ -96,9 +97,10 @@ FAILED  run #5 · 12 cases in 18 ms
 ```
 
 The exit code is 1, so CI fails. Open the failing case and the trace explorer shows why: the
-right fact was retrieved, and the one-sentence answer dropped it.
+right fact was retrieved, and the one-sentence answer dropped it. `[` and `]` step through the
+run's other failing cases.
 
-![The trace explorer: span tree with timing, the model call's prompt and response, and evaluation results](docs/images/trace-explorer.png)
+![The trace explorer: a failing case with the run's other failures a key press away, the span tree with timing and filters, the output next to what was expected, and evaluation results](docs/images/trace-explorer.png)
 
 ## Workflows
 
@@ -139,6 +141,11 @@ Steps: `llm` (OpenAI, Anthropic, any OpenAI-compatible endpoint, offline stand-i
 `transform`, and `function` — your own JavaScript or TypeScript, whose tool calls, retrievals
 and model calls are traced too. Guide: [workflows](docs/guides/workflows.md).
 
+Each variant runs as its own run: `scope run --all-variants`, then `scope compare 3 4 5` or select
+them on the dashboard's Runs page to see them side by side.
+
+![Three variants side by side: the parameters that differ, each metric per run with the best marked, and the one case where they disagree](docs/images/side-by-side.png)
+
 ## Evaluators say how they judge
 
 | Kind | Built-in evaluators | Trust it as |
@@ -155,18 +162,24 @@ wrong. Guide: [evaluators](docs/guides/evaluators.md).
 ```yaml
 # .github/workflows/scope.yml
 on: pull_request
+permissions:
+  contents: read
+  pull-requests: write                     # for the comment
 jobs:
   evaluate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: tanmaytyagii/scope/integrations/github-action@main
+        with:
+          comment: true                    # optional: report on the pull request
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-Each workflow runs against its committed baseline; the job summary gets a report of every metric
-and regressed case, failed gates become annotations, and the job fails on a regression. Because
+Each workflow runs against its committed baseline; the job summary (and, with `comment: true`,
+one pull request comment updated on every push) gets a report of every metric and regressed
+case, failed gates become annotations, and the job fails on a regression. Because
 baselines are files, a pull request that intentionally changes quality shows the new numbers in
 its diff. Guide: [CI and regressions](docs/guides/ci.md).
 
@@ -210,7 +223,7 @@ docker exec <container> scope keys create --project support-bot --name dashboard
 
 Guide: [self-hosting](docs/guides/self-hosting.md).
 
-![A run in dark mode: gates, evaluator breakdown and per-case results](docs/images/run-dark.png)
+![A run in dark mode: its gates, and what changed against the baseline those gates compared with](docs/images/run-dark.png)
 
 ## How it is built
 

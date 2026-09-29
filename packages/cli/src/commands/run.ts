@@ -644,9 +644,9 @@ function printVariantComparison(ctx: CommandContext, results: VariantResult[]): 
       s.dim,
     ),
   );
-  out.print(
-    `  ${s.dim(`Compare in detail: scope compare ${results[0]?.run.number} ${results[1]?.run.number}`)}`,
-  );
+  // Two runs compare case by case; more go side by side (up to four).
+  const numbers = results.slice(0, 4).map((r) => r.run.number);
+  out.print(`  ${s.dim(`Compare in detail: scope compare ${numbers.join(' ')}`)}`);
   out.print('');
 }
 

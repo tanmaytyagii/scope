@@ -107,3 +107,8 @@ steps:
 Pull requests from forks get a read-only token, so there the action logs a warning and the
 report stays in the job summary; the check itself still passes or fails on the gates. The token is
 used for the comment only — it is not passed to `scope run` or the project code it runs.
+
+The comment contains exactly the job summary's report: metrics, gate results, case ids and
+evaluator reasons (which can quote parts of outputs, e.g. a missing expected phrase). Anyone who
+can read the pull request can read it, so keep `comment: false` where reports must stay within
+the Actions log.

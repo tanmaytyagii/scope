@@ -111,7 +111,8 @@ function KpiRow({ data }: { data: OverviewData }) {
                   to="/runs?gateStatus=failed"
                   className="inline-flex items-center gap-1 text-bad-fg hover:underline"
                 >
-                  <Cross size={12} /> {runs.failed} failed gates
+                  <Cross size={12} /> {runs.failed} {runs.failed === 1 ? 'run' : 'runs'} failed
+                  gates
                 </Link>
               )}
               {runs.warned > 0 && (

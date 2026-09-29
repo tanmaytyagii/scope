@@ -7,6 +7,10 @@ which are always called out).
 
 ## [Unreleased]
 
+The first published release. Version 0.1.0 was developed in the open but never published, so
+these notes cover everything in SCOPE; the Fixed section lists defects found and fixed before
+this release.
+
 ### Added
 
 - Workflow engine with `llm`, `retrieve`, `transform` and `function` steps, variants, datasets,

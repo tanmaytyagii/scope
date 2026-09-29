@@ -1,6 +1,6 @@
 # SCOPE Development Status
 
-Last updated: 2026-09-28. Keep this file current: it is how the next session knows where to
+Last updated: 2026-09-29. Keep this file current: it is how the next session knows where to
 start. Milestones are defined in [roadmap.md](./roadmap.md).
 
 ## Product Vision
@@ -40,33 +40,49 @@ source (Apache-2.0).
   themes), docs/examples verified against the running product, DX (`scope doctor` reports the
   dashboard build).
 
+- **v0.2 Product upgrade** — see [v0.2-roadmap.md](./v0.2-roadmap.md) for the audit and every
+  item's outcome. In short: CI and Action reliability (actionlint, runner tests, API tests on
+  PostgreSQL, three real bugs fixed); distribution (`scope-ai`, lockstep versions, package
+  verification, tag-driven release workflow with npm provenance and a GHCR image, `RELEASING.md`);
+  `scope run` without a path; dataset validation and a deeper `scope doctor` (`--network`);
+  failing-case navigation and span filters in the trace explorer; the baseline comparison on the
+  run page (stored per run, migration 0002); up to four runs side by side; pull-request comments
+  from the Action; measured performance ([performance.md](./performance.md)); refreshed README,
+  screenshots and guides.
+
 ## In Progress
 
 - Nothing half-done.
 
 ## Not Started
 
-- Post-v0.1 roadmap items, in order: npm publishing and tagged action releases, Python SDK,
-  OpenAI/Anthropic client auto-instrumentation, OTLP ingestion, server-side baselines,
-  pull-request comments, retention (`scope prune`), dataset tooling, more evaluators, accounts.
+- The first published release: 0.2.0 is prepared, but publishing needs the maintainer's npm
+  organization and token (one-time setup in [RELEASING.md](../RELEASING.md)), then a `v0.2.0` tag.
+- Roadmap items, in order: Python SDK, OpenAI/Anthropic client auto-instrumentation, OTLP
+  ingestion, server-side baselines, retention (`scope prune`), dataset tooling, more evaluators,
+  accounts, online evaluation, rollups at scale.
 
 ## Current Architecture
 
-See [architecture.md](./architecture.md). All packages and apps are implemented and tested.
+See [architecture.md](./architecture.md). All packages and apps are implemented and tested;
+`packages/scope-ai` is the installable wrapper around the CLI.
 
 ## Current Milestone
 
-v0.1 milestones are complete. Next: publish `@scope-ai/*` to npm (a release workflow with
-provenance) and tag the GitHub Action, so the quickstart becomes `npx @scope-ai/cli init`.
+v0.2 is complete and 0.2.0 is prepared (CHANGELOG section, versions). Next: the maintainer sets
+up npm (RELEASING.md) and pushes the `v0.2.0` tag, which publishes.
 
 ## Working Commands
 
 ```bash
-npm ci && npm run check          # lint, typecheck (incl. dashboard + e2e), 248 tests
+npm ci && npm run check          # lint, typecheck (incl. dashboard + e2e), 277 tests (+4 on PostgreSQL)
 npm run build                    # packages (tsc -b) + dashboard (vite)
-npm run smoke                    # pack all packages, install in a temp dir: init, run, ui
+npm run release:verify           # package manifests and tarball contents (after a build)
+npm run smoke                    # pack all packages, npm install scope-ai from them: init, run, ui
 npx playwright install chromium  # once
-npm run test:e2e                 # dashboard E2E (needs the dashboard built)
+npm run test:e2e                 # dashboard E2E, 34 tests (needs the dashboard built)
+npm run bench -- --traces 100000 # ingestion and API timings (docs/performance.md)
+node scripts/screenshots.mjs     # regenerate docs/images from real runs
 npm run scope -- ui              # local dashboard on 127.0.0.1:4700 (from sources)
 npm run dev:web                  # dashboard dev server, proxies /api to scope ui
 docker compose up                # demo: PostgreSQL + seeded runs + dashboard on 127.0.0.1:4700
@@ -75,8 +91,9 @@ SCOPE_TEST_DATABASE_URL=postgres://scope:scope@127.0.0.1:55432/scope_test npm te
 
 ## Known Issues
 
-- Server and E2E tests run on SQLite only; PostgreSQL coverage of queries comes from the
-  storage tests (`SCOPE_TEST_DATABASE_URL`).
+- E2E tests run on SQLite only; storage and server API tests also run on PostgreSQL when
+  `SCOPE_TEST_DATABASE_URL` is set (CI sets it).
+- A database migrated by 0.2 (migration 0002) cannot be opened by 0.1 with auto-migration.
 - Overview time buckets are aligned to UTC, so in non-whole-hour time zones (e.g. UTC+5:30)
   bucket boundaries fall at :30 local time. Correct, but slightly odd-looking.
 
@@ -85,7 +102,11 @@ SCOPE_TEST_DATABASE_URL=postgres://scope:scope@127.0.0.1:55432/scope_test npm te
 - API-key authentication does one database lookup per request (no cache).
 - The dashboard initial bundle is ~160 KB gzipped (React, React Router, TanStack Query);
   pages load on demand.
+- Time-window aggregates (overview, evaluators, models) scan their window: ~260 ms at 100,000
+  traces on SQLite ([performance.md](./performance.md)); rollups are on the roadmap.
+- The span tree is not virtualized; fine at the 1,000-span limit.
 
 ## Next Milestone
 
-Python SDK speaking the ingestion protocol (docs/guides/api.md#ingestion).
+The first published release (maintainer action), then the Python SDK speaking the ingestion
+protocol (docs/guides/api.md#ingestion).

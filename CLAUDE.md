@@ -14,6 +14,9 @@ code. Update both files when architecture or milestone state changes.
 | `docs/architecture.md` | Package boundaries, data model, API, dashboard routes, CLI, limits |
 | `docs/decisions/` | ADRs. Do not silently contradict one; write a superseding ADR instead |
 | `docs/roadmap.md` | Milestones M1–M7 and post-v0.1 work. Planned work lives here, never in the UI |
+| `docs/v0.2-roadmap.md` | The v0.2 audit, scope and outcome of each item; compatibility notes |
+| `docs/performance.md` | Measured timings and how to reproduce them (`npm run bench`) |
+| `RELEASING.md` | Versioning, the release workflow, what only the maintainer can do |
 
 ## Repository map
 
@@ -70,6 +73,9 @@ code as `*.test.ts` under `packages/*/src` and `apps/server/src`.
   2 usage/config, 3 execution/storage, 130 interrupted.
 - Never log prompt/output content — ids, sizes, counts and timings only.
 - Only `storage` knows SQL; only `server` knows HTTP; only `cli` knows terminals.
+- Migrations are append-only (`packages/storage/src/migrations.ts`), tested for upgrades from the
+  previous schema. Large per-run JSON goes in its own table (`run_comparisons`), because run
+  queries `selectAll()` and run lists must stay small.
 - API: `/api/v1`, camelCase JSON, ISO-8601 timestamps in responses, keyset pagination
   (`limit` ≤ 200, opaque `cursor`, `nextCursor`), one error envelope
   `{ error: { code, message, hint?, details?, requestId } }`. DTOs are explicit mappings.

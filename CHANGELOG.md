@@ -7,6 +7,23 @@ which are always called out).
 
 ## [Unreleased]
 
+### Security
+
+- Redaction now covers everything a trace stores, in the process that records it: span
+  attributes, event attributes, status messages, error stacks, trace metadata, and evaluation
+  reasons and evidence. Before, the SDK and `scope run` redacted only inputs, outputs and error
+  messages, so a secret set as an attribute in a `function` step (or quoted by an evaluator) was
+  stored as-is; with content capture off, error messages were not redacted at all.
+- Sensitive keys also match by their last segments: `openai_api_key`, `db.password` and
+  `http.request.header.authorization` are masked, not only exact names like `api_key`.
+- Evaluation evidence follows the content policy in `scope run` as it already did on the server:
+  with `capture_content: false` it is no longer stored.
+
+### Added
+
+- [Privacy and data](docs/guides/privacy.md): what is stored, what leaves the machine, what is
+  redacted where, and how to keep content out.
+
 ## [0.2.0] - 2026-09-29
 
 The first published release. Version 0.1.0 was developed in the open but never published, so

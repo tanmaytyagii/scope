@@ -12,7 +12,6 @@
  */
 import {
   type Attributes,
-  type AttributeValue,
   capture,
   ErrorCodes,
   type ErrorInfo,
@@ -20,6 +19,7 @@ import {
   type JsonObject,
   type JsonValue,
   type PrivacyPolicy,
+  redactAttributes as redactAttributesWith,
   redactText,
   rollupSpans,
   ScopeError,
@@ -66,15 +66,7 @@ function redact(text: string, policy: PrivacyPolicy): string {
 }
 
 function redactAttributes(attributes: Attributes, policy: PrivacyPolicy): Attributes {
-  const out: Attributes = {};
-  for (const [key, value] of Object.entries(attributes)) {
-    let next: AttributeValue = value;
-    if (typeof value === 'string') next = redact(value, policy);
-    else if (Array.isArray(value) && value.every((v) => typeof v === 'string'))
-      next = (value as string[]).map((v) => redact(v, policy));
-    out[key] = next;
-  }
-  return out;
+  return redactAttributesWith(attributes, policy).attributes;
 }
 
 function redactError(error: ErrorInfo | null, policy: PrivacyPolicy): ErrorInfo | null {

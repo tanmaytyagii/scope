@@ -6,6 +6,7 @@
  * capture entirely.
  */
 import { byteLength, isJsonObject, type JsonValue, toJsonValue } from './json.ts';
+import type { Attributes, AttributeValue } from './model.ts';
 
 export interface RedactionRule {
   name: string;
@@ -113,6 +114,43 @@ export interface PrivacyPolicy {
 function normalizeKey(key: string): string {
   return key.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
+
+/** "openai_api_key" → [openai, api, key]; "xApiKey" → [x, api, key]; "a.b-c" → [a, b, c]. */
+function keySegments(key: string): string[] {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+/**
+ * Whether a key names a secret: `exact` when the whole key is a sensitive name ("Authorization",
+ * "api_key"), `suffix` when its last segments are ("openai_api_key", "db.password",
+ * "http.request.header.authorization"). Keys that merely contain one ("max_tokens",
+ * "token_count", "tokenizer") do not match.
+ */
+export function sensitiveKeyMatch(
+  key: string,
+  policy: PrivacyPolicy = DEFAULT_PRIVACY_POLICY,
+): 'exact' | 'suffix' | null {
+  if (policy.sensitiveKeys.has(normalizeKey(key))) return 'exact';
+  const segments = keySegments(key);
+  for (let i = 1; i < segments.length; i++)
+    if (policy.sensitiveKeys.has(segments.slice(i).join(''))) return 'suffix';
+  return null;
+}
+
+/**
+ * Masks a value stored under a sensitive key. Keys matched exactly mask any scalar (as before);
+ * keys matched by suffix mask strings only, so numbers like `input_token: 12` stay readable.
+ */
+function masks(match: 'exact' | 'suffix' | null, value: unknown): boolean {
+  if (!match || value === null || typeof value === 'object') return false;
+  return match === 'exact' || typeof value === 'string';
+}
+
+export const SENSITIVE_FIELD = '[redacted:sensitive_field]';
 
 export function createPrivacyPolicy(options: PrivacyOptions = {}): PrivacyPolicy {
   const rules: RedactionRule[] = [...SECRET_RULES];
@@ -222,9 +260,9 @@ export function capture(
     if (isJsonObject(value)) {
       const out: Record<string, JsonValue> = {};
       for (const [key, v] of Object.entries(value)) {
-        if (policy.sensitiveKeys.has(normalizeKey(key)) && v !== null && typeof v !== 'object') {
+        if (masks(sensitiveKeyMatch(key, policy), v)) {
           redactions++;
-          out[key] = '[redacted:sensitive_field]';
+          out[key] = SENSITIVE_FIELD;
         } else {
           out[key] = walk(v);
         }
@@ -251,6 +289,49 @@ export function capture(
     truncated: true,
     bytes,
   };
+}
+
+/**
+ * Redacts span or event attributes. Attributes are structure, not content: they are kept even
+ * when content capture is off, so every string is redacted, and values under sensitive keys
+ * ("authorization", "*_api_key", …) are masked whatever they contain.
+ */
+export function redactAttributes(
+  attributes: Readonly<Attributes>,
+  policy: PrivacyPolicy = DEFAULT_PRIVACY_POLICY,
+): { attributes: Attributes; redactions: number } {
+  let redactions = 0;
+  const out: Attributes = {};
+  for (const [key, value] of Object.entries(attributes)) {
+    const r = redactAttributeValue(key, value, policy);
+    redactions += r.redactions;
+    out[key] = r.value;
+  }
+  return { attributes: out, redactions };
+}
+
+export function redactAttributeValue(
+  key: string,
+  value: AttributeValue,
+  policy: PrivacyPolicy = DEFAULT_PRIVACY_POLICY,
+): { value: AttributeValue; redactions: number } {
+  const match = sensitiveKeyMatch(key, policy);
+  if (typeof value === 'string') {
+    if (match) return { value: SENSITIVE_FIELD, redactions: 1 };
+    const r = redactText(value, policy);
+    return { value: r.text, redactions: r.redactions };
+  }
+  if (Array.isArray(value) && value.every((v) => typeof v === 'string')) {
+    if (match) return { value: (value as string[]).map(() => SENSITIVE_FIELD), redactions: 1 };
+    let redactions = 0;
+    const next = (value as string[]).map((v) => {
+      const r = redactText(v, policy);
+      redactions += r.redactions;
+      return r.text;
+    });
+    return { value: next, redactions };
+  }
+  return { value, redactions: 0 };
 }
 
 /** Convenience wrapper that returns only the captured value. */

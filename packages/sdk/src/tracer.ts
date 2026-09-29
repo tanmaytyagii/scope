@@ -10,6 +10,7 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import {
+  capture,
   createPrivacyPolicy,
   DEFAULT_PRIVACY_POLICY,
   type EvaluationRecord,
@@ -21,6 +22,7 @@ import {
   type PriceTable,
   type PrivacyOptions,
   type PrivacyPolicy,
+  redactText,
   rollupSpans,
   type SpanKind,
   type SpanRecord,
@@ -200,8 +202,15 @@ export class Tracer {
         state.metadata[k] = toJsonValue(v);
       },
       addEvaluation: (e) => {
+        const privacy = this.#settings.privacy;
+        const evidence = capture(e.metadata, privacy).value;
         state.evaluations.push({
           ...e,
+          // Evaluators see the unredacted output, so their reasons and evidence can quote it.
+          reason: redactText(e.reason, privacy).text,
+          // Evidence often quotes the output, so it follows the content policy.
+          metadata:
+            evidence && typeof evidence === 'object' && !Array.isArray(evidence) ? evidence : {},
           id: e.id ?? newId('ev'),
           traceId,
           runId: state.runId,
@@ -252,7 +261,9 @@ export class Tracer {
       durationMs: rootRecord.durationMs,
       input: rootRecord.input,
       output: rootRecord.output,
-      metadata: state.metadata,
+      // Metadata is structure: kept without content capture, always redacted and bounded.
+      metadata: (capture(state.metadata, { ...this.#settings.privacy, captureContent: true })
+        .value ?? {}) as JsonObject,
       error: rootRecord.error,
       usage: rollup.usage,
       costUsd: rollup.costUsd,

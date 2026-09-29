@@ -135,7 +135,8 @@ privacy:
 
 `SCOPE_CAPTURE_CONTENT=false` overrides `capture_content`. Redaction is pattern-based and
 therefore best effort; for regulated data, turn content capture off. SCOPE's own logs never
-contain prompt or output content.
+contain prompt or output content. [Privacy and data](./privacy.md) lists what is stored, what
+leaves the machine and exactly what is redacted where.
 
 ## Defaults
 

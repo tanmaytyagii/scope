@@ -483,7 +483,12 @@ describe('ingestion', () => {
           inputTokens: 10,
           outputTokens: 5,
           costUsd: null,
-          attributes: { 'http.header': 'Bearer abcdefghijklmnopqrstuvwxyz' },
+          attributes: {
+            'http.header': 'Bearer abcdefghijklmnopqrstuvwxyz',
+            // Masked by key, whatever the value looks like (a client that skips the SDK).
+            'http.request.header.authorization': 'Basic dXNlcjpwYXNz',
+            'app.openai_api_key': 'plain-value',
+          },
         }),
       ],
     });
@@ -493,7 +498,11 @@ describe('ingestion', () => {
     expect(JSON.stringify(detail.trace.input)).toContain('[redacted:anthropic_key]');
     expect(detail.trace.usage).toMatchObject({ inputTokens: 10, outputTokens: 5, totalTokens: 15 });
     expect(detail.trace.costUsd).toBeNull();
-    expect(detail.spans[1]?.attributes['http.header']).toBe('Bearer [redacted:bearer_token]');
+    expect(detail.spans[1]?.attributes).toMatchObject({
+      'http.header': 'Bearer [redacted:bearer_token]',
+      'http.request.header.authorization': '[redacted:sensitive_field]',
+      'app.openai_api_key': '[redacted:sensitive_field]',
+    });
   });
 
   it('drops content when the server does not capture it', async () => {

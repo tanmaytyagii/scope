@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { capture, createPrivacyPolicy, isTruncatedPayload, redactText } from './privacy.ts';
+import {
+  capture,
+  createPrivacyPolicy,
+  isTruncatedPayload,
+  redactAttributes,
+  redactText,
+  sensitiveKeyMatch,
+} from './privacy.ts';
 
 describe('redactText', () => {
   it.each([
@@ -128,6 +135,69 @@ describe('capture', () => {
       when: '1970-01-01T00:00:00.000Z',
       cyclic: { name: 'a', self: '[circular]' },
       err: { name: 'Error', message: 'boom' },
+    });
+  });
+});
+
+describe('sensitive keys', () => {
+  it.each([
+    ['Authorization', 'exact'],
+    ['x-api-key', 'exact'],
+    ['api_key', 'exact'],
+    ['openai_api_key', 'suffix'],
+    ['OPENAI_API_KEY', 'suffix'],
+    ['http.request.header.authorization', 'suffix'],
+    ['db.password', 'suffix'],
+    ['stripeClientSecret', 'suffix'],
+    ['csrf_token', 'suffix'],
+    ['proxy-authorization', 'suffix'],
+  ])('%s is sensitive (%s)', (key, match) => {
+    expect(sensitiveKeyMatch(key)).toBe(match);
+  });
+
+  it.each(['max_tokens', 'gen_ai.usage.input_tokens', 'token_count', 'tokenizer', 'api_key_id'])(
+    '%s is not sensitive',
+    (key) => {
+      expect(sensitiveKeyMatch(key)).toBeNull();
+    },
+  );
+
+  it('masks strings under keys that end in a sensitive name, and keeps numbers', () => {
+    expect(
+      capture({ openai_api_key: 'abc', config: { 'db.password': 'x' }, input_token: 12 }).value,
+    ).toEqual({
+      openai_api_key: '[redacted:sensitive_field]',
+      config: { 'db.password': '[redacted:sensitive_field]' },
+      input_token: 12,
+    });
+  });
+});
+
+describe('redactAttributes', () => {
+  it('masks sensitive keys, redacts secrets in values and keeps numbers and booleans', () => {
+    const { attributes, redactions } = redactAttributes({
+      'http.request.header.authorization': 'Basic dXNlcjpwYXNz',
+      'http.request.header.cookie': ['a=1', 'b=2'],
+      note: 'retry with sk-proj-abcdefghijklmnopqrstuvwxyz123456',
+      'gen_ai.usage.input_tokens': 12,
+      'scope.cache.hit': true,
+      'gen_ai.request.model': 'gpt-5',
+    });
+    expect(attributes).toEqual({
+      'http.request.header.authorization': '[redacted:sensitive_field]',
+      'http.request.header.cookie': ['[redacted:sensitive_field]', '[redacted:sensitive_field]'],
+      note: 'retry with [redacted:openai_key]',
+      'gen_ai.usage.input_tokens': 12,
+      'scope.cache.hit': true,
+      'gen_ai.request.model': 'gpt-5',
+    });
+    expect(redactions).toBe(3);
+  });
+
+  it('applies project sensitive keys to attributes too', () => {
+    const policy = createPrivacyPolicy({ sensitiveKeys: ['customer_note'] });
+    expect(redactAttributes({ 'app.customer_note': 'call me' }, policy).attributes).toEqual({
+      'app.customer_note': '[redacted:sensitive_field]',
     });
   });
 });

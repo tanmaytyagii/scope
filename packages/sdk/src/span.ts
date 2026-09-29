@@ -10,6 +10,9 @@ import {
   estimateCost,
   type PriceTable,
   type PrivacyPolicy,
+  redactAttributes,
+  redactAttributeValue,
+  redactText,
   type SpanEvent,
   type SpanKind,
   type SpanRecord,
@@ -153,7 +156,11 @@ export class SpanRecorder implements SpanHandle {
   setAttribute(key: string, value: AttributeValue | null | undefined): this {
     if (this.#ended || value === null || value === undefined) return this;
     if (typeof value === 'number' && !Number.isFinite(value)) return this;
-    this.#attributes[key] = value;
+    // Attributes are kept even without content capture, so they are always redacted here —
+    // spans written by `scope run` never pass through the server's ingestion.
+    const redacted = redactAttributeValue(key, value, this.#settings.privacy);
+    this.#redactions += redacted.redactions;
+    this.#attributes[key] = redacted.value;
     return this;
   }
 
@@ -165,7 +172,11 @@ export class SpanRecorder implements SpanHandle {
   addEvent(name: string, attributes?: Attributes): this {
     if (this.#ended) return this;
     const event: SpanEvent = { name, time: roundMs(hrNow()) };
-    if (attributes) event.attributes = attributes;
+    if (attributes) {
+      const redacted = redactAttributes(attributes, this.#settings.privacy);
+      this.#redactions += redacted.redactions;
+      event.attributes = redacted.attributes;
+    }
     this.#events.push(event);
     return this;
   }
@@ -173,16 +184,25 @@ export class SpanRecorder implements SpanHandle {
   setStatus(status: SpanStatus, message?: string): this {
     if (this.#ended) return this;
     this.#status = status;
-    this.#statusMessage = message ?? null;
+    this.#statusMessage = message === undefined ? null : this.#redact(message);
     return this;
+  }
+
+  #redact(text: string): string {
+    const r = redactText(text, this.#settings.privacy);
+    this.#redactions += r.redactions;
+    return r.text;
   }
 
   recordError(error: unknown): this {
     if (this.#ended) return this;
     const info = toErrorInfo(error, { includeStack: this.#settings.includeStacks });
-    // Error messages can quote secrets (e.g. an invalid key echoed back); redact them too.
-    const redacted = capture(info.message, this.#settings.privacy).value;
-    if (typeof redacted === 'string') info.message = redacted;
+    // Error messages can quote secrets (e.g. an invalid key echoed back). They are structure, kept
+    // even without content capture, so they are always redacted — and so is the stack, whose
+    // first line repeats the message.
+    info.message = this.#redact(info.message);
+    if (info.stack) info.stack = this.#redact(info.stack);
+    if (info.hint) info.hint = this.#redact(info.hint);
     this.#error = info;
     this.#status = 'error';
     this.#statusMessage = info.message;

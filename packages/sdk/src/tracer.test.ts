@@ -183,6 +183,68 @@ describe('Tracer', () => {
     expect(spans[1]?.attributes['scope.content.omitted']).toBe(true);
   });
 
+  it('redacts attributes, events, status messages, errors, evaluations and metadata', async () => {
+    const key = 'sk-proj-abcdefghijklmnopqrstuvwxyz123456';
+    for (const captureContent of [true, false]) {
+      const { exporter, tracer } = setup({ privacy: { captureContent }, includeStacks: true });
+      await tracer
+        .trace(
+          'call',
+          {
+            finalize: (trace) =>
+              trace.addEvaluation({
+                evaluator: 'echo',
+                type: 'regex',
+                kind: 'deterministic',
+                status: 'failed',
+                score: 0,
+                threshold: null,
+                reason: `Output contained ${key}`,
+                metadata: { match: key },
+                durationMs: 1,
+                spanId: null,
+              }),
+          },
+          async (trace) => {
+            trace.setMetadata('password', 'hunter2');
+            trace.setMetadata('note', `uses ${key}`);
+            await tracer.span('fetch', { kind: 'tool' }, (span) => {
+              span.setAttribute('openai_api_key', 'plain-value');
+              span.setAttribute('http.request.header.authorization', 'Basic dXNlcjpwYXNz');
+              span.setAttribute('url', `https://api.example.com/?key=${key}`);
+              span.setAttribute('http.response.status_code', 401);
+              span.addEvent('retry', { 'http.request.header.cookie': 'session=abc' });
+              span.setStatus('ok', `sent ${key}`);
+            });
+            throw new Error(`401 Incorrect API key provided: ${key}`);
+          },
+        )
+        .catch(() => {});
+      const bundle = exporter.bundles[0];
+      const text = JSON.stringify(bundle);
+      expect(text, `captureContent: ${captureContent}`).not.toContain(key);
+      expect(text).not.toContain('plain-value');
+      expect(text).not.toContain('hunter2');
+      expect(text).not.toContain('dXNlcjpwYXNz');
+      expect(text).not.toContain('session=abc');
+      const fetch = bundle?.spans.find((s) => s.name === 'fetch');
+      expect(fetch?.attributes).toMatchObject({
+        openai_api_key: '[redacted:sensitive_field]',
+        'http.response.status_code': 401,
+        url: 'https://api.example.com/?key=[redacted:openai_key]',
+      });
+      expect(bundle?.trace.error?.message).toBe(
+        '401 Incorrect API key provided: [redacted:openai_key]',
+      );
+      expect(bundle?.evaluations[0]?.reason).toBe('Output contained [redacted:openai_key]');
+      // Evidence is content: kept (redacted) with capture on, dropped with capture off.
+      expect(bundle?.evaluations[0]?.metadata).toEqual(
+        captureContent ? { match: '[redacted:openai_key]' } : {},
+      );
+      expect(bundle?.trace.metadata).toMatchObject({ password: '[redacted:sensitive_field]' });
+    }
+  });
+
   it('runs spans outside a trace without recording them', async () => {
     const { exporter, tracer } = setup();
     expect(await tracer.span('lonely', {}, () => 42)).toBe(42);

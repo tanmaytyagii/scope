@@ -108,6 +108,13 @@ pricing:
 A model with no known price has an **unknown** cost, shown as "unknown" — never `$0`. Run totals
 that include unpriced calls are marked incomplete. `local:*` models cost nothing.
 
+**Measured and estimated.** Token counts are what the provider reported for each call (marked
+*estimated* only where SCOPE had to count them itself, e.g. offline models). Costs are always
+estimates: reported tokens times the price in the table, which may differ from your invoice
+(discounts, batch or regional pricing, price changes). Prices are dated; one older than 180 days
+is shown as possibly out of date on the Models and Settings pages, and `scope doctor` warns about
+it for the models your workflows use. Set the current price in `pricing:` to replace it.
+
 ## Privacy
 
 Prompts and outputs often contain personal data. Before anything is stored — in the engine and

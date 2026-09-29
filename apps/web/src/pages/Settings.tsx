@@ -4,6 +4,7 @@
  * like code; the page says where each setting comes from.
  */
 
+import { isPriceStale } from '@scope-ai/core';
 import { clearApiKey, getApiKey } from '../api/client.ts';
 import { useApiKeys, useProject } from '../api/queries.ts';
 import { useTitle } from '../app/hooks.ts';
@@ -253,7 +254,12 @@ export function Settings() {
                 <TD align="right" className="text-fg-2">
                   {formatPrice(price.cacheWrite)}
                 </TD>
-                <TD className="text-fg-2">{price.asOf}</TD>
+                <TD className="text-fg-2">
+                  {price.asOf}
+                  {isPriceStale(price.asOf) && (
+                    <span className="block text-xs text-warn-fg">may be out of date</span>
+                  )}
+                </TD>
                 <TD className="max-w-60 truncate text-xs text-fg-3">
                   {/^https?:\/\//.test(price.source) ? (
                     <a

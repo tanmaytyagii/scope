@@ -138,3 +138,19 @@ export function estimateCost(
     1_000_000;
   return { usd, priceKey: lookup.key, asOf: p.asOf };
 }
+
+/** Prices older than this are shown as possibly out of date: providers change them. */
+export const PRICE_REVIEW_DAYS = 180;
+
+/** Days since a price was recorded (its `asOf` date), or null when the date is unreadable. */
+export function priceAgeDays(asOf: string, now: number = Date.now()): number | null {
+  const recorded = Date.parse(asOf);
+  if (Number.isNaN(recorded)) return null;
+  return Math.max(0, Math.floor((now - recorded) / 86_400_000));
+}
+
+/** Whether a price is old enough that it may no longer be what the provider charges. */
+export function isPriceStale(asOf: string, now: number = Date.now()): boolean {
+  const age = priceAgeDays(asOf, now);
+  return age !== null && age > PRICE_REVIEW_DAYS;
+}

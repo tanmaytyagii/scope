@@ -4,7 +4,7 @@ import { formatDelta, formatDuration, formatPercent, formatUsd } from './format.
 import { evaluateGates, gateStatus } from './gates.ts';
 import { describeMetric, readMetric } from './metrics.ts';
 import type { CaseResult, EvaluationStatus } from './model.ts';
-import { estimateCost, lookupPrice } from './pricing.ts';
+import { estimateCost, isPriceStale, lookupPrice, priceAgeDays } from './pricing.ts';
 import { percentile } from './stats.ts';
 import { summarizeRun } from './summary.ts';
 
@@ -346,6 +346,17 @@ describe('compareConfig', () => {
 });
 
 describe('pricing', () => {
+  it('knows when a price is old enough to be out of date', () => {
+    const day = 86_400_000;
+    const now = Date.parse('2026-09-30');
+    expect(priceAgeDays('2026-09-01', now)).toBe(29);
+    expect(isPriceStale('2026-06-24', now)).toBe(false);
+    expect(isPriceStale('2025-08-07', now)).toBe(true);
+    expect(isPriceStale(new Date(now - 181 * day).toISOString().slice(0, 10), now)).toBe(true);
+    expect(priceAgeDays('someday', now)).toBeNull();
+    expect(isPriceStale('someday', now)).toBe(false);
+  });
+
   it('finds exact and snapshot matches', () => {
     expect(lookupPrice('openai', 'gpt-4o').key).toBe('openai:gpt-4o');
     expect(lookupPrice('openai', 'gpt-4o-2024-08-06').key).toBe('openai:gpt-4o');

@@ -9,6 +9,12 @@ which are always called out).
 
 ### Added
 
+- Prices say when they may be out of date. A price recorded more than 180 days ago is marked on
+  the Models and Settings pages, and `scope doctor` warns about it for the models the workflows
+  use (and says when a model has no price, so its cost will be unknown). The built-in OpenAI
+  prices date from 2025-08-07. The configuration guide separates reported token counts from
+  estimated costs.
+
 - Runs record what produced them (a *manifest*, stored by migration `0003_run_manifest`): the
   SCOPE and Node.js versions and platform; SHA-256 fingerprints of every file the workflow names
   (`function` step modules, custom evaluator modules, retrieval corpora — each matched file's path

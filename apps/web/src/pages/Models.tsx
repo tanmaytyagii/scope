@@ -2,6 +2,8 @@
  * Models — "which model is slowest, most used, most expensive, and how reliable?" In-cell bars
  * compare models within each column; the table itself is the data.
  */
+
+import { isPriceStale, priceAgeDays } from '@scope-ai/core';
 import type { ModelUsage, TimeWindowName } from '@scope-ai/protocol';
 import { Link } from 'react-router';
 import { useModels } from '../api/queries.ts';
@@ -126,6 +128,11 @@ function ModelTable({
                       <span className="cursor-help">
                         {formatPrice(m.price.input)} in · {formatPrice(m.price.output)} out
                         <span className="text-fg-3"> · {m.price.asOf}</span>
+                        {isPriceStale(m.price.asOf) && (
+                          <span className="block text-warn-fg">
+                            price may be out of date ({priceAgeDays(m.price.asOf)} days old)
+                          </span>
+                        )}
                       </span>
                     </Tooltip>
                   ) : (

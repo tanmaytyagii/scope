@@ -503,6 +503,29 @@ describe('scope doctor', () => {
     expect((await scope(['init', 'doc'], dir)).code).toBe(0);
   });
 
+  it('says when a model has no price, or a price that may be out of date', async () => {
+    const priced = join(dir, 'priced');
+    expect((await scope(['init', 'priced'], dir)).code).toBe(0);
+    const file = join(priced, 'workflows', 'support.yaml');
+    writeFileSync(file, readFileSync(file, 'utf8').replace(/local:extractive/g, 'openai:gpt-5'));
+    const { checks } = await doctor(priced);
+    // The built-in OpenAI prices were recorded on 2025-08-07.
+    expect(checks).toContainEqual(
+      check(
+        'Pricing',
+        'warn',
+        /^openai:gpt-5: price recorded 2025-08-07 \(\d+ days ago\) may be out of date$/,
+      ),
+    );
+    writeFileSync(
+      file,
+      readFileSync(file, 'utf8').replace(/openai:gpt-5/g, 'openai:gpt-9-preview'),
+    );
+    expect((await doctor(priced)).checks).toContainEqual(
+      check('Pricing', 'info', 'openai:gpt-9-preview: no price, so its cost is shown as unknown'),
+    );
+  });
+
   it('checks the datasets and baselines the workflows use', async () => {
     let { checks } = await doctor();
     expect(checks).toContainEqual(

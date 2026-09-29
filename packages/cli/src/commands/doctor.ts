@@ -12,7 +12,14 @@ import {
   renderTemplate,
   resolveParams,
 } from '@scope-ai/config';
-import { errorMessage, isScopeError, SCOPE_VERSION } from '@scope-ai/core';
+import {
+  errorMessage,
+  isPriceStale,
+  isScopeError,
+  lookupPrice,
+  priceAgeDays,
+  SCOPE_VERSION,
+} from '@scope-ai/core';
 import { Engine } from '@scope-ai/engine';
 import {
   isAbortError,
@@ -343,6 +350,32 @@ export async function doctorCommand(
         if (options.network && used && d.type !== 'local')
           for (const c of await probeProvider(registry, name, models)) add(c);
       }
+    }
+    // Prices behind cost estimates: missing ones make costs unknown, old ones may be wrong.
+    for (const ref of [...new Set(modelsInUse)].sort()) {
+      const { provider, model } = parseModelRef(ref);
+      if (registry.typeOf(provider) === 'local') continue;
+      const found = lookupPrice(provider, model, project.pricing);
+      if (!found.price)
+        add({
+          area: 'Pricing',
+          status: 'info',
+          message: `${ref}: no price, so its cost is shown as unknown`,
+          hint: 'Add it under pricing: in scope.yaml if you want cost estimates.',
+        });
+      else if (isPriceStale(found.price.asOf))
+        add({
+          area: 'Pricing',
+          status: 'warn',
+          message: `${ref}: price recorded ${found.price.asOf} (${priceAgeDays(found.price.asOf)} days ago) may be out of date`,
+          hint: `Check ${found.price.source} and set the current price under pricing: in scope.yaml.`,
+        });
+      else
+        add({
+          area: 'Pricing',
+          status: 'pass',
+          message: `${ref}: price recorded ${found.price.asOf}`,
+        });
     }
     if (!options.network && [...providersInUse].some((p) => registry.typeOf(p) !== 'local'))
       add({

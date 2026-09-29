@@ -125,13 +125,21 @@ try {
   writeFileSync(
     join(sdkApp, 'trace.js'),
     [
-      "import { MemoryExporter, Tracer } from '@scope-ai/sdk';",
+      "import { instrumentOpenAI, MemoryExporter, Tracer } from '@scope-ai/sdk';",
       'const exporter = new MemoryExporter();',
       'const tracer = new Tracer({ exporter });',
       "await tracer.trace('answer', {}, () => tracer.span('llm', { kind: 'llm' }, () => 'ok'));",
       'const [bundle] = exporter.bundles;',
       "if (bundle?.spans.length !== 2) throw new Error('the installed SDK did not trace');",
       "console.log('traced', bundle.spans.length, 'spans with the installed SDK');",
+      // Instrumentation is structural: it needs no vendor SDK installed.
+      'const reply = { model: "m", choices: [{ message: { content: "hi" } }], usage: { prompt_tokens: 3, completion_tokens: 1 } };',
+      'const client = instrumentOpenAI({ chat: { completions: { create: async () => reply } } }, { tracer });',
+      "await client.chat.completions.create({ model: 'm', messages: [] });",
+      'for (let i = 0; i < 100 && exporter.bundles.length < 2; i++) await new Promise((r) => setTimeout(r, 10));',
+      'const call = exporter.bundles[1]?.spans[0];',
+      "if (call?.kind !== 'llm' || call.inputTokens !== 3) throw new Error('instrumentOpenAI did not record the call');",
+      "console.log('recorded a model call with the installed SDK');",
     ].join('\n'),
   );
   process.stdout.write(run(process.execPath, ['trace.js'], sdkApp));

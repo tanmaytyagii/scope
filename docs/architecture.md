@@ -22,19 +22,24 @@ ADRs in [decisions/](./decisions/). Product scope and vocabulary are defined in
                 │   ┌─────────┐                                              ▼                             │
                 │   │   cli   │──── run / report / compare / baseline ──▶ storage ◀── server (Hono) ◀── web │
                 │   └─────────┘                                         (SQLite │                 dashboard│
-                │                                                        or PG)  └── /api/v1 ◀── SDK HTTP  │
+                │                                                        or PG)  ├── /api/v1 ◀── SDK HTTP  │
+                │                                                                └── /v1/traces ◀── OTLP   │
                 └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Two ways data enters SCOPE:
+Three ways data enters SCOPE:
 
 1. **Workflows run by SCOPE** (`scope run`). The engine executes steps, the SDK tracer records
    spans, evaluators score each case, and the CLI persists the run.
 2. **Existing applications instrumented with the SDK.** The application creates traces with
-   `@scope-ai/sdk`; the HTTP exporter posts them to a SCOPE server (`scope ui` locally, or a
-   self-hosted server).
+   `@scope-ai/sdk` — by hand, or by wrapping its OpenAI or Anthropic client — and the HTTP
+   exporter posts them to a SCOPE server (`scope ui` locally, or a self-hosted server).
+3. **Applications instrumented with OpenTelemetry**, in any language. Their OTLP/HTTP exporter
+   posts spans to `/v1/traces`; the server maps GenAI semantic conventions (and OpenLLMetry,
+   OpenInference and Vercel AI SDK attributes) to SCOPE spans.
 
-Both paths produce identical trace records, so the dashboard and API do not distinguish them.
+All paths produce the same trace records, so the dashboard and API do not distinguish them.
+[Integrations](./integrations.md) lists each path and how it is tested.
 
 ## 2. Repository layout
 
@@ -147,8 +152,8 @@ interface SpanRecord {
 
 Model-call spans use the OpenTelemetry GenAI semantic-convention attribute names
 (`gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.response.model`,
-`gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.request.temperature`) so an
-OTLP ingestion endpoint can map spans without translation. See
+`gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.request.temperature`), so
+the OTLP endpoint (section 10) maps OpenTelemetry spans without translating the model. See
 [ADR 0003](./decisions/0003-opentelemetry-aligned-trace-model.md).
 
 ### Payloads and privacy
@@ -383,22 +388,22 @@ Custom evaluators are modules: `type: ./evaluators/refund-policy.ts` exporting
 
 ```ts
 const tracer = createTracer({ project: 'support-bot' });   // exporter chosen from env
+const openai = instrumentOpenAI(new OpenAI(), { tracer });  // model calls become llm spans
 
 await tracer.trace('answer-question', { input: { question } }, async () => {
   const docs = await tracer.span('retrieve', { kind: 'retrieval' }, () => search(question));
-  return tracer.span('generate', { kind: 'llm' }, async (span) => {
-    const res = await openai.chat.completions.create({ ... });
-    span.recordModelCall({
-      provider: 'openai',
-      model: res.model,
-      usage: { inputTokens: res.usage.prompt_tokens, outputTokens: res.usage.completion_tokens },
-    });
-    return res.choices[0].message.content;
-  });
+  const res = await openai.chat.completions.create({ ... });
+  return res.choices[0].message.content;
 });
 ```
 
 - Context propagates through `AsyncLocalStorage`; nested `span()` calls parent automatically.
+- `instrumentOpenAI` / `instrumentAnthropic` patch the client's `create()` methods in place
+  (chat completions, responses, embeddings; messages), structurally — the SDKs are not
+  dependencies. Non-streaming calls return the SDK's own promise, observed on the side; streams
+  are wrapped so each chunk passes through unchanged while the span accumulates the output.
+  Response fields are validated before use (token counts must be non-negative integers).
+  Model calls from anything else are recorded with `span.recordModelCall(...)`.
 - Exporters: `HttpExporter` (batched, bounded queue, retry with backoff, drops and counts on
   overflow — never blocks or crashes the host application), `ConsoleExporter`,
   `MemoryExporter` (tests). The engine uses a storage-backed exporter.
@@ -477,6 +482,7 @@ an unmapped field fails the test.
 | GET | `/api/v1/project` | Project, storage, privacy policy, pricing table and row counts |
 | GET | `/api/v1/api-keys` | Key metadata (name, prefix, scopes, last use); never secrets or hashes |
 | POST | `/api/v1/ingest` | Batched traces, spans and evaluations from SDKs |
+| POST | `/v1/traces` | OpenTelemetry spans (OTLP/HTTP, protobuf or JSON, optionally gzip) |
 | GET | `/healthz`, `/readyz`, `/metrics` | Liveness, readiness (database ping + migrations), Prometheus metrics |
 
 Conventions:
@@ -503,6 +509,18 @@ must name runs of the project. Before storage the server applies its own privacy
 first; the count of dropped spans is recorded in trace metadata), and recomputes token, cost and
 count rollups from the spans. Re-sent traces are ignored (idempotent per id); trace ids owned by
 another project are never overwritten and are reported as `rejectedTraces`.
+
+`POST /v1/traces` accepts OTLP/HTTP (`application/x-protobuf` or `application/json`, optionally
+`Content-Encoding: gzip`, decompressed size bounded at 4× the body limit) with the same
+authentication (`ingest` scope) and privacy policy. A minimal protobuf reader (no generated code)
+decodes requests; `otlp/map.ts` maps each span: the kind from GenAI operation names or
+OpenInference/OpenLLMetry span kinds, messages and completions into span input and output,
+tokens (cached input counted once), estimated cost from the pricing table, exceptions into span
+errors, resource attributes into trace metadata. The resource attribute `scope.project` selects
+the project where authentication allows it. Exporters send spans as they end, so a trace arrives
+over several requests: storage inserts spans idempotently and recomputes every touched trace
+from all its stored spans (root, timing, rollups, previews), within the per-trace span limit.
+Invalid spans are counted in an OTLP partial-success response rather than failing the request.
 
 ### Metrics
 
@@ -573,7 +591,8 @@ scope evaluate <run>              Re-score a stored run with the current evaluat
 scope runs [id]                   List runs or show one
 scope traces [id]                 List traces or show one as a tree
 scope compare <base> <head>       Compare two runs (IDs, #numbers or a baseline file)
-scope report [run]                Render a report (text, markdown, json)
+scope report [run]                Render a report (text, markdown, json, junit)
+scope export traces|run           Write traces (JSONL, or dataset cases) or a run's results (CSV, JSONL)
 scope baseline save [run]         Write a baseline file for CI
 scope ui [--port] [--open]        Start the local dashboard (127.0.0.1, no authentication)
 scope server [--host] [--port]    Start a server for shared deployments (API keys required)
@@ -585,7 +604,8 @@ scope version
 Global flags: `--json` (machine-readable output on stdout, diagnostics on stderr), `--cwd`,
 `--config`, `--quiet`, `--verbose`, `--no-color` (and `NO_COLOR`). Exit codes are stable and
 documented: `0` success, `1` gates failed, `2` usage or configuration error, `3` execution or
-storage error.
+storage error, `130` interrupted. `scope run --junit-file` writes a JUnit XML report (each case a
+test case, each run's gates a second suite) for CI systems other than GitHub.
 
 ## 13. GitHub integration
 
@@ -602,9 +622,14 @@ A composite action (`integrations/github-action`, documented in its README) that
    and `report`,
 5. fails the job when a `fail`-severity gate fails (exit 1) or a workflow cannot run (2 or 3).
 
-Every workflow runs even if an earlier one fails. The repository's own CI runs the action
-against a starter project twice — unchanged (must pass) and with an injected regression (must
-fail). Pull-request comments are a roadmap item.
+Every workflow runs even if an earlier one fails. With `comment: true` the reports also go to
+one pull request comment, updated on every push. The repository's own CI runs the action against
+a starter project twice — unchanged (must pass) and with an injected regression (must fail).
+
+Reports say what changed in configuration since the baseline: baseline files record their
+parameters and workflow hash (`config`), and comparisons list changed parameters and whether the
+workflow file or the dataset changed. Text that can come from models or datasets (reasons, case
+ids) is escaped so it renders as plain text in pull requests — no mentions, links or images.
 
 Baselines are committed JSON files (`scope baseline save`), so a pull request that changes
 quality shows the baseline diff for review. See
@@ -631,11 +656,14 @@ quality shows the baseline diff for review. See
 - Redaction of known secret formats in all captured payloads (section 3).
 - API keys hashed with SHA-256 (they are high-entropy random tokens, so a slow hash is not
   required), compared in constant time, scoped to one project.
-- Input validation on every API boundary with explicit body-size limits (ingest: 5 MiB).
+- Input validation on every API boundary with explicit body-size limits (ingest and OTLP:
+  5 MiB; gzip-compressed OTLP is bounded after decompression too). The OTLP decoder bounds
+  nesting depth, and mapped spans get the same field limits as the SDK ingestion schema.
 - Security headers and a strict Content-Security-Policy for the dashboard.
 - `scope ui` (no authentication) answers only requests addressed to `localhost`, `127.0.0.1` or
-  `::1` — a DNS-rebinding defense — and ingestion requires `application/json`, which a
-  cross-site page cannot send without a CORS preflight (the server sends no CORS headers).
+  `::1` — a DNS-rebinding defense — and ingestion requires `application/json` (OTLP:
+  `application/json` or `application/x-protobuf`), which a cross-site page cannot send without a
+  CORS preflight (the server sends no CORS headers).
 - `function` steps and custom evaluators execute user code from the project directory with
   the CLI's privileges — the same trust model as a test runner. This is documented, and
   SCOPE never loads code from datasets or remote sources.
@@ -646,7 +674,7 @@ quality shows the baseline diff for review. See
 | --- | --- | --- |
 | Captured payload size per field | 64 KiB | `privacy.max_payload_bytes` |
 | Spans per trace | 1,000 (excess dropped and counted) | `SCOPE_MAX_SPANS_PER_TRACE` |
-| Ingest request body | 5 MiB | `SCOPE_MAX_INGEST_BYTES` |
+| Ingest request body (SDK and OTLP) | 5 MiB (OTLP gzip: 20 MiB decompressed) | `SCOPE_MAX_INGEST_BYTES` |
 | SDK export queue | 2,048 spans, dropped with a warning when full | exporter option |
 | API page size | 50 (max 200) | per request |
 | Run concurrency | 4 | `--concurrency` / `defaults.concurrency` |

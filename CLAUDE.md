@@ -14,6 +14,8 @@ code. Update both files when architecture or milestone state changes.
 | `docs/architecture.md` | Package boundaries, data model, API, dashboard routes, CLI, limits |
 | `docs/decisions/` | ADRs. Do not silently contradict one; write a superseding ADR instead |
 | `docs/roadmap.md` | Milestones M1–M7 and post-v0.1 work. Planned work lives here, never in the UI |
+| `docs/integrations.md` | How traces get in from each stack, and how each path is tested. Claim nothing untested |
+| `docs/extensibility.md` | Extension points (evaluators, steps, providers, exporters, APIs) and their stability |
 | `docs/v0.2-roadmap.md` | The v0.2 audit, scope and outcome of each item; compatibility notes |
 | `docs/performance.md` | Measured timings and how to reproduce them (`npm run bench`) |
 | `RELEASING.md` | Versioning, the release workflow, what only the maintainer can do |
@@ -24,15 +26,17 @@ code. Update both files when architecture or milestone state changes.
 packages/core        domain model + pure logic (no deps, no I/O)
 packages/config      YAML schemas, diagnostics, templating, datasets, baselines
 packages/providers   OpenAI, Anthropic, OpenAI-compatible, offline local:* models
-packages/sdk         Tracer (AsyncLocalStorage), Memory/Console/Http exporters
+packages/sdk         Tracer (AsyncLocalStorage), exporters, OpenAI/Anthropic client instrumentation
 packages/evaluators  evaluator framework + built-ins (deterministic / heuristic / model)
 packages/engine      workflow execution (llm, retrieve, transform, function steps)
 packages/storage     Kysely store: SQLite (node:sqlite) + PostgreSQL, migrations, analytics
 packages/protocol    HTTP API contract: Zod schemas, DTO types, OpenAPI document
 packages/cli         the `scope` binary (commander)
 packages/scope-ai    `npm install -g scope-ai`: re-exports the CLI's bin
-apps/server          Hono HTTP API + dashboard hosting (`scope ui`, `scope server`)
+apps/server          Hono HTTP API, OTLP ingestion (`src/otlp/`), dashboard hosting
 apps/web             dashboard SPA (React 19, Vite, Tailwind v4, Radix, TanStack Query)
+integrations/        GitHub Action (composite; self-tested in CI)
+examples/            runnable examples; examples/examples.test.ts runs each as its README says
 ```
 
 Dependency direction: `cli → server → storage, protocol → core`; `cli → engine → {evaluators,
@@ -60,8 +64,11 @@ SCOPE_TEST_DATABASE_URL=postgres://… npm test   # also run storage/server test
 To look at the dashboard: `npm run build -w @scope-ai/web`, then `npm run scope -- ui` in a
 project (e.g. one made with `scope init`). Screenshot pages with Playwright to review design.
 
-Sources run directly on Node (`--conditions=scope-source`, erasable TS only). Tests live next to
-code as `*.test.ts` under `packages/*/src` and `apps/server/src`.
+Sources run directly on Node (`--conditions=scope-source`, erasable TS only; the condition is not
+`source` because third-party packages publish that one). Tests live next to code as `*.test.ts`
+under `packages/*/src` and `apps/server/src`, plus `examples/` and `integrations/`.
+`npm run bench` measures ingestion (SDK and OTLP) and API timings; record results in
+`docs/performance.md`.
 
 ## Conventions
 
@@ -81,7 +88,15 @@ code as `*.test.ts` under `packages/*/src` and `apps/server/src`.
   `{ error: { code, message, hint?, details?, requestId } }`. DTOs are explicit mappings.
 - Ingestion (`POST /api/v1/ingest`, header `scope-protocol: 1`) accepts the SDK wire format:
   `{ project?, traces: TraceRecord[], spans: SpanRecord[], evaluations: EvaluationRecord[] }`
-  with epoch-millisecond numbers.
+  with epoch-millisecond numbers. `POST /v1/traces` accepts OTLP/HTTP (protobuf or JSON, gzip);
+  spans of one trace may arrive over many requests, so storage recomputes touched traces from
+  all their stored spans (`ingestSpans`). Both paths redact with the server's policy.
+- Span queries select by `trace_id` (the primary key), without `project_id` conditions next to
+  trace ids: on SQLite those pick the `(project_id, model, start_time)` index and scan the whole
+  project (see `docs/performance.md`).
+- Treat model output, provider responses and ingested attributes as untrusted: validate numbers
+  (token counts are non-negative integers), bound sizes, and render text in Markdown reports
+  with `mdText`/`mdCode` (no mentions, links or images in pull requests).
 - Dashboard (`apps/web`): tokens in `src/styles.css` (light-dark(), no raw hex in components),
   primitives in `src/ui/`, charts in `src/charts/` (every chart has a table twin), filters in
   the URL (`useUrlState`), types only from `@scope-ai/protocol`, formatting from

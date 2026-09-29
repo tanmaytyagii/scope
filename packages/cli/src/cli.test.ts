@@ -508,13 +508,18 @@ describe('scope doctor', () => {
     expect((await scope(['init', 'priced'], dir)).code).toBe(0);
     const file = join(priced, 'workflows', 'support.yaml');
     writeFileSync(file, readFileSync(file, 'utf8').replace(/local:extractive/g, 'openai:gpt-5'));
+    // A project price recorded long ago.
+    const config = join(priced, 'scope.yaml');
+    writeFileSync(
+      config,
+      `${readFileSync(config, 'utf8')}\npricing:\n  openai:gpt-5:\n    input: 1.25\n    output: 10\n    as_of: "2024-01-01"\n    source: https://example.com/pricing\n`,
+    );
     const { checks } = await doctor(priced);
-    // The built-in OpenAI prices were recorded on 2025-08-07.
     expect(checks).toContainEqual(
       check(
         'Pricing',
         'warn',
-        /^openai:gpt-5: price recorded 2025-08-07 \(\d+ days ago\) may be out of date$/,
+        /^openai:gpt-5: price recorded 2024-01-01 \(\d+ days ago\) may be out of date$/,
       ),
     );
     writeFileSync(

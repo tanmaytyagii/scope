@@ -102,7 +102,7 @@ pricing:
     output: 10
     cache_read: 0.125
     as_of: "2026-09-01"
-    source: https://openai.com/api/pricing
+    source: https://developers.openai.com/api/docs/pricing
 ```
 
 A model with no known price has an **unknown** cost, shown as "unknown" — never `$0`. Run totals

@@ -24,8 +24,9 @@ export interface ModelPrice {
 
 const ANTHROPIC_SOURCE = 'https://www.anthropic.com/pricing';
 const ANTHROPIC_AS_OF = '2026-06-24';
-const OPENAI_SOURCE = 'https://openai.com/api/pricing';
-const OPENAI_AS_OF = '2025-08-07';
+// Checked against this page on 2026-09-30: unchanged since the 2025-08-07 entries.
+const OPENAI_SOURCE = 'https://developers.openai.com/api/docs/pricing';
+const OPENAI_AS_OF = '2026-09-30';
 
 /** Derived prices are rounded so they read as the published figures (3 × 0.1 is not 0.30000000000000004). */
 const perMillion = (usd: number) => Math.round(usd * 1e6) / 1e6;

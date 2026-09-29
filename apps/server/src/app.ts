@@ -78,12 +78,17 @@ export function createApp(options: AppOptions): ScopeApp {
     metrics.httpRequests.inc({ method: c.req.method, route, status });
     metrics.httpDuration.observe({ method: c.req.method, route }, durationMs / 1000);
     if (route !== 'dashboard' || c.res.status >= 400) {
+      // Which key acted on which project (the key's id, never the key): an audit trail.
+      const key = c.get('apiKey');
+      const project = c.get('project');
       deps.logger.info('request', {
         method: c.req.method,
         route,
         status: c.res.status,
         durationMs: Math.round(durationMs * 10) / 10,
         requestId: c.get('requestId'),
+        ...(project ? { project: project.slug } : {}),
+        ...(key ? { keyId: key.id } : {}),
       });
     }
   });

@@ -77,7 +77,10 @@ export function createApp(options: AppOptions): ScopeApp {
     const status = String(c.res.status);
     metrics.httpRequests.inc({ method: c.req.method, route, status });
     metrics.httpDuration.observe({ method: c.req.method, route }, durationMs / 1000);
-    if (route !== 'dashboard' || c.res.status >= 400) {
+    // Successful health checks (every few seconds from an orchestrator) are counted in the
+    // metrics but not logged; failures are.
+    const probe = route === '/healthz' || route === '/readyz';
+    if ((route !== 'dashboard' && !probe) || c.res.status >= 400) {
       // Which key acted on which project (the key's id, never the key): an audit trail.
       const key = c.get('apiKey');
       const project = c.get('project');

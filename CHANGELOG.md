@@ -37,7 +37,9 @@ which are always called out).
   deploying, monitoring, upgrades, backups, retention and key rotation; the
   [API guide](docs/guides/api.md#stability-and-deprecation) states which interfaces are stable and
   how they are deprecated.
-- Request logs name the project and the API key id behind each request.
+- Request logs name the project and the API key id behind each request, including requests the
+  key's scopes refuse. Health checks that pass are counted in the metrics but no longer logged
+  (an orchestrator's every-few-seconds probe buried the real requests).
 - Retention. `scope prune --older-than 30d` deletes runs (with their traces) and application
   traces that started before a date or age; `--run` and `--trace` delete one; `--only`,
   `--project` and `--all-projects` narrow or widen it. Without `--yes` it only says what it would

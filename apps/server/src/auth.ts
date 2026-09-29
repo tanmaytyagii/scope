@@ -50,6 +50,8 @@ export function requireAccess(deps: Deps, access: RouteAccess): MiddlewareHandle
         hint: KEY_HINT,
       });
     }
+    // Known from here on, so the request log names the key even when it is refused.
+    c.set('apiKey', key);
     if (!key.scopes.includes(access)) {
       throw new ScopeError(
         ErrorCodes.forbidden,

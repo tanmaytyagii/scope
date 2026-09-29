@@ -240,6 +240,15 @@ it('refuses to write into another project with a key', async () => {
 });
 
 it('logs which key and project each request used, never the key', async () => {
+  const readKey = (
+    await store.createApiKey(
+      (
+        await store.getProjectBySlug('project-b')
+      )?.id as string,
+      'read-only',
+      ['read'],
+    )
+  ).secret;
   const raw: string[] = [];
   const logger = createLogger({ level: 'info', format: 'json', write: (line) => raw.push(line) });
   const { app: logged } = createApp({ store, auth: { mode: 'api-key' }, logger });
@@ -247,5 +256,17 @@ it('logs which key and project each request used, never the key', async () => {
   const lines = raw.map((line) => JSON.parse(line) as Record<string, unknown>);
   const request = lines.find((l) => l.msg === 'request');
   expect(request).toMatchObject({ project: 'project-b', keyId: expect.stringMatching(/^key_/) });
+  // A refused request names its key too; health checks that pass are not logged.
+  await logged.request(`${API_BASE}/ingest`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${readKey}`, 'content-type': 'application/json' },
+    body: '{"traces":[],"spans":[],"evaluations":[]}',
+  });
+  await logged.request('/healthz');
+  const after = raw.map((line) => JSON.parse(line) as Record<string, unknown>);
+  expect(after.find((l) => l.status === 403)).toMatchObject({
+    keyId: expect.stringMatching(/^key_/),
+  });
+  expect(after.some((l) => l.route === '/healthz')).toBe(false);
   expect(raw.join('\n')).not.toContain(keys.b);
 });

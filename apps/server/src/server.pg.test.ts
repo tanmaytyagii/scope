@@ -35,10 +35,8 @@ describe.runIf(url)('API on PostgreSQL', () => {
     store = await Store.open(withSearchPath(url as string, SCHEMA));
     const project = await store.ensureProject('demo');
     const root = writeProject();
-    runs = [
-      await runWorkflow(store, project, root),
-      await runWorkflow(store, project, root, 'terse'),
-    ];
+    const first = await runWorkflow(store, project, root);
+    runs = [first, await runWorkflow(store, project, root, 'terse', first)];
     ({ app } = createApp({ store, auth: { mode: 'none', defaultProject: project } }));
   });
 
@@ -59,6 +57,7 @@ describe.runIf(url)('API on PostgreSQL', () => {
     const concrete: Record<string, string> = {
       '/runs/{run}': `/runs/${first.number}`,
       '/runs/{run}/cases': `/runs/${first.id}/cases`,
+      '/runs/{run}/baseline-comparison': `/runs/${second.number}/baseline-comparison`,
       '/comparisons': `/comparisons?base=${first.number}&head=${second.number}`,
       '/traces/{trace}': `/traces/${list.items[0]?.id}`,
       '/workflows/{workflow}': '/workflows/support',

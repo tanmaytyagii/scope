@@ -146,6 +146,14 @@ export interface EvaluationsTable {
   created_at: number;
 }
 
+export interface RunComparisonsTable {
+  run_id: string;
+  project_id: string;
+  baseline: JsonColumn;
+  comparison: JsonColumn;
+  created_at: number;
+}
+
 export interface Database {
   projects: ProjectsTable;
   api_keys: ApiKeysTable;
@@ -155,4 +163,5 @@ export interface Database {
   traces: TracesTable;
   spans: SpansTable;
   evaluations: EvaluationsTable;
+  run_comparisons: RunComparisonsTable;
 }

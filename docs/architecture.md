@@ -433,7 +433,13 @@ spans           (trace_id, id) primary key, trace_id → traces (cascade), paren
 evaluations     id, project_id, trace_id → traces (cascade), run_id, span_id, evaluator, type,
                 kind, status, score, threshold, reason, metadata, duration_ms, created_at
                 index (run_id, evaluator), (project_id, evaluator, created_at), (trace_id)
+run_comparisons run_id → runs (cascade, primary key), project_id, baseline (json),
+                comparison (json: metric deltas, counts, up to 500 changed cases), created_at
 ```
+
+`run_comparisons` (migration `0002`) keeps what a run's regression gates compared against when
+it ran. The baseline file may have been saved on another machine, from a run that is not in this
+database, so the comparison cannot be recomputed later; run lists never load it.
 
 Conventions: timestamps are epoch milliseconds — `bigint` for records, `double precision` for
 trace and span times so spans that start within the same millisecond keep their order. JSON is
@@ -459,6 +465,7 @@ an unmapped field fails the test.
 | GET | `/api/v1/runs` | List runs (filter: workflow, variant, status, gateStatus; keyset pagination) |
 | GET | `/api/v1/runs/{run}` | Run detail with summary, gates and evaluator breakdown (`{run}`: id or number) |
 | GET | `/api/v1/runs/{run}/cases` | Per-case results (filter: outcome, failing evaluator, `q`) |
+| GET | `/api/v1/runs/{run}/baseline-comparison` | The run next to its baseline file as compared when it ran: metric deltas, changed cases |
 | GET | `/api/v1/comparisons?base=&head=` | Compare two runs; unchanged cases only with `includeUnchanged=true` |
 | GET | `/api/v1/traces` | List traces (filter: run, name, status, eval, model, case, `q`, time; sort; pagination) |
 | GET | `/api/v1/traces/{trace}` | Trace with spans (with `offsetMs` from trace start) and evaluations |

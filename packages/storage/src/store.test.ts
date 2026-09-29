@@ -4,8 +4,10 @@ import { join } from 'node:path';
 import { isScopeError, type TraceBundle } from '@scope-ai/core';
 import { MemoryExporter, Tracer } from '@scope-ai/sdk';
 import { sql } from 'kysely';
+import { Migrator } from 'kysely/migration';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parseStorageUrl } from './dialects.ts';
+import { ScopeMigrations } from './migrations.ts';
 import { Store } from './store.ts';
 
 /** Builds realistic trace bundles with the real tracer. */
@@ -96,7 +98,10 @@ function storeSuite(label: string, url: () => string, reset?: (store: Store) => 
     });
 
     it('applies migrations once and reports state', async () => {
-      expect(await store.migrationState()).toEqual({ applied: ['0001_initial'], pending: [] });
+      expect(await store.migrationState()).toEqual({
+        applied: ['0001_initial', '0002_run_comparisons'],
+        pending: [],
+      });
       expect(await store.migrate()).toEqual([]);
       expect((await store.ensureProject('acme')).id).toBe(projectId);
     });
@@ -337,6 +342,46 @@ function storeSuite(label: string, url: () => string, reset?: (store: Store) => 
       ).toBe(runId);
     });
 
+    it('stores the comparison with the baseline, apart from the run', async () => {
+      expect(await store.getBaselineComparison(projectId, runId)).toBeNull();
+      const snapshot = { outcome: 'passed' as const, durationMs: 1, traceId: null, evaluators: {} };
+      const change = (i: number, kind: 'regressed' | 'unchanged') => ({
+        caseId: `c${String(i).padStart(3, '0')}`,
+        kind,
+        base: snapshot,
+        head: {
+          ...snapshot,
+          outcome: kind === 'regressed' ? ('failed' as const) : ('passed' as const),
+        },
+        evaluators: [],
+      });
+      const baseline = {
+        file: 'baselines/support.json',
+        runId: 'run_01',
+        runNumber: 1,
+        commit: 'abc1234',
+        createdAt: '2026-09-01T00:00:00.000Z',
+      };
+      const counts = { regressed: 600, fixed: 0, changed: 0, unchanged: 5, added: 0, removed: 0 };
+      await store.saveBaselineComparison(projectId, {
+        runId,
+        baseline,
+        metrics: [],
+        counts,
+        cases: [
+          ...Array.from({ length: 5 }, (_, i) => change(i, 'unchanged')),
+          ...Array.from({ length: 600 }, (_, i) => change(i + 5, 'regressed')),
+        ],
+      });
+      const stored = await store.getBaselineComparison(projectId, runId);
+      expect(stored).toMatchObject({ runId, baseline, counts, omittedCases: 100 });
+      expect(stored?.cases).toHaveLength(500);
+      expect(stored?.cases.every((c) => c.kind === 'regressed')).toBe(true);
+      expect(await store.getBaselineComparison(otherProjectId, runId)).toBeNull();
+      // Run lists never carry it.
+      expect(Object.keys((await store.getRun(projectId, runId)) ?? {})).not.toContain('cases');
+    });
+
     it('re-scores a trace by replacing its evaluations', async () => {
       const { items } = await store.listTraces(projectId, { caseId: 'c2' });
       const traceId = items[0]?.id as string;
@@ -438,8 +483,8 @@ function storeSuite(label: string, url: () => string, reset?: (store: Store) => 
       expect(await store.authenticateApiKey(secret)).toBeNull();
     });
 
-    it('cascades run deletion to traces, spans and evaluations', async () => {
-      const count = async (table: 'traces' | 'spans' | 'evaluations') =>
+    it('cascades run deletion to traces, spans, evaluations and comparisons', async () => {
+      const count = async (table: 'traces' | 'spans' | 'evaluations' | 'run_comparisons') =>
         Number(
           (
             await store.db
@@ -453,6 +498,7 @@ function storeSuite(label: string, url: () => string, reset?: (store: Store) => 
       expect(await count('traces')).toBe(0);
       expect(await count('spans')).toBe(0);
       expect(await count('evaluations')).toBe(0);
+      expect(await count('run_comparisons')).toBe(0);
     });
   });
 }
@@ -491,6 +537,29 @@ describe('storage urls and errors', () => {
       /^Unable to connect to PostgreSQL at postgres:\/\/scope:\*\*\*@127.0.0.1:9\/nope/,
     );
     expect(error.hint).toContain('SCOPE_DATABASE_URL');
+  });
+
+  it('upgrades a database created by an earlier version', async () => {
+    const url = `sqlite:${join(mkdtempSync(join(tmpdir(), 'scope-upgrade-')), 'scope.db')}`;
+    const old = await Store.open(url, { autoMigrate: false });
+    const migrations = await new ScopeMigrations('sqlite').getMigrations();
+    const { error } = await new Migrator({
+      db: old.db,
+      provider: { getMigrations: async () => ({ '0001_initial': migrations['0001_initial'] }) },
+      migrationTableName: 'scope_migrations',
+      migrationLockTableName: 'scope_migrations_lock',
+    } as ConstructorParameters<typeof Migrator>[0]).migrateToLatest();
+    expect(error).toBeUndefined();
+    const project = await old.ensureProject('legacy');
+    await old.close();
+
+    const store = await Store.open(url);
+    expect(await store.migrationState()).toEqual({
+      applied: ['0001_initial', '0002_run_comparisons'],
+      pending: [],
+    });
+    expect((await store.ensureProject('legacy')).id).toBe(project.id);
+    await store.close();
   });
 
   it('opens an in-memory database', async () => {

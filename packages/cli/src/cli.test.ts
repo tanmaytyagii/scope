@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SCOPE_VERSION } from '@scope-ai/core';
+import { Store } from '@scope-ai/storage';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 const BIN = resolve(fileURLToPath(new URL('.', import.meta.url)), 'bin.ts');
@@ -261,6 +262,20 @@ describe('scope run → inspect → baseline → regression', () => {
     expect(regressed.stdout).toMatch(/regressed/);
     expect(regressed.stdout).toMatch(/dropped more than the allowed 5\.0 pp/);
 
+    // The comparison the gates used is stored with the run, for the dashboard.
+    const store = await Store.open(`sqlite:${join(project, '.scope', 'scope.db')}`);
+    try {
+      const row = await store.ensureProject('demo');
+      const run = await store.latestRun(row.id, { workflow: 'support' });
+      expect(run?.baseline).toMatchObject({ file: 'baselines/support.json', runNumber: 1 });
+      expect(run?.baseline?.runId).toMatch(/^run_/);
+      const stored = await store.getBaselineComparison(row.id, run?.id as string);
+      expect(stored?.counts.regressed).toBeGreaterThan(0);
+      expect(stored?.cases[0]?.kind).toBe('regressed');
+    } finally {
+      await store.close();
+    }
+
     const allowed = await scope(['run', 'workflows/support.yaml', '--no-fail'], project);
     expect(allowed.code).toBe(0);
   });
@@ -291,6 +306,26 @@ describe('scope run → inspect → baseline → regression', () => {
     const md = await scope(['report', '4', '--format', 'markdown'], project);
     expect(md.stdout).toContain('### ❌ SCOPE · support — failed');
     expect(md.stdout).toContain('| Metric | Baseline | Current | Change | Gate |');
+
+    // Replacing the baseline file later does not rewrite history: the report shows what the
+    // run's gates compared against.
+    const file = join(project, 'baselines', 'support.json');
+    const original = readFileSync(file, 'utf8');
+    try {
+      expect((await scope(['baseline', 'save', '4', '--force'], project)).code).toBe(0);
+      const later = await scope(['report', '4', '--format', 'json'], project);
+      const report = JSON.parse(later.stdout);
+      expect(report.baseline).toMatchObject({ runNumber: 1 });
+      expect(report.comparison.counts.regressed).toBeGreaterThan(0);
+      // An explicit --baseline still compares with that file.
+      const explicit = await scope(
+        ['report', '4', '--format', 'json', '--baseline', 'baselines/support.json'],
+        project,
+      );
+      expect(JSON.parse(explicit.stdout).baseline).toMatchObject({ runNumber: 4 });
+    } finally {
+      writeFileSync(file, original);
+    }
     const out = join(project, 'summary.md');
     await scope(
       ['run', 'workflows/support.yaml', '--no-fail', '--summary-file', out, '-q'],

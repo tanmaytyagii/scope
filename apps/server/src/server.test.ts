@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { createPrivacyPolicy, isScopeError, SCOPE_VERSION } from '@scope-ai/core';
 import {
   API_BASE,
+  type Run as ApiRun,
+  type BaselineComparison,
   ErrorBody,
   ROUTES,
   type RunCasePage,
@@ -28,10 +30,9 @@ beforeAll(async () => {
   const root = writeProject();
   store = await Store.open(`sqlite:${join(root, '.scope', 'scope.db')}`);
   project = await store.ensureProject('demo');
-  runs = [
-    await runWorkflow(store, project, root),
-    await runWorkflow(store, project, root, 'terse'),
-  ];
+  const first = await runWorkflow(store, project, root);
+  // The terse variant, compared with a baseline saved from the first run.
+  runs = [first, await runWorkflow(store, project, root, 'terse', first)];
   ({ app } = createApp({ store, auth: { mode: 'none', defaultProject: project } }));
 });
 
@@ -108,6 +109,7 @@ describe('contract', () => {
     const concrete: Record<string, string> = {
       '/runs/{run}': `/runs/${first.number}`,
       '/runs/{run}/cases': `/runs/${first.id}/cases`,
+      '/runs/{run}/baseline-comparison': `/runs/${second.number}/baseline-comparison`,
       '/comparisons': `/comparisons?base=${first.number}&head=${second.number}`,
       '/traces/{trace}': `/traces/${traceId}`,
       '/workflows/{workflow}': '/workflows/support',
@@ -273,6 +275,30 @@ describe('traces', () => {
     expect(llm).toMatchObject({ provider: 'local', model: 'extractive' });
     expect(detail.evaluations.map((e) => e.evaluator)).toEqual(['grounded', 'key_facts']);
     expect(detail.trace.metadata.expected).toEqual(['5 to 7 business days']);
+  });
+
+  it('returns the comparison a run made with its baseline', async () => {
+    const [first, second] = runs as [Run, Run];
+    const { status, body } = await get(`${API_BASE}/runs/${second.number}/baseline-comparison`);
+    expect(status).toBe(200);
+    const data = body as unknown as BaselineComparison;
+    expect(data.run).toMatchObject({ number: second.number, variant: 'terse' });
+    expect(data.baseline).toMatchObject({ file: 'baselines/support.json', runId: first.id });
+    expect(data.baselineRun).toEqual({ id: first.id, number: first.number });
+    expect(data.headline[0]).toBe('pass_rate');
+    // Every case is counted; only the changed ones are listed.
+    const counted = Object.values(data.counts).reduce((a, b) => a + b, 0);
+    expect(counted).toBe(5);
+    expect(data.cases).toHaveLength(counted - data.counts.unchanged);
+    expect(data.cases.map((c) => c.kind)).not.toContain('unchanged');
+    expect(data.omittedCases).toBe(0);
+    // The run itself names its baseline's source run by id.
+    const run = (await get(`${API_BASE}/runs/${second.number}`)).body as unknown as ApiRun;
+    expect(run.baseline).toMatchObject({ runId: first.id, runNumber: first.number });
+
+    const none = await get(`${API_BASE}/runs/${first.number}/baseline-comparison`);
+    expect(none.status).toBe(404);
+    expect((none.body.error as { hint: string }).hint).toContain('scope baseline save');
   });
 
   it('places each case among the failing cases of its run', async () => {

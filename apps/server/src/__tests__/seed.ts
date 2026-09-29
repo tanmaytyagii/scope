@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { loadDataset, loadWorkflow, prepareCases } from '@scope-ai/config';
-import { evaluateGates, gateStatus, summarizeRun } from '@scope-ai/core';
+import { compareRuns, evaluateGates, gateStatus, snapshotCase, summarizeRun } from '@scope-ai/core';
 import { Engine, toCaseResult } from '@scope-ai/engine';
 import type { Project, Run, Store } from '@scope-ai/storage';
 
@@ -93,12 +93,17 @@ export function writeProject(): string {
   return root;
 }
 
-/** Runs the workflow once per variant and stores each run, like `scope run --variant`. */
+/**
+ * Runs the workflow once per variant and stores each run, like `scope run --variant`. With
+ * `baselineOf`, the run is compared with that run as its baseline, as `scope run` does with a
+ * baseline file saved from it.
+ */
 export async function runWorkflow(
   store: Store,
   project: Project,
   root: string,
   variant: string | null = null,
+  baselineOf: Run | null = null,
 ): Promise<Run> {
   const loaded = loadWorkflow(resolve(root, 'workflows/support.yaml'), { root, env: {} });
   const engine = new Engine({
@@ -142,18 +147,42 @@ export async function runWorkflow(
     },
     git: null,
     trigger: 'cli',
-    baseline: null,
+    baseline: baselineOf
+      ? {
+          file: 'baselines/support.json',
+          runId: baselineOf.id,
+          runNumber: baselineOf.number,
+          commit: null,
+          createdAt: new Date(baselineOf.endedAt ?? baselineOf.startedAt).toISOString(),
+        }
+      : null,
     caseCount: cases.length,
   });
   const result = await engine.run(prepared, cases, { runId: run.id });
-  const summary = summarizeRun(result.executions.map(toCaseResult), {
+  const results = result.executions.map(toCaseResult);
+  const summary = summarizeRun(results, {
     evaluatorOrder: prepared.evaluators.map((e) => e.name),
   });
-  const gates = evaluateGates(summary, prepared.gates, null);
-  return store.completeRun(run.id, {
+  const gates = evaluateGates(summary, prepared.gates, baselineOf?.summary ?? null);
+  const completed = await store.completeRun(run.id, {
     status: 'completed',
     summary,
     gates,
     gateStatus: gateStatus(gates),
   });
+  if (baselineOf?.summary && completed.baseline) {
+    const comparison = compareRuns(
+      {
+        summary: baselineOf.summary,
+        cases: await store.runCaseSnapshots(project.id, baselineOf.id),
+      },
+      { summary, cases: Object.fromEntries(results.map((r) => [r.caseId, snapshotCase(r)])) },
+    );
+    await store.saveBaselineComparison(project.id, {
+      runId: run.id,
+      baseline: completed.baseline,
+      ...comparison,
+    });
+  }
+  return completed;
 }

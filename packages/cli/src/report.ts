@@ -26,11 +26,26 @@ import type { Run } from '@scope-ai/storage';
 import { plainStyle, type Style, type Symbols, symbols } from './ui/style.ts';
 import { renderTable } from './ui/table.ts';
 
+/** The baseline a run was compared with, as reports describe it. */
+export interface ReportBaseline {
+  runNumber: number;
+  commit: string | null;
+  createdAt: string;
+}
+
+export function reportBaseline(baseline: Baseline): ReportBaseline {
+  return {
+    runNumber: baseline.source.runNumber,
+    commit: baseline.source.git?.commit ?? null,
+    createdAt: baseline.createdAt,
+  };
+}
+
 export interface ReportInput {
   run: Run;
   summary: RunSummary;
   gates: GateResult[];
-  baseline: Baseline | null;
+  baseline: ReportBaseline | null;
   /** Per-case comparison against the baseline, when both have case data. */
   comparison: Comparison | null;
   /** Failing cases to list (already limited by the caller). */
@@ -257,7 +272,7 @@ export function renderMarkdown(input: ReportInput): string {
     `${summary.cases.total} cases`,
     run.git?.commit ? `commit \`${run.git.commit.slice(0, 7)}\`` : null,
     baseline
-      ? `baseline: run #${baseline.source.runNumber}${baseline.source.git?.commit ? ` (\`${baseline.source.git.commit.slice(0, 7)}\`)` : ''}, ${formatRelativeTime(Date.parse(baseline.createdAt))}`
+      ? `baseline: run #${baseline.runNumber}${baseline.commit ? ` (\`${baseline.commit.slice(0, 7)}\`)` : ''}, ${formatRelativeTime(Date.parse(baseline.createdAt))}`
       : 'no baseline',
   ].filter(Boolean);
   lines.push('', `<sub>${facts.join(' · ')}</sub>`, '');
@@ -447,13 +462,7 @@ export function reportJson(input: ReportInput) {
     },
     summary: input.summary,
     gates: input.gates,
-    baseline: input.baseline
-      ? {
-          runNumber: input.baseline.source.runNumber,
-          commit: input.baseline.source.git?.commit ?? null,
-          createdAt: input.baseline.createdAt,
-        }
-      : null,
+    baseline: input.baseline,
     comparison: input.comparison
       ? {
           metrics: input.comparison.metrics,

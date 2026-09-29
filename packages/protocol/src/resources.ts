@@ -117,6 +117,22 @@ export const RunRef = z.strictObject({
   number: z.number().int(),
 });
 
+export const BaselineRef = z
+  .strictObject({
+    file: z.string(),
+    runId: z
+      .string()
+      .nullable()
+      .describe('Id of the run the baseline was saved from; null for runs before SCOPE 0.2.'),
+    runNumber: z
+      .number()
+      .int()
+      .describe('Number of that run in the database it was saved from, possibly another one.'),
+    commit: z.string().nullable(),
+    createdAt: z.string(),
+  })
+  .register(components, { id: 'BaselineRef' });
+
 export const Run = z
   .strictObject({
     id: z.string(),
@@ -130,15 +146,9 @@ export const Run = z
     params: JsonObject,
     dataset: DatasetInfo.nullable(),
     git: GitInfo.nullable(),
-    baseline: z
-      .strictObject({
-        file: z.string(),
-        runNumber: z.number().int(),
-        commit: z.string().nullable(),
-        createdAt: z.string(),
-      })
-      .nullable()
-      .describe('The baseline file regression gates compared against, if any.'),
+    baseline: BaselineRef.nullable().describe(
+      'The baseline file regression gates compared against, if any.',
+    ),
     caseCount: z.number().int(),
     passRate: z.number().nullable(),
     summary: RunSummary.nullable(),
@@ -178,6 +188,34 @@ export const RunCase = z
   .register(components, { id: 'RunCase' });
 
 export const RunCasePage = pageOf(RunCase, 'RunCasePage');
+
+/**
+ * How a run compared with its baseline file when it ran — the comparison its regression gates
+ * used. Stored with the run, because the baseline may come from another machine's database.
+ */
+export const BaselineComparison = z
+  .strictObject({
+    run: RunRef.extend({ workflow: z.string(), variant: z.string().nullable() }),
+    baseline: BaselineRef,
+    baselineRun: RunRef.nullable().describe(
+      'The run the baseline was saved from, when it is in this project.',
+    ),
+    metrics: z.array(MetricDelta),
+    headline: z
+      .array(z.string())
+      .describe('Ids of the metrics worth showing first, in display order.'),
+    counts: z.strictObject({
+      regressed: z.number().int(),
+      fixed: z.number().int(),
+      changed: z.number().int(),
+      unchanged: z.number().int(),
+      added: z.number().int(),
+      removed: z.number().int(),
+    }),
+    cases: z.array(CaseChange).describe('Changed cases, worst first.'),
+    omittedCases: z.number().int().describe('Changed cases not stored (beyond the first 500).'),
+  })
+  .register(components, { id: 'BaselineComparison' });
 
 export const ComparisonSide = z.strictObject({
   run: RunRef.extend({ workflow: z.string(), variant: z.string().nullable() }),
@@ -554,6 +592,7 @@ export type SpanEvent = z.output<typeof SpanEvent>;
 export type Span = z.output<typeof Span>;
 export type Evaluation = z.output<typeof Evaluation>;
 export type TraceDetail = z.output<typeof TraceDetail>;
+export type BaselineComparison = z.output<typeof BaselineComparison>;
 export type EvaluatorHealth = z.output<typeof EvaluatorHealth>;
 export type EvaluatorHealthList = z.output<typeof EvaluatorHealthList>;
 export type EvaluationListItem = z.output<typeof EvaluationListItem>;

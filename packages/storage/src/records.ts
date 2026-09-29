@@ -3,6 +3,8 @@
  * API maps them to its own DTOs.
  */
 import type {
+  CaseChange,
+  CaseChangeKind,
   DatasetInfo,
   ErrorInfo,
   EvaluationStatus,
@@ -11,6 +13,7 @@ import type {
   GateStatus,
   GitInfo,
   JsonObject,
+  MetricDelta,
   RunStatus,
   RunSummary,
   RunTrigger,
@@ -39,9 +42,25 @@ export interface ApiKey {
 
 export interface BaselineRef {
   file: string;
+  /** Id of the run the baseline was saved from (absent on runs made before SCOPE 0.2). */
+  runId?: string | null;
+  /** Number of that run in the database the baseline was saved from — not necessarily this one. */
   runNumber: number;
   commit: string | null;
   createdAt: string;
+}
+
+/** A run next to the baseline it was compared with, as computed when it ran. */
+export interface BaselineComparisonRecord {
+  runId: string;
+  baseline: BaselineRef;
+  metrics: MetricDelta[];
+  counts: Record<CaseChangeKind, number>;
+  /** Cases that changed, worst first; at most MAX_STORED_CASE_CHANGES. */
+  cases: CaseChange[];
+  /** Changed cases beyond the stored ones. */
+  omittedCases: number;
+  createdAt: number;
 }
 
 export interface Run {

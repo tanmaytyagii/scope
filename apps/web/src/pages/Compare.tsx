@@ -3,60 +3,18 @@
  * deltas are direction-aware (higher pass rate is better, higher latency is worse); small
  * differences within noise tolerance are reported as unchanged.
  */
-import type { CaseChange, Comparison, MetricDelta } from '@scope-ai/protocol';
+import type { Comparison } from '@scope-ai/protocol';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { allItems, useComparison, useRuns } from '../api/queries.ts';
 import { useTitle, useUrlState } from '../app/hooks.ts';
-import { formatDelta, formatDuration, formatMetric, formatScore } from '../lib/format.ts';
+import { CaseChangeCounts, CaseChangeTable, MetricDeltaTable } from '../components/Comparison.tsx';
 import { Button } from '../ui/Button.tsx';
 import { Select } from '../ui/Controls.tsx';
 import { PageHeader } from '../ui/Figures.tsx';
-import { Alert, ArrowDown, ArrowRight, ArrowUp, IconCompare } from '../ui/icons.tsx';
+import { Alert, ArrowRight, IconCompare } from '../ui/icons.tsx';
 import { Panel } from '../ui/Panel.tsx';
 import { EmptyState, ErrorState, Loading } from '../ui/States.tsx';
-import { OutcomeBadge, Pill, type Tone } from '../ui/Status.tsx';
-import { Table, TD, TH, THead, TR } from '../ui/Table.tsx';
-
-function Verdict({ change }: { change: MetricDelta['change'] }) {
-  if (change === 'improved')
-    return (
-      <Pill tone="good" icon={<ArrowUp size={12} />}>
-        better
-      </Pill>
-    );
-  if (change === 'regressed')
-    return (
-      <Pill tone="bad" icon={<ArrowDown size={12} />}>
-        worse
-      </Pill>
-    );
-  if (change === 'unchanged') return <span className="text-xs text-fg-3">no change</span>;
-  return <span className="text-xs text-fg-3">—</span>;
-}
-
-const KIND_TONE: Record<CaseChange['kind'], Tone> = {
-  regressed: 'bad',
-  fixed: 'good',
-  changed: 'info',
-  added: 'neutral',
-  removed: 'neutral',
-  unchanged: 'neutral',
-};
-
-function describeEvaluators(change: CaseChange): string[] {
-  return change.evaluators
-    .filter((e) => e.change === 'improved' || e.change === 'regressed' || !e.base || !e.head)
-    .map((e) => {
-      const from = e.base
-        ? `${e.base.status}${e.base.score !== null ? ` ${formatScore(e.base.score)}` : ''}`
-        : 'absent';
-      const to = e.head
-        ? `${e.head.status}${e.head.score !== null ? ` ${formatScore(e.head.score)}` : ''}`
-        : 'absent';
-      return `${e.evaluator}: ${from} → ${to}`;
-    });
-}
 
 function RunPicker({
   label,
@@ -87,17 +45,12 @@ function RunPicker({
 
 function Metrics({ data }: { data: Comparison }) {
   const [all, setAll] = useState(false);
-  const byId = new Map(data.metrics.map((m) => [m.id, m]));
-  const headline = data.headline
-    .map((id) => byId.get(id))
-    .filter((m): m is MetricDelta => Boolean(m));
-  const shown = all ? data.metrics : headline;
   return (
     <Panel
       title="Metrics"
       description="Change from the base run to the head run; tolerances absorb timer and rounding noise"
       actions={
-        data.metrics.length > headline.length && (
+        data.metrics.length > data.headline.length && (
           <button
             type="button"
             onClick={() => setAll((a) => !a)}
@@ -108,33 +61,13 @@ function Metrics({ data }: { data: Comparison }) {
         )
       }
     >
-      <Table>
-        <THead>
-          <TH>Metric</TH>
-          <TH align="right">Base #{data.base.run.number}</TH>
-          <TH align="right">Head #{data.head.run.number}</TH>
-          <TH align="right">Change</TH>
-          <TH>Verdict</TH>
-        </THead>
-        <tbody>
-          {shown.map((m) => (
-            <TR key={m.id}>
-              <TD>
-                <div className="text-fg">{m.label}</div>
-                <div className="font-mono text-2xs text-fg-3">{m.id}</div>
-              </TD>
-              <TD align="right">{formatMetric(m.base, m.unit)}</TD>
-              <TD align="right">{formatMetric(m.head, m.unit)}</TD>
-              <TD align="right" className="text-fg-2">
-                {formatDelta(m.base, m.head, m.unit)}
-              </TD>
-              <TD>
-                <Verdict change={m.change} />
-              </TD>
-            </TR>
-          ))}
-        </tbody>
-      </Table>
+      <MetricDeltaTable
+        metrics={data.metrics}
+        headline={data.headline}
+        showAll={all}
+        baseLabel={`Base #${data.base.run.number}`}
+        headLabel={`Head #${data.head.run.number}`}
+      />
     </Panel>
   );
 }
@@ -148,7 +81,6 @@ function Cases({
   includeUnchanged: boolean;
   onToggle: () => void;
 }) {
-  const c = data.counts;
   return (
     <Panel
       title="Cases"
@@ -161,90 +93,15 @@ function Cases({
             onChange={onToggle}
             className="accent-(--accent)"
           />
-          Include {c.unchanged} unchanged
+          Include {data.counts.unchanged} unchanged
         </label>
       }
     >
-      <div className="flex flex-wrap gap-2 border-b border-line px-4 py-2.5">
-        <Pill tone={c.regressed ? 'bad' : 'neutral'}>{c.regressed} regressed</Pill>
-        <Pill tone={c.fixed ? 'good' : 'neutral'}>{c.fixed} fixed</Pill>
-        <Pill tone={c.changed ? 'info' : 'neutral'}>{c.changed} score changes</Pill>
-        {c.added > 0 && <Pill>{c.added} only in head</Pill>}
-        {c.removed > 0 && <Pill>{c.removed} only in base</Pill>}
-        <Pill>{c.unchanged} unchanged</Pill>
-      </div>
+      <CaseChangeCounts counts={data.counts} onlyHead="only in head" onlyBase="only in base" />
       {data.cases.length === 0 ? (
         <p className="px-4 py-6 text-sm text-fg-2">No case changed its outcome or scores.</p>
       ) : (
-        <Table>
-          <THead>
-            <TH>Case</TH>
-            <TH>Change</TH>
-            <TH>Outcome</TH>
-            <TH>Evaluators</TH>
-            <TH align="right">Duration</TH>
-            <TH>Traces</TH>
-          </THead>
-          <tbody>
-            {data.cases.map((change) => (
-              <TR
-                key={change.caseId}
-                to={change.head?.traceId ? `/traces/${change.head.traceId}` : undefined}
-              >
-                <TD className="font-medium text-fg">{change.caseId}</TD>
-                <TD>
-                  <Pill tone={KIND_TONE[change.kind]}>{change.kind}</Pill>
-                </TD>
-                <TD>
-                  <span className="inline-flex items-center gap-1.5">
-                    {change.base ? (
-                      <OutcomeBadge outcome={change.base.outcome} />
-                    ) : (
-                      <span className="text-fg-3">—</span>
-                    )}
-                    <ArrowRight size={12} className="text-fg-3" />
-                    {change.head ? (
-                      <OutcomeBadge outcome={change.head.outcome} />
-                    ) : (
-                      <span className="text-fg-3">—</span>
-                    )}
-                  </span>
-                </TD>
-                <TD className="max-w-md">
-                  <ul className="space-y-0.5 font-mono text-2xs text-fg-2">
-                    {describeEvaluators(change).map((line) => (
-                      <li key={line}>{line}</li>
-                    ))}
-                  </ul>
-                </TD>
-                <TD align="right" className="text-fg-2">
-                  {formatDuration(change.base?.durationMs)} →{' '}
-                  {formatDuration(change.head?.durationMs)}
-                </TD>
-                <TD>
-                  <span className="flex gap-3 text-xs">
-                    {change.base?.traceId && (
-                      <Link
-                        to={`/traces/${change.base.traceId}`}
-                        className="text-accent-fg hover:underline"
-                      >
-                        base
-                      </Link>
-                    )}
-                    {change.head?.traceId && (
-                      <Link
-                        to={`/traces/${change.head.traceId}`}
-                        className="text-accent-fg hover:underline"
-                      >
-                        head
-                      </Link>
-                    )}
-                  </span>
-                </TD>
-              </TR>
-            ))}
-          </tbody>
-        </Table>
+        <CaseChangeTable cases={data.cases} />
       )}
     </Panel>
   );

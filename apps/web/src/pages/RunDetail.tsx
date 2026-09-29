@@ -5,8 +5,9 @@
 import type { GateResult, Run, RunCase } from '@scope-ai/protocol';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { allItems, useRun, useRunCases, useRuns } from '../api/queries.ts';
+import { allItems, useBaselineComparison, useRun, useRunCases, useRuns } from '../api/queries.ts';
 import { useTitle, useUrlState } from '../app/hooks.ts';
+import { CaseChangeCounts, CaseChangeTable, MetricDeltaTable } from '../components/Comparison.tsx';
 import {
   formatCost,
   formatDateTime,
@@ -305,14 +306,101 @@ function Cases({ run }: { run: Run }) {
   );
 }
 
+/**
+ * "What changed?" — the run next to the baseline its regression gates used, as computed when it
+ * ran. Runs from before SCOPE 0.2 did not store this; they show the baseline file in Details.
+ */
+function BaselineComparisonPanel({ run }: { run: Run }) {
+  const stored = Boolean(run.baseline?.runId) && run.status === 'completed';
+  const comparison = useBaselineComparison(String(run.number), stored);
+  const [all, setAll] = useState(false);
+  if (!stored || !run.baseline) return null;
+  const b = run.baseline;
+  const source = (
+    <>
+      <code className="text-xs">{b.file}</code> · saved from run #{b.runNumber}
+      {b.commit ? ` @ ${b.commit.slice(0, 7)}` : ''} · {relativeTime(b.createdAt)}
+    </>
+  );
+  if (comparison.isPending)
+    return (
+      <Panel title="Compared with baseline" description={source}>
+        <Loading rows={3} label="Loading the baseline comparison" />
+      </Panel>
+    );
+  if (comparison.isError)
+    return (
+      <Panel title="Compared with baseline" description={source}>
+        <ErrorState error={comparison.error} onRetry={() => void comparison.refetch()} />
+      </Panel>
+    );
+  const d = comparison.data;
+  return (
+    <Panel
+      id="baseline"
+      title="Compared with baseline"
+      description={source}
+      actions={
+        <>
+          {d.metrics.length > d.headline.length && (
+            <button
+              type="button"
+              onClick={() => setAll((a) => !a)}
+              className="text-xs text-accent-fg hover:underline"
+            >
+              {all ? 'Headline metrics' : `All ${d.metrics.length} metrics`}
+            </button>
+          )}
+          {d.baselineRun && (
+            <Link
+              to={`/compare?base=${d.baselineRun.number}&head=${run.number}`}
+              className="text-xs text-accent-fg hover:underline"
+            >
+              Compare with run #{d.baselineRun.number}
+            </Link>
+          )}
+        </>
+      }
+    >
+      <CaseChangeCounts
+        counts={d.counts}
+        onlyHead="new since the baseline"
+        onlyBase="missing from this run"
+      />
+      <MetricDeltaTable
+        metrics={d.metrics}
+        headline={d.headline}
+        showAll={all}
+        baseLabel="Baseline"
+        headLabel={`Run #${run.number}`}
+      />
+      {d.cases.length === 0 ? (
+        <p className="border-t border-line px-4 py-4 text-sm text-fg-2">
+          No case changed its outcome or scores.
+        </p>
+      ) : (
+        <div className="border-t border-line">
+          <CaseChangeTable cases={d.cases} baseTraces={d.baselineRun !== null} />
+          {d.omittedCases > 0 && (
+            <p className="px-4 py-3 text-xs text-fg-2">
+              …and {d.omittedCases} more changed cases, which were counted but not stored.
+            </p>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function CompareWith({ run }: { run: Run }) {
   const navigate = useNavigate();
   const others = allItems(useRuns({ workflow: run.workflow }, 50).data).filter(
     (r) => r.id !== run.id && r.summary,
   );
   const previous = others.find((r) => r.number < run.number);
-  const baselineRun = run.baseline
-    ? others.find((r) => r.number === run.baseline?.runNumber)
+  // By id: a baseline's run number belongs to the database it was saved from, maybe another.
+  const baselineRun = run.baseline?.runId
+    ? others.find((r) => r.id === run.baseline?.runId)
     : undefined;
   const [target, setTarget] = useState('');
   const chosen = target || String(baselineRun?.number ?? previous?.number ?? '');
@@ -447,6 +535,7 @@ export function RunDetail() {
       )}
       <Summary run={r} />
       <Gates run={r} />
+      <BaselineComparisonPanel run={r} />
       <Evaluators
         run={r}
         onFilter={(evaluator) => {

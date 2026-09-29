@@ -174,6 +174,33 @@ export function registerApi(app: Hono<AppEnv>, deps: Deps): void {
     return c.json(runDto(run) satisfies api.Run);
   });
 
+  app.get('/api/v1/runs/:run/baseline-comparison', read, async (c) => {
+    const project = c.get('project');
+    const run = await resolveRun(c, deps, c.req.param('run'));
+    const stored = await store.getBaselineComparison(project.id, run.id);
+    if (!stored) {
+      throw notFound(
+        `A baseline comparison of run #${run.number}`,
+        run.baseline
+          ? 'This run was recorded before SCOPE kept baseline comparisons (0.2); compare runs instead.'
+          : `Run #${run.number} was not compared with a baseline. Runs use baselines/<workflow>.json when it exists; save one with scope baseline save.`,
+      );
+    }
+    const source = stored.baseline.runId
+      ? await store.getRun(project.id, stored.baseline.runId)
+      : null;
+    return c.json({
+      run: { id: run.id, number: run.number, workflow: run.workflowName, variant: run.variant },
+      baseline: { ...stored.baseline, runId: stored.baseline.runId ?? null },
+      baselineRun: source ? { id: source.id, number: source.number } : null,
+      metrics: stored.metrics,
+      headline: headlineMetrics(stored.metrics, run.summary?.evaluators ?? []).map((m) => m.id),
+      counts: stored.counts,
+      cases: stored.cases,
+      omittedCases: stored.omittedCases,
+    } satisfies api.BaselineComparison);
+  });
+
   app.get('/api/v1/runs/:run/cases', read, async (c) => {
     const q = parseQuery(c, RunCasesQuery);
     const run = await resolveRun(c, deps, c.req.param('run'));

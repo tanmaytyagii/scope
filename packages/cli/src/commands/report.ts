@@ -4,17 +4,19 @@
 import { existsSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { readBaseline } from '@scope-ai/config';
-import { type Baseline, ErrorCodes, ScopeError } from '@scope-ai/core';
+import { type Baseline, type Comparison, ErrorCodes, ScopeError } from '@scope-ai/core';
 import type { Run, Store } from '@scope-ai/storage';
 import type { CommandContext } from '../context.ts';
 import {
   buildComparison,
+  type ReportBaseline,
   type ReportInput,
   renderComparisonText,
   renderEvaluatorsText,
   renderGatesText,
   renderMarkdown,
   renderSummaryText,
+  reportBaseline,
   reportJson,
   resultLabel,
 } from '../report.ts';
@@ -43,16 +45,34 @@ export async function buildReportInput(
       { hint: 'Reports are available for completed runs.' },
     );
   }
+  // What the run's gates compared against, as stored when it ran — the baseline file may have
+  // changed since. An explicit --baseline, or a run from before SCOPE 0.2, reads the file.
+  const stored = baselinePath ? null : await store.getBaselineComparison(projectId, run.id);
+  let reportedBaseline: ReportBaseline | null = stored
+    ? {
+        runNumber: stored.baseline.runNumber,
+        commit: stored.baseline.commit,
+        createdAt: stored.baseline.createdAt,
+      }
+    : null;
+  let comparison: Comparison | null = stored
+    ? { metrics: stored.metrics, counts: stored.counts, cases: stored.cases }
+    : null;
+  const file = stored
+    ? undefined
+    : (baselinePath ?? (run.baseline ? resolve(ctx.project().root, run.baseline.file) : undefined));
   let baseline: Baseline | null = null;
-  const file =
-    baselinePath ?? (run.baseline ? resolve(ctx.project().root, run.baseline.file) : undefined);
   if (file) {
     const path = resolve(ctx.cwd, file);
     if (existsSync(path)) baseline = readBaseline(path, relative(ctx.cwd, path));
     else if (baselinePath)
       throw new ScopeError(ErrorCodes.baselineInvalid, `Baseline file not found: ${baselinePath}`);
   }
-  const snapshots = await store.runCaseSnapshots(projectId, run.id);
+  if (baseline) {
+    reportedBaseline = reportBaseline(baseline);
+    const snapshots = await store.runCaseSnapshots(projectId, run.id);
+    comparison = buildComparison(run.summary, snapshots, baseline);
+  }
   const failing = [
     ...(await store.listRunCases(projectId, run.id, { outcome: 'errored', limit: 50 })).items,
     ...(await store.listRunCases(projectId, run.id, { outcome: 'failed', limit: 50 })).items,
@@ -61,8 +81,8 @@ export async function buildReportInput(
     run,
     summary: run.summary,
     gates: run.gates,
-    baseline,
-    comparison: buildComparison(run.summary, snapshots, baseline),
+    baseline: reportedBaseline,
+    comparison,
     failures: failing.map((c) => ({
       caseId: c.caseId,
       traceId: c.traceId,

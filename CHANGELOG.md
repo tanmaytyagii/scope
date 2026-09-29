@@ -79,6 +79,10 @@ which are always called out).
   header's arrows, "Failing case 2 of 5"), and filter the span tree by name, kind or model and to
   errors or model calls — matches keep their parent spans for context; filters live in the URL.
   The trace API returns `failingCases` (position, total, previous, next) for run cases.
+- Run page: "Compared with baseline" — the metric deltas and changed cases the run's regression
+  gates saw, with links to the traces. Stored with the run (`run_comparisons`, migration `0002`,
+  applied automatically) because the baseline may come from another machine; served at
+  `GET /api/v1/runs/{run}/baseline-comparison`. Runs record their baseline's source run id.
 - The GitHub Action's `install` input: `auto` installs `scope-ai` from npm at the action's version
   when it is published and builds from source otherwise.
 
@@ -97,6 +101,10 @@ which are always called out).
 - `scope init <dir>` outside the current directory printed paths like `./../x`; it now prints the
   absolute path.
 - Package tarballs included TypeScript's `dist/.tsbuildinfo`.
+- `scope report <run>` recomputed the baseline comparison from the file on disk, so a baseline
+  saved after the run changed the report; it now shows what the run was compared with.
+- The run page labelled a run "(baseline)" by run number, which is wrong when the baseline was
+  saved in another database (e.g. CI); it now matches the baseline's run id.
 
 - Run references containing `%` returned 500 (they were URL-decoded twice); they are now 404.
 - Derived cache prices in the built-in pricing table are rounded (no `0.30000000000000004`).

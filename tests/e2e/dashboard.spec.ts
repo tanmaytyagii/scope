@@ -107,6 +107,25 @@ test('steps through the failing cases of a run and filters the span tree', async
   expect(errors).toEqual([]);
 });
 
+test('a run shows what changed against its baseline', async ({ page }) => {
+  await page.goto('/runs/2');
+  const panel = page.getByRole('region', { name: 'Compared with baseline' });
+  await expect(panel).toContainText('baselines/support.json · saved from run #1');
+  await expect(panel.getByText(/^[1-9]\d* regressed$/)).toBeVisible();
+  const passRate = panel
+    .getByRole('row')
+    .filter({ has: page.getByText('pass_rate', { exact: true }) });
+  await expect(passRate.getByText('worse')).toBeVisible();
+  await expect(panel.getByRole('row').filter({ hasText: 'regressed' }).first()).toBeVisible();
+  await panel.getByRole('link', { name: 'Compare with run #1' }).click();
+  await expect(page).toHaveURL(/\/compare\?base=1&head=2/);
+
+  // A run made without a baseline has nothing to show here.
+  await page.goto('/runs/3');
+  await expect(page.getByRole('heading', { name: /Run #3/ })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Compared with baseline' })).toHaveCount(0);
+});
+
 test('compares two runs case by case', async ({ page }) => {
   await page.goto('/runs');
   await page.getByRole('checkbox', { name: 'Select run #1 to compare' }).check();
@@ -167,30 +186,32 @@ test('a shared server asks for an API key', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
 });
 
+// One test per page and theme: they run in parallel, and a failure names its page.
 test.describe('accessibility', () => {
-  const pages = [
-    '/',
-    '/runs',
-    '/runs/2',
-    '/compare?base=1&head=2',
-    '/traces',
-    '/evaluations',
-    '/workflows/support',
-    '/models',
-    '/settings',
+  const pages: Array<[string, (page: Page) => Promise<string>]> = [
+    ['overview', async () => '/'],
+    ['runs', async () => '/runs'],
+    ['a run', async () => '/runs/2'],
+    ['a comparison', async () => '/compare?base=1&head=2'],
+    ['traces', async () => '/traces'],
+    ['a trace', async (page) => `/traces/${await failingTraceId(page)}`],
+    ['a filtered trace', async (page) => `/traces/${await failingTraceId(page)}?only=llm`],
+    ['evaluations', async () => '/evaluations'],
+    ['a workflow', async () => '/workflows/support'],
+    ['models', async () => '/models'],
+    ['settings', async () => '/settings'],
   ];
   for (const theme of ['light', 'dark'] as const) {
-    test(`pages have no serious WCAG A/AA violations (${theme})`, async ({ page }) => {
-      await page.emulateMedia({ colorScheme: theme });
-      const trace = await failingTraceId(page);
-      for (const path of [...pages, `/traces/${trace}`, `/traces/${trace}?only=llm`]) {
+    for (const [name, pathOf] of pages) {
+      test(`${name} has no serious WCAG A/AA violations (${theme})`, async ({ page }) => {
+        await page.emulateMedia({ colorScheme: theme });
+        const path = await pathOf(page);
         await page.goto(path);
         await page.waitForLoadState('networkidle');
         const results = await new AxeBuilder({ page })
           .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
           .analyze();
-        const violations = results.violations as Violation[];
-        const serious = violations
+        const serious = (results.violations as Violation[])
           .filter((v) => v.impact === 'serious' || v.impact === 'critical')
           .map(
             (v) =>
@@ -200,7 +221,7 @@ test.describe('accessibility', () => {
                 .join(', ')})`,
           );
         expect(serious, path).toEqual([]);
-      }
-    });
+      });
+    }
   }
 });

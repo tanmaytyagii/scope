@@ -43,7 +43,7 @@ export function runDto(run: Run): api.Run {
     params: run.params,
     dataset: run.dataset,
     git: run.git,
-    baseline: run.baseline,
+    baseline: run.baseline ? { ...run.baseline, runId: run.baseline.runId ?? null } : null,
     caseCount: run.caseCount,
     passRate: run.passRate,
     summary: run.summary,

@@ -41,6 +41,7 @@ The complete contract, generated from the server's own schemas, is at
 | GET | `/api/v1/runs` | Runs, newest first (`workflow`, `variant`, `status`, `gateStatus`) |
 | GET | `/api/v1/runs/{run}` | A run — `{run}` is an id or a number |
 | GET | `/api/v1/runs/{run}/cases` | Per-case results (`outcome`, `evaluator`, `q`) |
+| GET | `/api/v1/runs/{run}/baseline-comparison` | How the run compared with its baseline file when it ran (404 when it had none) |
 | GET | `/api/v1/comparisons?base=&head=` | Metric deltas and changed cases (`includeUnchanged=true` for all) |
 | GET | `/api/v1/traces` | Traces (`run`, `name`, `status`, `eval`, `model`, `case`, `q`, `since`, `until`, `sort`) |
 | GET | `/api/v1/traces/{trace}` | A trace with spans and evaluations, and for run cases where it stands among the run's failing cases (`failingCases`); id or unique prefix |

@@ -4,6 +4,7 @@
  */
 import type {
   ApiKeyList,
+  BaselineComparison,
   Comparison,
   EvaluationPage,
   EvaluatorHealthList,
@@ -86,6 +87,21 @@ export const useRun = (ref: string) =>
   useQuery({
     queryKey: ['run', ref],
     queryFn: ({ signal }) => apiGet<Run>(`/runs/${encodeURIComponent(ref)}`, {}, { signal }),
+  });
+
+/** How a run compared with its baseline when it ran; only runs that stored one ask for it. */
+export const useBaselineComparison = (ref: string, enabled: boolean) =>
+  useQuery({
+    queryKey: ['baseline-comparison', ref],
+    queryFn: ({ signal }) =>
+      apiGet<BaselineComparison>(
+        `/runs/${encodeURIComponent(ref)}/baseline-comparison`,
+        {},
+        { signal },
+      ),
+    enabled,
+    // A finished run's comparison never changes.
+    staleTime: Number.POSITIVE_INFINITY,
   });
 
 export const useRunCases = (ref: string, filters: Filters) =>

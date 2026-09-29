@@ -53,6 +53,7 @@ import { LATEST_MIGRATION, ScopeMigrations } from './migrations.ts';
 import type {
   ApiKey,
   ApiKeyScope,
+  BaselineComparisonRecord,
   BaselineRef,
   Page,
   Project,
@@ -120,6 +121,9 @@ export interface CompleteRunInput {
 }
 
 type RunRow = Selectable<Database['runs']>;
+
+/** Changed cases stored per baseline comparison; the rest are counted. */
+export const MAX_STORED_CASE_CHANGES = 500;
 
 function mapRun(row: RunRow): Run {
   return {
@@ -739,6 +743,62 @@ export class Store {
       .where('variant', 'is not', null)
       .execute();
     return rows.map((r) => r.variant as string).sort();
+  }
+
+  /**
+   * Stores how a run compared with its baseline. Changed cases beyond
+   * MAX_STORED_CASE_CHANGES are counted, not stored.
+   */
+  async saveBaselineComparison(
+    projectId: string,
+    input: Omit<BaselineComparisonRecord, 'omittedCases' | 'createdAt'>,
+  ): Promise<void> {
+    const changed = input.cases.filter((c) => c.kind !== 'unchanged');
+    const cases = changed.slice(0, MAX_STORED_CASE_CHANGES);
+    const comparison = {
+      metrics: input.metrics,
+      counts: input.counts,
+      cases,
+      omittedCases: changed.length - cases.length,
+    };
+    await this.db
+      .insertInto('run_comparisons')
+      .values({
+        run_id: input.runId,
+        project_id: projectId,
+        baseline: writeJson(input.baseline),
+        comparison: writeJson(comparison),
+        created_at: Date.now(),
+      })
+      .onConflict((oc) =>
+        oc.column('run_id').doUpdateSet({
+          baseline: writeJson(input.baseline),
+          comparison: writeJson(comparison),
+        }),
+      )
+      .execute();
+  }
+
+  async getBaselineComparison(
+    projectId: string,
+    runId: string,
+  ): Promise<BaselineComparisonRecord | null> {
+    const row = await this.db
+      .selectFrom('run_comparisons')
+      .selectAll()
+      .where('project_id', '=', projectId)
+      .where('run_id', '=', runId)
+      .executeTakeFirst();
+    if (!row) return null;
+    const comparison = readJson<
+      Pick<BaselineComparisonRecord, 'metrics' | 'counts' | 'cases' | 'omittedCases'>
+    >(row.comparison);
+    return {
+      runId: row.run_id,
+      baseline: readJson<BaselineRef>(row.baseline),
+      ...comparison,
+      createdAt: Number(row.created_at),
+    };
   }
 
   async deleteRun(projectId: string, runId: string): Promise<boolean> {

@@ -14,6 +14,7 @@ import {
 } from './queries.ts';
 import {
   ApiKeyList,
+  BaselineComparison,
   Comparison,
   EvaluationPage,
   EvaluatorHealthList,
@@ -118,6 +119,17 @@ export const ROUTES: readonly RouteDefinition[] = [
     access: 'read',
     params: [RUN_PARAM],
     response: Run,
+    errors: [400, 404],
+  },
+  {
+    method: 'get',
+    path: '/runs/{run}/baseline-comparison',
+    operationId: 'getBaselineComparison',
+    summary: 'How a run compared with its baseline file: metric deltas and changed cases',
+    tag: 'Runs',
+    access: 'read',
+    params: [RUN_PARAM],
+    response: BaselineComparison,
     errors: [400, 404],
   },
   {

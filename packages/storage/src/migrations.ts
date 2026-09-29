@@ -254,6 +254,33 @@ function migration0001(dialect: DialectName): Migration {
   };
 }
 
+/**
+ * What a run looked like next to the baseline it was compared with (metric deltas and changed
+ * cases), as computed when it ran. Kept apart from `runs` so run lists never load it.
+ */
+function migration0002(dialect: DialectName): Migration {
+  const json = jsonType(dialect);
+  return {
+    async up(db: AnyDb) {
+      await db.schema
+        .createTable('run_comparisons')
+        .addColumn('run_id', 'text', (c) =>
+          c.primaryKey().references('runs.id').onDelete('cascade'),
+        )
+        .addColumn('project_id', 'text', (c) =>
+          c.notNull().references('projects.id').onDelete('cascade'),
+        )
+        .addColumn('baseline', json, (c) => c.notNull())
+        .addColumn('comparison', json, (c) => c.notNull())
+        .addColumn('created_at', 'bigint', (c) => c.notNull())
+        .execute();
+    },
+    async down(db: AnyDb) {
+      await db.schema.dropTable('run_comparisons').ifExists().execute();
+    },
+  };
+}
+
 export class ScopeMigrations implements MigrationProvider {
   readonly #dialect: DialectName;
   constructor(dialect: DialectName) {
@@ -262,8 +289,9 @@ export class ScopeMigrations implements MigrationProvider {
   async getMigrations(): Promise<Record<string, Migration>> {
     return {
       '0001_initial': migration0001(this.#dialect),
+      '0002_run_comparisons': migration0002(this.#dialect),
     };
   }
 }
 
-export const LATEST_MIGRATION = '0001_initial';
+export const LATEST_MIGRATION = '0002_run_comparisons';

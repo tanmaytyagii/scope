@@ -45,6 +45,7 @@ import {
   renderGatesText,
   renderMarkdown,
   renderSummaryText,
+  reportBaseline,
   reportJson,
   resultLabel,
 } from '../report.ts';
@@ -418,6 +419,7 @@ async function executeVariant(
     baseline: p.baseline
       ? {
           file: p.baselinePath ?? 'baseline',
+          runId: p.baseline.source.runId,
           runNumber: p.baseline.source.runNumber,
           commit: p.baseline.source.git?.commit ?? null,
           createdAt: p.baseline.createdAt,
@@ -485,6 +487,16 @@ async function executeVariant(
 
   const snapshots = Object.fromEntries(caseResults.map((r) => [r.caseId, snapshotCase(r)]));
   const comparison = buildComparison(summary, snapshots, p.baseline);
+  // Kept with the run, so the dashboard shows what the gates compared against — the baseline
+  // file may come from another machine, and its run may not be in this database.
+  if (comparison && run.baseline && !cancelled)
+    await store.saveBaselineComparison(p.projectId, {
+      runId: run.id,
+      baseline: run.baseline,
+      metrics: comparison.metrics,
+      counts: comparison.counts,
+      cases: comparison.cases,
+    });
   const failures = executions
     .filter(
       (e) =>
@@ -562,7 +574,7 @@ async function executeVariant(
     run,
     summary,
     gates,
-    baseline: p.baseline,
+    baseline: p.baseline ? reportBaseline(p.baseline) : null,
     comparison,
     failures: failures.slice(0, 50),
   };

@@ -18,35 +18,54 @@ npm pack -w @scope-ai/core -w @scope-ai/sdk --pack-destination /tmp/scope-packs
 npm install /tmp/scope-packs/scope-ai-core-*.tgz /tmp/scope-packs/scope-ai-sdk-*.tgz
 ```
 
-## Trace a request
+## Instrument a model client
+
+One line records every call your application makes through the OpenAI or Anthropic SDK:
 
 ```ts
-import { createTracer } from '@scope-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
+import { createTracer, instrumentAnthropic, instrumentOpenAI } from '@scope-ai/sdk';
 
 const tracer = createTracer();   // exports to SCOPE_URL (default http://127.0.0.1:4700)
+const openai = instrumentOpenAI(new OpenAI(), { tracer });
+const anthropic = instrumentAnthropic(new Anthropic(), { tracer });
+```
 
+Each call to `openai.chat.completions.create`, `openai.responses.create`,
+`openai.embeddings.create` or `anthropic.messages.create` — streaming or not, and through the
+stream helpers built on them (`chat.completions.stream()`, `messages.stream()`) — becomes a model
+span: the request and its messages, the response text and tool calls, the model that answered,
+tokens (cached input counted separately), estimated cost, finish reason and request id. Inside a
+trace it is a child of the current span; outside one it is a trace of its own.
+
+The client keeps its exact behavior: same return values (`.withResponse()` and stream helpers
+work), same errors, no changes to requests. Recording failures never reach your code.
+
+- **Streams** are recorded as your code reads them; a stream that is never read or cancelled
+  never finishes its span. OpenAI reports token usage for streams only with
+  `stream_options: { include_usage: true }`; without it, streamed calls have no token counts.
+- **OpenAI-compatible servers** (Ollama, vLLM, OpenRouter, Gemini's OpenAI endpoint): point the
+  OpenAI client at them and name the provider — `instrumentOpenAI(new OpenAI({ baseURL }),
+  { tracer, provider: 'ollama' })`. Their cost is unknown unless you pass prices with
+  `createTracer({ pricing })`.
+- Other endpoints (batches, assistants, realtime, files) are not recorded.
+
+## Trace a request
+
+Group the calls of one request into a trace, with spans for your own steps:
+
+```ts
 export async function answer(question: string) {
   return tracer.trace('answer-question', { input: { question } }, async () => {
     const docs = await tracer.span('search', { kind: 'retrieval', input: { question } }, () =>
       search(question),
     );
-    return tracer.span('generate', { kind: 'llm' }, async (span) => {
-      const res = await openai.chat.completions.create({
-        model: 'gpt-5-mini',
-        messages: [{ role: 'user', content: prompt(question, docs) }],
-      });
-      span.recordModelCall({
-        provider: 'openai',
-        model: 'gpt-5-mini',
-        responseModel: res.model,
-        finishReason: res.choices[0]?.finish_reason,
-        usage: {
-          inputTokens: res.usage?.prompt_tokens ?? 0,
-          outputTokens: res.usage?.completion_tokens ?? 0,
-        },
-      });
-      return res.choices[0]?.message.content ?? '';
+    const res = await openai.chat.completions.create({     // recorded as a child span
+      model: 'gpt-5-mini',
+      messages: [{ role: 'user', content: prompt(question, docs) }],
     });
+    return res.choices[0]?.message.content ?? '';
   });
 }
 ```
@@ -60,10 +79,25 @@ export async function answer(question: string) {
 - Errors thrown inside a span are recorded on it (status `error`, type, message) and re-thrown
   unchanged.
 
-### Model calls
+### Model calls from other clients
 
-`span.recordModelCall` records a call with OpenTelemetry GenAI attribute names and estimates
-its cost from SCOPE's pricing table. Pass usage in SCOPE's field names:
+For a client without a wrapper, record the call on a span yourself. `span.recordModelCall`
+records it with OpenTelemetry GenAI attribute names and estimates its cost from SCOPE's pricing
+table:
+
+```ts
+await tracer.span('generate', { kind: 'llm', input: { messages } }, async (span) => {
+  const res = await client.generate({ model: 'my-model', messages });
+  span.recordModelCall({
+    provider: 'acme',
+    model: 'my-model',
+    usage: { inputTokens: res.usage.input, outputTokens: res.usage.output },
+  });
+  return res.text;
+});
+```
+
+Pass usage in SCOPE's field names:
 
 | SCOPE | OpenAI Chat Completions | Anthropic Messages |
 | --- | --- | --- |

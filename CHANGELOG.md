@@ -33,6 +33,13 @@ which are always called out).
   `OTEL_EXPORTER_OTLP_ENDPOINT`. GenAI semantic conventions become model calls with provider,
   model, tokens, estimated cost, prompt and response; spans of one trace may arrive over several
   requests. Tested with the OpenTelemetry JS exporters and the AI SDK's `@ai-sdk/otel`.
+- `instrumentOpenAI(client, { tracer })` and `instrumentAnthropic(client, { tracer })` in
+  `@scope-ai/sdk`: every chat, Responses, embeddings and messages call — streamed or not, and
+  through the SDKs' stream helpers — becomes a model span with request, response, model, tokens,
+  estimated cost and finish reason, inside the current trace or as its own. The client's behavior
+  is unchanged (`withResponse()`, stream helpers, errors). OpenAI-compatible servers are recorded
+  under the provider name you give. Tested against the real `openai` and `@anthropic-ai/sdk`
+  packages.
 - [Privacy and data](docs/guides/privacy.md): what is stored, what leaves the machine, what is
   redacted where, and how to keep content out.
 

@@ -68,3 +68,4 @@ export function createTracer(options: CreateTracerOptions = {}): Tracer {
     logger,
   });
 }
+export * from './instrument.ts';

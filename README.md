@@ -22,7 +22,8 @@ evaluated traces is a **run** you can compare with another run or with a **basel
 next to your code.
 
 - **Trace** every step of a workflow — retrievals, model calls, tool calls, your own functions —
-  with inputs, outputs, tokens, latency and estimated cost. Instrument existing apps with the SDK.
+  with inputs, outputs, tokens, latency and estimated cost. Trace existing apps with one line
+  around the OpenAI or Anthropic client, or send OpenTelemetry spans from any language.
 - **Evaluate** every output with evaluators that say how they judge: deterministic rules,
   heuristic signals, or a model's opinion. Custom evaluators are plain modules.
 - **Compare** prompts, models and parameters as variants — two runs case by case, or up to four
@@ -179,35 +180,41 @@ jobs:
 
 Each workflow runs against its committed baseline; the job summary (and, with `comment: true`,
 one pull request comment updated on every push) gets a report of every metric and regressed
-case, failed gates become annotations, and the job fails on a regression. Because
-baselines are files, a pull request that intentionally changes quality shows the new numbers in
-its diff. Guide: [CI and regressions](docs/guides/ci.md).
+case — and of what changed in configuration since the baseline — failed gates become
+annotations, and the job fails on a regression. Because baselines are files, a pull request that
+intentionally changes quality shows the new numbers in its diff. On GitLab, Jenkins, CircleCI or
+Azure Pipelines, `scope run --junit-file` reports every case as a test result. Guide:
+[CI and regressions](docs/guides/ci.md).
 
 ![Comparing two runs: direction-aware metric deltas and the cases that changed](docs/images/compare.png)
 
 ## Trace your application
 
 ```ts
-import { createTracer } from '@scope-ai/sdk';
+import OpenAI from 'openai';
+import { createTracer, instrumentOpenAI } from '@scope-ai/sdk';
 
-const tracer = createTracer();                         // sends to SCOPE_URL (a scope ui or scope server)
+const tracer = createTracer();                   // sends to SCOPE_URL (a scope ui or scope server)
+const openai = instrumentOpenAI(new OpenAI(), { tracer });   // every call becomes a model span
 
 await tracer.trace('answer-question', { input: { question } }, async () => {
   const docs = await tracer.span('search', { kind: 'retrieval' }, () => search(question));
-  return tracer.span('generate', { kind: 'llm' }, async (span) => {
-    const res = await openai.chat.completions.create({ model: 'gpt-5-mini', messages });
-    span.recordModelCall({
-      provider: 'openai', model: 'gpt-5-mini',
-      usage: { inputTokens: res.usage.prompt_tokens, outputTokens: res.usage.completion_tokens },
-    });
-    return res.choices[0].message.content;
-  });
+  const res = await openai.chat.completions.create({ model: 'gpt-5-mini', messages: prompt(docs) });
+  return res.choices[0].message.content;
 });
 ```
 
-The exporter batches in the background, bounds its memory, and never breaks your application
-when the server is down. Other languages can post to the same
-[ingestion API](docs/guides/api.md#ingestion). Guide: [tracing](docs/guides/tracing.md).
+Model calls record their messages, response, tokens, estimated cost and finish reason — streams
+included, for the OpenAI and Anthropic SDKs and OpenAI-compatible servers such as Ollama. The
+exporter batches in the background, bounds its memory, and never breaks your application when
+the server is down.
+
+Already on OpenTelemetry? Point any OTLP/HTTP exporter at SCOPE (`POST /v1/traces`): GenAI
+semantic conventions, OpenLLMetry, OpenInference and the Vercel AI SDK's spans become model,
+tool and retrieval spans. Guides: [tracing](docs/guides/tracing.md) ·
+[integrations](docs/integrations.md), which says how each path is tested.
+
+`scope export traces --format dataset` turns what you observed into test cases for `scope run`.
 
 ## Self-hosting
 
@@ -241,27 +248,34 @@ document is generated from the same schemas the server validates against. Detail
 
 ## Documentation
 
-- Guides: [quickstart](docs/guides/quickstart.md) · [workflows](docs/guides/workflows.md) ·
-  [evaluators](docs/guides/evaluators.md) · [configuration](docs/guides/configuration.md) ·
+- [Guides](docs/guides/README.md), in the order you are likely to need them:
+  [quickstart](docs/guides/quickstart.md) · [workflows](docs/guides/workflows.md) ·
+  [evaluators](docs/guides/evaluators.md) · [custom evaluators](docs/guides/custom-evaluators.md) ·
   [tracing](docs/guides/tracing.md) · [CI](docs/guides/ci.md) ·
-  [self-hosting](docs/guides/self-hosting.md) · [CLI](docs/guides/cli.md) ·
+  [self-hosting](docs/guides/self-hosting.md) · [privacy](docs/guides/privacy.md) ·
+  [configuration](docs/guides/configuration.md) · [CLI](docs/guides/cli.md) ·
   [HTTP API](docs/guides/api.md)
-- Examples, all runnable offline: [RAG support assistant](examples/rag) ·
-  [ticket triage with function steps](examples/triage) · [SDK tracing](examples/sdk-tracing)
+- [Integrations](docs/integrations.md) (how traces get in from each stack) and
+  [extensibility](docs/extensibility.md) (every extension point and its stability)
+- Examples, each run in CI: [RAG support assistant](examples/rag) ·
+  [ticket triage with function steps](examples/triage) ·
+  [custom evaluators](examples/custom-evaluator) · [SDK tracing](examples/sdk-tracing) ·
+  [an instrumented OpenAI app](examples/instrument-openai)
 - Design: [product](docs/product.md) · [architecture](docs/architecture.md) ·
-  [design system](docs/design-system.md)
+  [design system](docs/design-system.md) · [performance](docs/performance.md)
 
 ## Status
 
 SCOPE is pre-1.0 and under active development. What is described above works and is
-tested in CI: unit, integration and CLI tests on SQLite and PostgreSQL, end-to-end dashboard
-tests with accessibility checks, an install test of the packed packages, a Docker image test, and
-a self-test of the GitHub Action.
+tested in CI: unit, integration and CLI tests on SQLite and PostgreSQL, every example, the
+integrations against the real OpenAI, Anthropic, OpenTelemetry and Vercel AI SDK packages,
+end-to-end dashboard tests with accessibility checks, an install test of the packed packages, a
+Docker image test, and a self-test of the GitHub Action.
 
-Not there yet, in [roadmap](docs/roadmap.md) order: a first published release — npm packages, the
-image on GHCR and tagged action releases (the pipeline is ready: [RELEASING.md](RELEASING.md)) — a
-Python SDK, automatic instrumentation of the OpenAI and Anthropic clients, OpenTelemetry (OTLP)
-ingestion, retention policies, and user accounts.
+Not there yet, in [roadmap](docs/roadmap.md) order: a Python SDK (Python applications can send
+OpenTelemetry spans today), a first published release — npm packages, the image on GHCR and
+tagged action releases (the pipeline is ready: [RELEASING.md](RELEASING.md)) — retention
+policies, and user accounts.
 
 ## Contributing
 

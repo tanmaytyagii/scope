@@ -87,11 +87,17 @@ scope run workflows/support.yaml
 ```
 
 Costs are estimated from SCOPE's pricing table (see [configuration](./configuration.md#pricing)).
-To compare models side by side, add them as [variants](./workflows.md#variants) and run
+To compare models side by side, add them as [variants](./workflows.md#inputs-params-and-variants) and run
 `scope run workflows/support.yaml --all-variants`.
 
 ## Next
 
-- [Write your own workflow](./workflows.md)
-- [Trace an existing application](./tracing.md)
-- [Gate pull requests in CI](./ci.md)
+- **Test your own prompts or pipeline**: [write a workflow](./workflows.md), pick
+  [evaluators](./evaluators.md), or [write one](./custom-evaluators.md).
+- **See what an application you already have does**: wrap its OpenAI or Anthropic client in one
+  line, or point its OpenTelemetry exporter at SCOPE — [tracing](./tracing.md). Then turn what
+  you observed into test cases with `scope export traces --format dataset`.
+- **Stop regressions from merging**: [gate pull requests in CI](./ci.md).
+- **Share it with a team**: [self-host a server](./self-hosting.md).
+
+Every guide, by task: [guides](./README.md).

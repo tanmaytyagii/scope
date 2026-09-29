@@ -6,7 +6,8 @@ shown in the product until it exists.
 
 ## v0.1 — Foundation (current)
 
-Status: M1–M7 are done. Next are the post-v0.1 items below, starting with npm publishing. Details in
+Status: M1–M7 are done, and so are the [v0.2](./v0.2-roadmap.md) and [v0.3](./v0.3-roadmap.md)
+upgrades. Next are the post-v0.1 items below that remain open. Details in
 [DEVELOPMENT_STATUS.md](./DEVELOPMENT_STATUS.md).
 
 | Milestone | Delivers | Exit criteria |
@@ -24,25 +25,27 @@ Status: M1–M7 are done. Next are the post-v0.1 items below, starting with npm 
 Ordered by expected value to users. Items move up when users ask for them.
 
 1. **Python SDK** — tracer and HTTP exporter speaking the same ingestion protocol.
-2. **Client auto-instrumentation** — wrappers for the OpenAI and Anthropic SDKs (TS and Python)
-   that record model spans with no manual code.
+2. ~~**Client auto-instrumentation** — wrappers for the OpenAI and Anthropic SDKs that record
+   model spans with no manual code~~ — done in 0.3 for TypeScript (`instrumentOpenAI`,
+   `instrumentAnthropic`); Python comes with the Python SDK.
 3. **Published packages and action release** — the release workflow is in place (0.2:
    `scope-ai` and `@scope-ai/*` on npm with provenance, the image on GHCR, tagged action
    releases); what remains is the first published release.
-4. **OTLP/HTTP ingestion** — accept OpenTelemetry GenAI spans directly (the data model already
-   matches; see ADR 0003).
+4. ~~**OTLP/HTTP ingestion** — accept OpenTelemetry GenAI spans directly~~ — done in 0.3
+   (`POST /v1/traces`, protobuf and JSON; see [integrations](./integrations.md)).
 5. **Server-side baselines** — "compare with the latest run on `main`" as an alternative to
    committed baseline files.
 6. ~~**Pull-request comments** from the GitHub Action, updated in place~~ — done in 0.2
    (`comment: true`).
 7. **Retention** — `scope prune` and server-side retention policies.
-8. **Dataset tooling** — promote traces to dataset cases from the dashboard; CSV datasets.
+8. **Dataset tooling** — promote traces to dataset cases from the dashboard; CSV datasets. (0.3
+   added the command-line half: `scope export traces --format dataset`.)
 9. **More evaluators** — tool-call correctness, citation verification, NLI-based
    groundedness (model), refusal detection.
 10. **Accounts** — users, organizations, SSO and role-based access for shared servers.
 11. **Online evaluation** — sampled evaluation of production traffic with alerting.
 12. **Rollups at scale** — pre-aggregated time buckets for the dashboard's overview, evaluator
-    and model views, once deployments outgrow window scans (today ~260 ms at 100,000 traces on
+    and model views, once deployments outgrow window scans (today ~220 ms at 100,000 traces on
     SQLite; see [performance](./performance.md)).
 
 ## How to influence the roadmap

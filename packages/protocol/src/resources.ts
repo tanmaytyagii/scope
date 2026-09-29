@@ -17,6 +17,7 @@ import {
   GateStatus,
   GitInfo,
   MetricDelta,
+  MetricRow,
   RunStatus,
   RunSummary,
   RunTrigger,
@@ -216,6 +217,31 @@ export const BaselineComparison = z
     omittedCases: z.number().int().describe('Changed cases not stored (beyond the first 500).'),
   })
   .register(components, { id: 'BaselineComparison' });
+
+export const RunMatrix = z
+  .strictObject({
+    runs: z.array(
+      z.strictObject({
+        run: RunRef.extend({ workflow: z.string(), variant: z.string().nullable() }),
+        params: JsonObject.describe('The parameters the run used (defaults with its variant).'),
+        summary: RunSummary,
+      }),
+    ),
+    metrics: z.array(MetricRow).describe('Every metric present in any run.'),
+    headline: z.array(z.string()).describe('Ids of the metrics worth showing first.'),
+    caseCount: z.number().int().describe('Distinct cases across the runs.'),
+    cases: z
+      .array(
+        z.strictObject({
+          caseId: z.string(),
+          outcomes: z.array(CaseOutcome.nullable()).describe('Null: not in that run.'),
+          traceIds: z.array(z.string().nullable()),
+        }),
+      )
+      .describe('Cases whose outcome is not the same in every run, by case id; at most 500.'),
+    omittedCases: z.number().int().describe('Differing cases beyond the first 500.'),
+  })
+  .register(components, { id: 'RunMatrix' });
 
 export const ComparisonSide = z.strictObject({
   run: RunRef.extend({ workflow: z.string(), variant: z.string().nullable() }),
@@ -593,6 +619,7 @@ export type Span = z.output<typeof Span>;
 export type Evaluation = z.output<typeof Evaluation>;
 export type TraceDetail = z.output<typeof TraceDetail>;
 export type BaselineComparison = z.output<typeof BaselineComparison>;
+export type RunMatrix = z.output<typeof RunMatrix>;
 export type EvaluatorHealth = z.output<typeof EvaluatorHealth>;
 export type EvaluatorHealthList = z.output<typeof EvaluatorHealthList>;
 export type EvaluationListItem = z.output<typeof EvaluationListItem>;

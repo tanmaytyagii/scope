@@ -9,6 +9,7 @@ import {
   ErrorBody,
   ROUTES,
   type RunCasePage,
+  type RunMatrix,
   type TraceDetail,
   type TracePage,
 } from '@scope-ai/protocol';
@@ -111,6 +112,7 @@ describe('contract', () => {
       '/runs/{run}/cases': `/runs/${first.id}/cases`,
       '/runs/{run}/baseline-comparison': `/runs/${second.number}/baseline-comparison`,
       '/comparisons': `/comparisons?base=${first.number}&head=${second.number}`,
+      '/comparisons/matrix': `/comparisons/matrix?runs=${first.number},${second.number}`,
       '/traces/{trace}': `/traces/${traceId}`,
       '/workflows/{workflow}': '/workflows/support',
     };
@@ -275,6 +277,32 @@ describe('traces', () => {
     expect(llm).toMatchObject({ provider: 'local', model: 'extractive' });
     expect(detail.evaluations.map((e) => e.evaluator)).toEqual(['grounded', 'key_facts']);
     expect(detail.trace.metadata.expected).toEqual(['5 to 7 business days']);
+  });
+
+  it('lays two to four runs side by side', async () => {
+    const [first, second] = runs as [Run, Run];
+    const { status, body } = await get(
+      `${API_BASE}/comparisons/matrix?runs=${first.number},${second.id}`,
+    );
+    expect(status).toBe(200);
+    const matrix = body as unknown as RunMatrix;
+    expect(matrix.runs.map((r) => r.run.variant)).toEqual([null, 'terse']);
+    expect(matrix.runs[1]?.params).toMatchObject({ sentences: 1 });
+    const passRate = matrix.metrics.find((m) => m.id === 'pass_rate');
+    expect(passRate?.values).toEqual([first.passRate, second.passRate]);
+    expect(matrix.headline[0]).toBe('pass_rate');
+    expect(matrix.caseCount).toBe(5);
+    for (const row of matrix.cases) expect(new Set(row.outcomes).size).toBeGreaterThan(1);
+
+    const one = await get(`${API_BASE}/comparisons/matrix?runs=${first.number}`);
+    expect(one.status).toBe(400);
+    expect((one.body.error as { message: string }).message).toBe(
+      'Compare 2 to 4 runs side by side (got 1)',
+    );
+    const five = await get(`${API_BASE}/comparisons/matrix?runs=1,2,3,4,5`);
+    expect(five.status).toBe(400);
+    const missing = await get(`${API_BASE}/comparisons/matrix?runs=1,99`);
+    expect(missing.status).toBe(404);
   });
 
   it('returns the comparison a run made with its baseline', async () => {

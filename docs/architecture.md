@@ -467,6 +467,7 @@ an unmapped field fails the test.
 | GET | `/api/v1/runs/{run}/cases` | Per-case results (filter: outcome, failing evaluator, `q`) |
 | GET | `/api/v1/runs/{run}/baseline-comparison` | The run next to its baseline file as compared when it ran: metric deltas, changed cases |
 | GET | `/api/v1/comparisons?base=&head=` | Compare two runs; unchanged cases only with `includeUnchanged=true` |
+| GET | `/api/v1/comparisons/matrix?runs=` | Two to four runs side by side (`compareMany`) |
 | GET | `/api/v1/traces` | List traces (filter: run, name, status, eval, model, case, `q`, time; sort; pagination) |
 | GET | `/api/v1/traces/{trace}` | Trace with spans (with `offsetMs` from trace start) and evaluations |
 | GET | `/api/v1/evaluators` | Per-evaluator health and per-run trend |

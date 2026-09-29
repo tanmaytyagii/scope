@@ -72,7 +72,9 @@ Paths in a workflow are relative to the workflow file.
 - **`variants`** are named overrides of params. `--variant narrow` runs one;
   `--variant base --variant narrow` runs several; `--all-variants` runs the defaults and every
   variant, then prints a side-by-side table. Each variant is its own run, so `scope compare`
-  and the dashboard compare them case by case.
+  and the dashboard compare them case by case — two as base and head, or up to four side by side
+  (`scope compare 12 13 14`, or select them on the dashboard's Runs page), with the parameters
+  that differ and the cases where the runs disagree.
 
 ```yaml
 params:

@@ -34,6 +34,13 @@ export const ComparisonQuery = z.object({
     .describe('Include unchanged cases in `cases` (default false).'),
 });
 
+export const RunMatrixQuery = z.object({
+  runs: z
+    .string()
+    .max(300)
+    .describe('Two to four run references, comma-separated, e.g. "12,13,14".'),
+});
+
 export const TRACE_SORTS = ['newest', 'oldest', 'slowest', 'costliest'] as const;
 
 export const TracesQuery = PageQuery.extend({
@@ -61,6 +68,7 @@ export const EvaluationsQuery = PageQuery.extend({
 
 export type RunsQuery = z.output<typeof RunsQuery>;
 export type RunCasesQuery = z.output<typeof RunCasesQuery>;
+export type RunMatrixQuery = z.output<typeof RunMatrixQuery>;
 export type ComparisonQuery = z.output<typeof ComparisonQuery>;
 export type TracesQuery = z.output<typeof TracesQuery>;
 export type TraceSort = (typeof TRACE_SORTS)[number];

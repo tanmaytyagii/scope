@@ -63,6 +63,7 @@ On GitHub Actions (`GITHUB_ACTIONS=true`), failed gates are also printed as erro
 | `scope runs [run]` | List recent runs (`--workflow`, `--limit`), or show one: summary, gates, evaluators |
 | `scope traces [trace]` | List traces (`--run`, `--workflow`, `--status`, `--eval`, `--search`, `--model`, `--limit`), or show one as a span tree with evaluations (`--full` for complete inputs and outputs) |
 | `scope compare <base> <head>` | Compare two runs (numbers or ids) or baseline files, metric by metric and case by case |
+| `scope compare <a> <b> <c> [d]` | Up to four side by side: each headline metric per run with the best marked (ties within noise share it), and the cases whose outcome differs |
 | `scope report [run]` | Render a run as `text`, `markdown` or `json` (`--format`, `--baseline`, `-o`, `--dashboard-url`) |
 
 Runs are referenced by number (`12` or `#12`) or id; traces by id or a unique prefix of at least

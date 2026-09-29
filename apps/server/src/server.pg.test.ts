@@ -59,6 +59,7 @@ describe.runIf(url)('API on PostgreSQL', () => {
       '/runs/{run}/cases': `/runs/${first.id}/cases`,
       '/runs/{run}/baseline-comparison': `/runs/${second.number}/baseline-comparison`,
       '/comparisons': `/comparisons?base=${first.number}&head=${second.number}`,
+      '/comparisons/matrix': `/comparisons/matrix?runs=${first.number},${second.number}`,
       '/traces/{trace}': `/traces/${list.items[0]?.id}`,
       '/workflows/{workflow}': '/workflows/support',
     };

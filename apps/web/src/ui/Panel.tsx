@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useId } from 'react';
 import { cx } from './cx.ts';
 
-/** A titled section of a page. */
+/** A section of a page; with a title, it is a landmark region named by that title. */
 export function Panel({
   title,
   description,
@@ -19,7 +19,8 @@ export function Panel({
   bodyClassName?: string;
   id?: string;
 }) {
-  const headingId = id ? `${id}-title` : undefined;
+  const generated = useId();
+  const headingId = title ? `${id ?? generated}-title` : undefined;
   return (
     <section
       id={id}

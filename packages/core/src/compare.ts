@@ -103,10 +103,10 @@ export function compareSummaries(base: RunSummary, head: RunSummary): MetricDelt
  * deterministic evaluators, whose scores are just pass/fail; mean score otherwise), p95 latency,
  * tokens and cost.
  */
-export function headlineMetrics(
-  metrics: readonly MetricDelta[],
+export function headlineMetrics<T extends { id: string }>(
+  metrics: readonly T[],
   evaluators: ReadonlyArray<{ name: string; kind: string }>,
-): MetricDelta[] {
+): T[] {
   const kinds = new Map(evaluators.map((e) => [e.name, e.kind]));
   const fixed = ['pass_rate', 'latency.p95_ms', 'tokens.total', 'cost.total_usd'];
   const order = [
@@ -247,6 +247,69 @@ export function compareRuns(base: ComparisonSide, head: ComparisonSide): Compari
   };
   for (const c of cases) counts[c.kind]++;
   return { metrics: compareSummaries(base.summary, head.summary), cases, counts };
+}
+
+// ─── Several runs side by side ───────────────────────────────────────────────────────────────
+
+/** Runs compared side by side at most (a table stays readable up to here). */
+export const MAX_COMPARED_RUNS = 4;
+
+export interface MetricRow extends MetricDescriptor {
+  /** One value per run, in the order the runs were given. */
+  values: Array<number | null>;
+  /**
+   * Runs with the best value. Values within noise tolerance of the best share it; empty when every
+   * known value is within tolerance (nothing to choose between) or fewer than two are known.
+   */
+  best: number[];
+}
+
+export interface CaseRow {
+  caseId: string;
+  /** One entry per run; null when the case is not in that run. */
+  outcomes: Array<CaseOutcome | null>;
+  traceIds: Array<string | null>;
+}
+
+export interface RunMatrix {
+  metrics: MetricRow[];
+  /** Cases whose outcome is not the same in every run, by case id. */
+  cases: CaseRow[];
+  caseCount: number;
+}
+
+export function compareMany(sides: readonly ComparisonSide[]): RunMatrix {
+  const ids: string[] = [];
+  for (const side of sides)
+    for (const m of listMetrics(side.summary)) if (!ids.includes(m.id)) ids.push(m.id);
+  const metrics: MetricRow[] = [];
+  for (const id of ids) {
+    const descriptor = describeMetric(id);
+    if (!descriptor) continue;
+    const values = sides.map((s) => readMetric(s.summary, id));
+    const known = values.filter((v): v is number => v !== null);
+    let best: number[] = [];
+    if (known.length >= 2) {
+      const top = descriptor.direction === 'higher' ? Math.max(...known) : Math.min(...known);
+      // A value is as good as the best when the change from it to the best is noise.
+      const tied = values.map(
+        (v) => v !== null && classifyChange(descriptor, v, top) === 'unchanged',
+      );
+      if (tied.some((t, i) => !t && values[i] !== null))
+        best = tied.flatMap((t, i) => (t ? [i] : []));
+    }
+    metrics.push({ ...descriptor, values, best });
+  }
+
+  const caseIds = [...new Set(sides.flatMap((s) => Object.keys(s.cases)))].sort();
+  const cases: CaseRow[] = [];
+  for (const caseId of caseIds) {
+    const snapshots = sides.map((s) => s.cases[caseId] ?? null);
+    const outcomes = snapshots.map((c) => c?.outcome ?? null);
+    if (outcomes.every((o) => o === outcomes[0])) continue;
+    cases.push({ caseId, outcomes, traceIds: snapshots.map((c) => c?.traceId ?? null) });
+  }
+  return { metrics, cases, caseCount: caseIds.length };
 }
 
 // ─── Baselines ───────────────────────────────────────────────────────────────────────────────

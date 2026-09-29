@@ -15,6 +15,7 @@ import { PageHeader } from '../ui/Figures.tsx';
 import { Alert, ArrowRight, IconCompare } from '../ui/icons.tsx';
 import { Panel } from '../ui/Panel.tsx';
 import { EmptyState, ErrorState, Loading } from '../ui/States.tsx';
+import { RunMatrixView } from './RunMatrixView.tsx';
 
 function RunPicker({
   label,
@@ -107,7 +108,19 @@ function Cases({
   );
 }
 
+/** `/compare?base=&head=` compares two runs; `/compare?runs=1,2,3` lays up to four side by side. */
 export function Compare() {
+  const [state, setState] = useUrlState(['runs'] as const);
+  const runs = state.runs
+    .split(',')
+    .map((r) => r.trim())
+    .filter(Boolean);
+  if (runs.length >= 2)
+    return <RunMatrixView runs={runs} onChange={(next) => setState({ runs: next.join(',') })} />;
+  return <PairCompare />;
+}
+
+function PairCompare() {
   const [state, setState] = useUrlState(['base', 'head', 'unchanged'] as const);
   useTitle(state.base && state.head ? `Compare #${state.base} → #${state.head}` : 'Compare runs');
   const runs = allItems(useRuns({}, 100).data).filter((r) => r.summary);

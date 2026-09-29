@@ -83,6 +83,11 @@ which are always called out).
   gates saw, with links to the traces. Stored with the run (`run_comparisons`, migration `0002`,
   applied automatically) because the baseline may come from another machine; served at
   `GET /api/v1/runs/{run}/baseline-comparison`. Runs record their baseline's source run id.
+- Compare up to four runs side by side — select them on the Runs page (`/compare?runs=…`) or
+  `scope compare 12 13 14`: the parameters that differ, every metric per run with the best
+  marked (values within noise tolerance share it), and the cases where the runs disagree, linked
+  to their traces. API: `GET /api/v1/comparisons/matrix?runs=`.
+- Every titled dashboard panel is a named landmark region for screen readers.
 - The GitHub Action's `install` input: `auto` installs `scope-ai` from npm at the action's version
   when it is published and builds from source otherwise.
 

@@ -4,7 +4,7 @@
 import { SCOPE_VERSION } from '@scope-ai/core';
 import { Command, CommanderError, Option } from 'commander';
 import { baselineSaveCommand } from './commands/baseline.ts';
-import { compareCommand } from './commands/compare.ts';
+import { compareManyCommand } from './commands/compare.ts';
 import { doctorCommand } from './commands/doctor.ts';
 import { evaluateCommand } from './commands/evaluate.ts';
 import { initCommand } from './commands/init.ts';
@@ -177,10 +177,9 @@ export async function main(argv: string[], options: MainOptions = {}): Promise<n
 
   program
     .command('compare')
-    .argument('<base>', 'run number, run id or baseline file')
-    .argument('<head>', 'run number, run id or baseline file')
-    .description('compare two runs metric by metric and case by case')
-    .action(withContext((ctx, base: string, head: string) => compareCommand(ctx, base, head)));
+    .argument('<runs...>', 'two to four run numbers, run ids or baseline files')
+    .description('compare two runs metric by metric and case by case, or up to four side by side')
+    .action(withContext((ctx, runs: string[]) => compareManyCommand(ctx, runs)));
 
   program
     .command('report')

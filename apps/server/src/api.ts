@@ -2,9 +2,11 @@
  * Read endpoints of /api/v1. Handlers stay thin: parse → query storage → map to a resource.
  */
 import {
+  compareMany,
   compareRuns,
   ErrorCodes,
   headlineMetrics,
+  MAX_COMPARED_RUNS,
   SCOPE_VERSION,
   ScopeError,
 } from '@scope-ai/core';
@@ -14,6 +16,7 @@ import {
   EvaluationsQuery,
   INGEST_PROTOCOL_VERSION,
   RunCasesQuery,
+  RunMatrixQuery,
   RunsQuery,
   type TimeWindowName,
   TracesQuery,
@@ -89,6 +92,59 @@ async function comparison(c: AppContext, deps: Deps): Promise<api.Comparison> {
       query.includeUnchanged === 'true'
         ? result.cases
         : result.cases.filter((change) => change.kind !== 'unchanged'),
+  };
+}
+
+/** Differing cases listed per matrix; the rest are counted. */
+const MAX_MATRIX_CASES = 500;
+
+async function runMatrix(c: AppContext, deps: Deps): Promise<api.RunMatrix> {
+  const query = parseQuery(c, RunMatrixQuery);
+  const project = c.get('project');
+  const refs = [
+    ...new Set(
+      query.runs
+        .split(',')
+        .map((r) => r.trim())
+        .filter(Boolean),
+    ),
+  ];
+  if (refs.length < 2 || refs.length > MAX_COMPARED_RUNS) {
+    throw new ScopeError(
+      ErrorCodes.badRequest,
+      `Compare 2 to ${MAX_COMPARED_RUNS} runs side by side (got ${refs.length})`,
+      { hint: 'Pass run numbers separated by commas, e.g. runs=12,13,14.' },
+    );
+  }
+  const runs = await Promise.all(refs.map((ref) => resolveRun(c, deps, ref)));
+  for (const run of runs) {
+    if (!run.summary) {
+      throw new ScopeError(
+        ErrorCodes.badRequest,
+        `Run #${run.number} has no summary yet (status: ${run.status})`,
+        { hint: 'Compare runs that have completed.' },
+      );
+    }
+  }
+  const sides = await Promise.all(
+    runs.map(async (run) => ({
+      summary: run.summary as NonNullable<typeof run.summary>,
+      cases: await deps.store.runCaseSnapshots(project.id, run.id),
+    })),
+  );
+  const matrix = compareMany(sides);
+  const evaluators = sides.flatMap((s) => s.summary.evaluators);
+  return {
+    runs: runs.map((run, i) => ({
+      run: { id: run.id, number: run.number, workflow: run.workflowName, variant: run.variant },
+      params: run.params,
+      summary: sides[i]?.summary as NonNullable<typeof run.summary>,
+    })),
+    metrics: matrix.metrics,
+    headline: headlineMetrics(matrix.metrics, evaluators).map((m) => m.id),
+    caseCount: matrix.caseCount,
+    cases: matrix.cases.slice(0, MAX_MATRIX_CASES),
+    omittedCases: Math.max(0, matrix.cases.length - MAX_MATRIX_CASES),
   };
 }
 
@@ -218,6 +274,7 @@ export function registerApi(app: Hono<AppEnv>, deps: Deps): void {
   });
 
   app.get('/api/v1/comparisons', read, async (c) => c.json(await comparison(c, deps)));
+  app.get('/api/v1/comparisons/matrix', read, async (c) => c.json(await runMatrix(c, deps)));
 
   app.get('/api/v1/traces', read, async (c) => {
     const q = parseQuery(c, TracesQuery);

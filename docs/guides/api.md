@@ -43,6 +43,7 @@ The complete contract, generated from the server's own schemas, is at
 | GET | `/api/v1/runs/{run}/cases` | Per-case results (`outcome`, `evaluator`, `q`) |
 | GET | `/api/v1/runs/{run}/baseline-comparison` | How the run compared with its baseline file when it ran (404 when it had none) |
 | GET | `/api/v1/comparisons?base=&head=` | Metric deltas and changed cases (`includeUnchanged=true` for all) |
+| GET | `/api/v1/comparisons/matrix?runs=` | Two to four runs side by side: metrics per run with the best marked, and the cases whose outcome differs |
 | GET | `/api/v1/traces` | Traces (`run`, `name`, `status`, `eval`, `model`, `case`, `q`, `since`, `until`, `sort`) |
 | GET | `/api/v1/traces/{trace}` | A trace with spans and evaluations, and for run cases where it stands among the run's failing cases (`failingCases`); id or unique prefix |
 | GET | `/api/v1/evaluators?window=7d` | Pass rate, mean score and per-run trend of each evaluator |

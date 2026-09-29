@@ -303,6 +303,25 @@ describe('scope run → inspect → baseline → regression', () => {
     expect(compare.code).toBe(0);
     const data = JSON.parse(compare.stdout);
     expect(data.counts.regressed).toBeGreaterThan(0);
+
+    // Up to four side by side, baselines included.
+    const many = await scope(['compare', 'baselines/support.json', '1', '4'], project);
+    expect(many.code).toBe(0);
+    expect(many.stdout).toMatch(
+      /Metric\s+baseline baselines\/support\.json \(run #1\)\s+run #1\s+run #4/,
+    );
+    expect(many.stdout).toMatch(/Pass rate\s+83\.3% ✓\s+83\.3% ✓\s+75\.0%/);
+    expect(many.stdout).toContain('Cases that differ');
+    const manyJson = JSON.parse(
+      (await scope(['compare', '1', '2', '4', '--json'], project)).stdout,
+    );
+    expect(manyJson.runs).toEqual(['run #1', 'run #2', 'run #4']);
+    expect(manyJson.metrics.find((m: { id: string }) => m.id === 'pass_rate').values).toHaveLength(
+      3,
+    );
+    const tooMany = await scope(['compare', '1', '2', '3', '4', '5'], project);
+    expect(tooMany.code).toBe(2);
+    expect(tooMany.stderr).toContain('Compare 2 to 4 runs (got 5)');
     const md = await scope(['report', '4', '--format', 'markdown'], project);
     expect(md.stdout).toContain('### ❌ SCOPE · support — failed');
     expect(md.stdout).toContain('| Metric | Baseline | Current | Change | Gate |');

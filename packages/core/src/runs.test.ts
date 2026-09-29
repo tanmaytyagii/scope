@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareRuns, snapshotCase } from './compare.ts';
+import { compareMany, compareRuns, snapshotCase } from './compare.ts';
 import { formatDelta, formatDuration, formatPercent, formatUsd } from './format.ts';
 import { evaluateGates, gateStatus } from './gates.ts';
 import { describeMetric, readMetric } from './metrics.ts';
@@ -223,6 +223,46 @@ describe('compareRuns', () => {
     expect(passRate).toMatchObject({ base: 0.75, head: 0.75, change: 'unchanged' });
     const score = comparison.metrics.find((m) => m.id === 'evaluator.grounded.mean_score');
     expect(score?.change).toBe('improved');
+  });
+});
+
+describe('compareMany', () => {
+  const side = (cases: CaseResult[]) => ({
+    summary: summarizeRun(cases),
+    cases: Object.fromEntries(cases.map((c) => [c.caseId, snapshotCase(c)])),
+  });
+  const passing = (id: string, durationMs = 100) =>
+    makeCase(id, { durationMs, evals: [['grounded', 'passed', 0.9]] });
+  const failing = (id: string) => makeCase(id, { evals: [['grounded', 'failed', 0.2]] });
+  const matrix = compareMany([
+    side([passing('a'), failing('b'), passing('c')]),
+    side([passing('a'), passing('b'), passing('c', 102)]),
+    side([failing('a'), failing('b'), passing('c', 400)]),
+  ]);
+
+  it('lays metrics out per run and marks the best, ignoring noise', () => {
+    const passRate = matrix.metrics.find((m) => m.id === 'pass_rate');
+    expect(passRate?.values).toEqual([2 / 3, 1, 1 / 3]);
+    expect(passRate?.best).toEqual([1]);
+    // p95 latency: 100, ~102 (noise) and ~370 — the first two share "best".
+    expect(matrix.metrics.find((m) => m.id === 'latency.p95_ms')?.best).toEqual([0, 1]);
+    // Identical everywhere: nothing to choose.
+    expect(matrix.metrics.find((m) => m.id === 'tokens.total')?.best).toEqual([]);
+  });
+
+  it('lists only the cases whose outcome differs', () => {
+    expect(matrix.caseCount).toBe(3);
+    expect(matrix.cases).toEqual([
+      { caseId: 'a', outcomes: ['passed', 'passed', 'failed'], traceIds: ['t-a', 't-a', 't-a'] },
+      { caseId: 'b', outcomes: ['failed', 'passed', 'failed'], traceIds: ['t-b', 't-b', 't-b'] },
+    ]);
+  });
+
+  it('shows a case missing from a run as null', () => {
+    const m = compareMany([side([passing('a')]), side([passing('a'), passing('new')])]);
+    expect(m.cases).toEqual([
+      { caseId: 'new', outcomes: [null, 'passed'], traceIds: [null, 't-new'] },
+    ]);
   });
 });
 

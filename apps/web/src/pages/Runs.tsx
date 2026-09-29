@@ -18,6 +18,8 @@ export function runLabel(run: Pick<Run, 'number' | 'variant'>): string {
   return `#${run.number}${run.variant ? ` · ${run.variant}` : ''}`;
 }
 
+const MAX_COMPARED = 4;
+
 export function Runs() {
   useTitle('Runs');
   const navigate = useNavigate();
@@ -27,14 +29,20 @@ export function Runs() {
   const [selected, setSelected] = useState<string[]>([]);
   const items = allItems(runs.data);
 
+  // Two runs compare as base → head; three or four go side by side.
   const toggle = (id: string) =>
-    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s.slice(-1), id]));
+    setSelected((s) =>
+      s.includes(id) ? s.filter((x) => x !== id) : [...s.slice(-(MAX_COMPARED - 1)), id],
+    );
+  const ready = selected.length >= 2;
   const compare = () => {
-    const [a, b] = selected
+    const chosen = selected
       .map((id) => items.find((r) => r.id === id))
       .filter((r): r is Run => Boolean(r))
       .sort((x, y) => x.number - y.number);
-    if (a && b) navigate(`/compare?base=${a.number}&head=${b.number}`);
+    const [a, b] = chosen;
+    if (chosen.length > 2) navigate(`/compare?runs=${chosen.map((r) => r.number).join(',')}`);
+    else if (a && b) navigate(`/compare?base=${a.number}&head=${b.number}`);
   };
 
   return (
@@ -43,13 +51,9 @@ export function Runs() {
         title="Runs"
         meta="Each run executes a workflow over its dataset, evaluates every case and applies gates."
         actions={
-          <Button
-            variant={selected.length === 2 ? 'primary' : 'default'}
-            disabled={selected.length !== 2}
-            onClick={compare}
-          >
+          <Button variant={ready ? 'primary' : 'default'} disabled={!ready} onClick={compare}>
             <IconCompare size={14} />
-            Compare {selected.length === 2 ? 'selected' : `(${selected.length}/2)`}
+            {ready ? `Compare selected (${selected.length})` : 'Compare (select 2–4 runs)'}
           </Button>
         }
       />

@@ -140,6 +140,32 @@ test('compares two runs case by case', async ({ page }) => {
   await expect(passRate.getByText('worse')).toBeVisible();
 });
 
+test('lays three runs side by side', async ({ page }) => {
+  await page.goto('/runs');
+  for (const n of [1, 2, 3])
+    await page.getByRole('checkbox', { name: `Select run #${n} to compare` }).check();
+  await page.getByRole('button', { name: 'Compare selected (3)' }).click();
+  await expect(page).toHaveURL(/\/compare\?runs=1(%2C|,)2(%2C|,)3$/);
+  await expect(page.getByRole('heading', { name: '3 runs side by side' })).toBeVisible();
+
+  // The variants differ in their parameters; the table names them.
+  const differs = page.getByRole('region', { name: 'What differs' });
+  await expect(differs.getByRole('cell', { name: 'sentences' })).toBeVisible();
+
+  const passRate = page
+    .getByRole('region', { name: 'Metrics' })
+    .getByRole('row')
+    .filter({ has: page.getByText('pass_rate', { exact: true }) });
+  await expect(passRate.getByRole('img', { name: 'best' }).first()).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Cases where the runs disagree' }).getByRole('link').first(),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'Remove run #3 from the comparison' }).click();
+  await expect(page).toHaveURL(/runs=1(%2C|,)2$/);
+  await expect(page.getByRole('heading', { name: '2 runs side by side' })).toBeVisible();
+});
+
 test('filters live in the URL and survive a reload', async ({ page }) => {
   await page.goto('/traces');
   await page.getByLabel('Evaluation').selectOption('failed');
@@ -193,6 +219,7 @@ test.describe('accessibility', () => {
     ['runs', async () => '/runs'],
     ['a run', async () => '/runs/2'],
     ['a comparison', async () => '/compare?base=1&head=2'],
+    ['runs side by side', async () => '/compare?runs=1,2,3'],
     ['traces', async () => '/traces'],
     ['a trace', async (page) => `/traces/${await failingTraceId(page)}`],
     ['a filtered trace', async (page) => `/traces/${await failingTraceId(page)}?only=llm`],

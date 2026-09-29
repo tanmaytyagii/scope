@@ -167,6 +167,21 @@ export const MetricDelta = z
   })
   .register(components, { id: 'MetricDelta' });
 
+export const MetricRow = z
+  .strictObject({
+    id: z.string(),
+    label: z.string(),
+    unit: MetricUnit,
+    direction: z.enum(['higher', 'lower']).describe('Which direction is an improvement.'),
+    values: z.array(z.number().nullable()).describe('One value per run, in request order.'),
+    best: z
+      .array(z.number().int())
+      .describe(
+        'Indexes of the runs with the best value; values within noise tolerance of it share it. Empty when there is nothing to choose between.',
+      ),
+  })
+  .register(components, { id: 'MetricRow' });
+
 const EvaluatorCell = z.strictObject({ status: EvaluationStatus, score: z.number().nullable() });
 
 export const CaseSnapshot = z
@@ -195,6 +210,7 @@ export const CaseChange = z
   })
   .register(components, { id: 'CaseChange' });
 
+export type MetricRow = z.output<typeof MetricRow>;
 export type SpanKind = z.output<typeof SpanKind>;
 export type SpanStatus = z.output<typeof SpanStatus>;
 export type EvaluatorKind = z.output<typeof EvaluatorKind>;

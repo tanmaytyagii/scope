@@ -14,6 +14,7 @@ import type {
   ProjectInfo,
   Run,
   RunCasePage,
+  RunMatrix,
   ServerInfo,
   TimeWindowName,
   TraceDetail,
@@ -122,6 +123,16 @@ export const useComparison = (base: string, head: string, includeUnchanged: bool
         { signal },
       ),
     enabled: Boolean(base && head),
+    placeholderData: keepPreviousData,
+  });
+
+/** Two to four runs side by side. */
+export const useRunMatrix = (runs: readonly string[]) =>
+  useQuery({
+    queryKey: ['run-matrix', runs.join(',')],
+    queryFn: ({ signal }) =>
+      apiGet<RunMatrix>('/comparisons/matrix', { runs: runs.join(',') }, { signal }),
+    enabled: runs.length >= 2,
     placeholderData: keepPreviousData,
   });
 

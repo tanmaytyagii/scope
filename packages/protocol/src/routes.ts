@@ -9,6 +9,7 @@ import {
   ComparisonQuery,
   EvaluationsQuery,
   RunCasesQuery,
+  RunMatrixQuery,
   RunsQuery,
   TracesQuery,
 } from './queries.ts';
@@ -23,6 +24,7 @@ import {
   ProjectInfo,
   Run,
   RunCasePage,
+  RunMatrix,
   RunPage,
   ServerInfo,
   TraceDetail,
@@ -153,6 +155,17 @@ export const ROUTES: readonly RouteDefinition[] = [
     access: 'read',
     query: ComparisonQuery,
     response: Comparison,
+    errors: [400, 404],
+  },
+  {
+    method: 'get',
+    path: '/comparisons/matrix',
+    operationId: 'compareManyRuns',
+    summary: 'Two to four runs side by side: metrics per run and the cases whose outcome differs',
+    tag: 'Runs',
+    access: 'read',
+    query: RunMatrixQuery,
+    response: RunMatrix,
     errors: [400, 404],
   },
   {

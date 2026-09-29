@@ -1,6 +1,6 @@
 {
   "name": "@scope-ai/providers",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Model providers for SCOPE: OpenAI, Anthropic, OpenAI-compatible endpoints and deterministic offline models.",
   "keywords": [
     "llm",
@@ -40,7 +40,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@scope-ai/core": "0.1.0",
+    "@scope-ai/core": "0.2.0",
     "@anthropic-ai/sdk": "^0.128.0",
     "openai": "^7.23.0"
   }

@@ -1,6 +1,6 @@
 {
   "name": "@scope-ai/protocol",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "SCOPE HTTP API contract: request and response schemas, types and the OpenAPI document.",
   "keywords": [
     "llm",
@@ -40,7 +40,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@scope-ai/core": "0.1.0",
+    "@scope-ai/core": "0.2.0",
     "zod": "^4.6.5"
   }
 }

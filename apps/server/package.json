@@ -1,6 +1,6 @@
 {
   "name": "@scope-ai/server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "SCOPE server: the HTTP API, trace ingestion and dashboard hosting.",
   "keywords": [
     "llm",
@@ -41,17 +41,17 @@
     "access": "public"
   },
   "dependencies": {
-    "@scope-ai/core": "0.1.0",
-    "@scope-ai/protocol": "0.1.0",
-    "@scope-ai/storage": "0.1.0",
+    "@scope-ai/core": "0.2.0",
+    "@scope-ai/protocol": "0.2.0",
+    "@scope-ai/storage": "0.2.0",
     "@hono/node-server": "^2.1.1",
     "hono": "^4.13.10",
     "zod": "^4.6.5",
-    "@scope-ai/web": "0.1.0"
+    "@scope-ai/web": "0.2.0"
   },
   "devDependencies": {
-    "@scope-ai/config": "0.1.0",
-    "@scope-ai/engine": "0.1.0",
-    "@scope-ai/sdk": "0.1.0"
+    "@scope-ai/config": "0.2.0",
+    "@scope-ai/engine": "0.2.0",
+    "@scope-ai/sdk": "0.2.0"
   }
 }

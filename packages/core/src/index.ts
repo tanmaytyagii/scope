@@ -15,4 +15,4 @@ export * from './summary.ts';
 export * from './text.ts';
 export * from './trace.ts';
 
-export const SCOPE_VERSION = '0.1.0';
+export const SCOPE_VERSION = '0.2.0';

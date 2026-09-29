@@ -7,6 +7,8 @@ which are always called out).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-29
+
 The first published release. Version 0.1.0 was developed in the open but never published, so
 these notes cover everything in SCOPE; the Fixed section lists defects found and fixed before
 this release.

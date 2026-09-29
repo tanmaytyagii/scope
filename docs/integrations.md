@@ -12,13 +12,22 @@ it is tested. For the design behind these choices, see [extensibility](./extensi
 | The OpenAI or Anthropic TypeScript SDK | [`instrumentOpenAI` / `instrumentAnthropic`](./guides/tracing.md#instrument-a-model-client) | automatically, streams included | CI, against the real SDK packages |
 | Any OpenTelemetry SDK (Node, Python, Go, Java, .NET, …) | OTLP/HTTP to `/v1/traces` | GenAI semantic conventions | CI with the OpenTelemetry JS exporters (JSON and protobuf); Python SDK checked manually |
 | Vercel AI SDK 7 | [`@ai-sdk/otel`](#vercel-ai-sdk) → OTLP | automatically | CI, with the AI SDK's own test models |
-| LangChain, LlamaIndex, OpenAI, Anthropic, Bedrock, … through OpenLLMetry | OTLP | OpenLLMetry's attributes | Mapping unit-tested on its documented attributes |
-| The same through OpenInference (Arize Phoenix) | OTLP | OpenInference's attributes | Mapping unit-tested on its documented attributes |
+| OpenAI and LangChain through OpenLLMetry (Traceloop) | OTLP | OpenLLMetry's attributes | CI, with `@traceloop/instrumentation-openai` and `-langchain` |
+| OpenAI and LangChain through OpenInference (Arize Phoenix) | OTLP | OpenInference's attributes | CI, with `@arizeai/openinference-instrumentation-openai` and `-langchain` |
+| LlamaIndex, Anthropic, Bedrock, … through OpenLLMetry or OpenInference, and their Python instrumentations | OTLP | the same attributes | Mapping unit-tested on their documented attributes |
 | Another language, without OpenTelemetry | [`POST /api/v1/ingest`](./guides/api.md#ingestion) | fields of the ingest protocol | CI |
 
+"CI, with …" means the real instrumentation package runs in SCOPE's tests: an application
+calls a model (a local server answering in OpenAI's format), the package's spans go through the
+OpenTelemetry exporter to a running SCOPE, and the test reads back what the dashboard would show.
 "Unit-tested on documented attributes" means the conventions those projects publish are mapped
-and tested with spans built to match them; their packages are not run in SCOPE's CI. If a
-version of theirs sends something SCOPE misreads, please open an issue with the span attributes.
+and tested with spans built to match them, but their packages are not run in CI. If a version of
+theirs sends something SCOPE misreads, please open an issue with the span attributes.
+
+**LangChain with OpenLLMetry:** its LangChain instrumentation nests LangChain's steps under the
+span that is *active* when the chain runs — OpenLLMetry's `withWorkflow`, or a span of your own.
+Without one, each step of a chain arrives as a trace of its own (in any backend).
+OpenInference's LangChain instrumentation nests them by itself.
 
 ## OpenTelemetry (OTLP/HTTP)
 
@@ -55,9 +64,13 @@ are accepted, gzip-compressed or not, within the server's request limit
 | Resource attribute `scope.project` | The project the trace goes to (servers without authentication; with an API key, it must match the key's project) |
 
 OpenLLMetry (`traceloop.span.kind`, indexed `gen_ai.prompt.N.*` / `gen_ai.completion.N.*`,
-`gen_ai.usage.prompt_tokens`) and OpenInference (`openinference.span.kind`, `llm.*`,
-`input.value` / `output.value`, `retrieval.documents.N.document.*` — shown as ranked documents)
-are recognized where they differ from the GenAI conventions.
+`gen_ai.usage.prompt_tokens`, `traceloop.entity.input` / `output`) and OpenInference
+(`openinference.span.kind`, `llm.*`, `input.value` / `output.value`,
+`retrieval.documents.N.document.*` — shown as ranked documents) are recognized where they differ
+from the GenAI conventions. A chain, agent or task that starts a trace becomes its workflow;
+nested ones are steps. The model is the one requested (OpenInference reports the provider's
+dated model as `llm.model_name`, kept as `gen_ai.response.model`), so one model is one row on the
+Models page.
 
 **Privacy.** Prompt and response attributes are moved into the span's input and output, so the
 server's content policy applies to them: with `SCOPE_CAPTURE_CONTENT=false` they are not stored.

@@ -157,10 +157,21 @@ export function spanKind(span: OtlpSpan): SpanKind {
   if (op === 'invoke_agent' || op === 'create_agent')
     return span.parentSpanId ? 'step' : 'workflow';
   if (op === 'agent_step') return 'step';
+  // A chain or agent that starts the trace (LangChain's RunnableSequence, an OpenLLMetry
+  // task) is its workflow, as an agent invocation is.
   const oi = str(a['openinference.span.kind'])?.toUpperCase();
-  if (oi && OPENINFERENCE_KINDS[oi]) return OPENINFERENCE_KINDS[oi];
+  if (oi && OPENINFERENCE_KINDS[oi]) {
+    const kind = OPENINFERENCE_KINDS[oi];
+    return kind === 'step' && !span.parentSpanId ? 'workflow' : kind;
+  }
+  // OpenLLMetry marks LangChain's chains as workflows wherever they are; in SCOPE the workflow
+  // is the trace's root, and nested ones are its steps.
   const tl = str(a['traceloop.span.kind'])?.toLowerCase();
-  if (tl && TRACELOOP_KINDS[tl]) return TRACELOOP_KINDS[tl];
+  if (tl && TRACELOOP_KINDS[tl]) {
+    const kind = TRACELOOP_KINDS[tl];
+    if (kind === 'step' || kind === 'workflow') return span.parentSpanId ? 'step' : 'workflow';
+    return kind;
+  }
   // Instrumentations without an operation name still name the model of a model call.
   if (!op && (str(a['gen_ai.request.model']) || str(a['llm.request.type']))) return 'llm';
   if (span.name === 'ai.toolCall' || span.name.startsWith('ai.toolCall ')) return 'tool';
@@ -314,6 +325,22 @@ function extractContent(
   const tlOut = indexedMessages(a, 'gen_ai.completion', 'role', 'content', consumed);
   if (input === null && tlIn) input = { messages: tlIn };
   if (output === null && tlOut) output = { text: text(tlOut) };
+  // OpenLLMetry workflows and tasks (LangChain runnables, decorated functions): JSON strings.
+  const entityIn = take('traceloop.entity.input');
+  const entityOut = take('traceloop.entity.output');
+  if (input === null && entityIn !== undefined) input = jsonish(entityIn);
+  if (output === null && entityOut !== undefined) {
+    const value = jsonish(entityOut);
+    // LangChain's results are wrapped as { output: … }.
+    output =
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      Object.keys(value).length === 1 &&
+      'output' in value
+        ? (value.output as JsonValue)
+        : value;
+  }
 
   // OpenInference: indexed messages, retrieved documents, generic input.value / output.value.
   const oiIn = indexedMessages(
@@ -435,13 +462,23 @@ export function mapSpan(span: OtlpSpan, scope: string, pricing: PriceTable): Ing
   if (scope) attributes['otel.scope.name'] = scope;
   if (kind === 'llm') {
     provider = providerName(a)?.slice(0, MAX_PROVIDER) ?? null;
+    // The model asked for, as SCOPE records it everywhere; the one the provider reported (a
+    // dated snapshot) goes to gen_ai.response.model. OpenInference names the reported model
+    // llm.model_name and keeps the requested one in llm.invocation_parameters.
+    const invocation = jsonish(a['llm.invocation_parameters'] ?? null);
+    const invoked =
+      invocation && typeof invocation === 'object' && !Array.isArray(invocation)
+        ? str(invocation.model as OtlpValue)
+        : null;
     model =
-      firstStr(a, [
-        'gen_ai.request.model',
-        'gen_ai.response.model',
-        'llm.model_name',
-        'ai.model.id',
-      ])?.slice(0, MAX_MODEL) ?? null;
+      (
+        firstStr(a, ['gen_ai.request.model']) ??
+        invoked ??
+        firstStr(a, ['gen_ai.response.model', 'llm.model_name', 'ai.model.id'])
+      )?.slice(0, MAX_MODEL) ?? null;
+    const reported = firstStr(a, ['gen_ai.response.model', 'llm.model_name']);
+    if (reported && model && reported !== model)
+      attributes['gen_ai.response.model'] = reported.slice(0, MAX_MODEL);
     const cacheRead =
       firstCount(a, [
         'gen_ai.usage.cache_read.input_tokens',

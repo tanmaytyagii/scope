@@ -60,6 +60,13 @@ which are always called out).
 
 ### Fixed
 
+- OTLP mapping, found by testing with the real OpenInference and OpenLLMetry instrumentations
+  (now in CI, for OpenAI and LangChain): a chain, agent or task that starts a trace is its
+  workflow and nested ones are steps (OpenLLMetry marks every LangChain chain a workflow);
+  OpenLLMetry's `traceloop.entity.input` / `output` are the span's content; OpenInference model
+  calls record the model requested (from `llm.invocation_parameters`), with the dated model the
+  provider reported kept as `gen_ai.response.model`, so one model is one row on the Models page.
+
 - The SDK's HTTP exporter no longer loses whole batches. Requests are bounded by size as well as
   by trace count (`maxBatchBytes`, 4 MiB by default, below the server's 5 MiB limit), a trace too
   large for any request is dropped on its own with a warning, and when the server refuses a batch

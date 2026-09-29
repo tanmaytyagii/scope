@@ -125,9 +125,32 @@ describe('OpenLLMetry (Traceloop)', () => {
     });
   });
 
-  it('maps workflow and task spans', () => {
-    expect(mapSpan(span({ 'traceloop.span.kind': 'workflow' }), '', {}).kind).toBe('workflow');
-    expect(mapSpan(span({ 'traceloop.span.kind': 'task' }), '', {}).kind).toBe('step');
+  it(`maps workflow and task spans: the trace's root is its workflow, nested ones are steps`, () => {
+    const root = { parentSpanId: null };
+    const kind = (attributes: Record<string, string>, extra = {}) =>
+      mapSpan(span(attributes, extra), '', {}).kind;
+    expect(kind({ 'traceloop.span.kind': 'workflow' }, root)).toBe('workflow');
+    expect(kind({ 'traceloop.span.kind': 'task' }, root)).toBe('workflow');
+    // LangChain's chains arrive as "workflow" at any depth.
+    expect(kind({ 'traceloop.span.kind': 'workflow' })).toBe('step');
+    expect(kind({ 'traceloop.span.kind': 'task' })).toBe('step');
+    expect(kind({ 'openinference.span.kind': 'CHAIN' }, root)).toBe('workflow');
+    expect(kind({ 'openinference.span.kind': 'CHAIN' })).toBe('step');
+  });
+
+  it('records the model asked for, and the one the provider reported beside it', () => {
+    const s = mapSpan(
+      span({
+        'openinference.span.kind': 'LLM',
+        'llm.model_name': 'gpt-5-mini-2026-08-07',
+        'llm.invocation_parameters': '{"model":"gpt-5-mini","temperature":0}',
+        'llm.token_count.prompt': 10,
+      }),
+      '',
+      {},
+    );
+    expect(s.model).toBe('gpt-5-mini');
+    expect(s.attributes['gen_ai.response.model']).toBe('gpt-5-mini-2026-08-07');
   });
 });
 

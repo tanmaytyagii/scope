@@ -205,6 +205,15 @@ All pure functions in `core`, shared by the CLI, the server and the dashboard's 
 - `compareRuns(base, head) → Comparison`: metric deltas with direction-awareness (higher is
   better for scores, lower is better for latency and cost) and per-case changes
   (`regressed`, `fixed`, `unchanged`, `added`, `removed`).
+- `compareConfig(base, head) → ConfigDiff`: what differs besides results — parameters, the
+  workflow file, the dataset, the files the workflow names (by fingerprint) and the SCOPE version.
+
+Each run also records a `RunManifest` (built by the engine's `runManifest` when it starts,
+completed with the models called when it ends): SCOPE and Node.js versions and platform,
+SHA-256 fingerprints of `function` modules, custom evaluator modules and retrieval corpora,
+evaluator identities (judge model and prompt version for model-graded ones), and the models
+called with the exact models providers reported. Baseline files keep the fingerprints and SCOPE
+version, so `compareConfig` can name changed files.
 
 The metric namespace used by gates, reports and the API:
 
@@ -404,9 +413,15 @@ await tracer.trace('answer-question', { input: { question } }, async () => {
   are wrapped so each chunk passes through unchanged while the span accumulates the output.
   Response fields are validated before use (token counts must be non-negative integers).
   Model calls from anything else are recorded with `span.recordModelCall(...)`.
-- Exporters: `HttpExporter` (batched, bounded queue, retry with backoff, drops and counts on
-  overflow — never blocks or crashes the host application), `ConsoleExporter`,
-  `MemoryExporter` (tests). The engine uses a storage-backed exporter.
+- A trace is exported when its function returns, or — when spans are still open then, such as a
+  stream handed to a web framework — when they end, at most `openSpanGraceMs` (10 minutes)
+  later; at most 1,000 traces wait. Instrumented streams mark partial output
+  (`scope.stream.incomplete`: `cancelled`, `abandoned`).
+- Exporters: `HttpExporter` (each trace serialized once when queued; requests bounded by traces
+  and bytes; queue bounded by spans and bytes; retry with backoff; a batch the server refuses as
+  too large or naming an invalid trace is split so only that trace is lost — never blocks or
+  crashes the host application), `ConsoleExporter`, `MemoryExporter` (tests). The engine uses a
+  storage-backed exporter.
 - Configuration via `SCOPE_URL`, `SCOPE_API_KEY`, `SCOPE_PROJECT`, `SCOPE_CAPTURE_CONTENT`.
 
 ## 9. Storage (`@scope-ai/storage`)
@@ -425,19 +440,23 @@ workflow_versions id, workflow_id → workflows, hash, definition (json), source
                 unique (workflow_id, hash)
 runs            id, project_id, number, workflow_id, workflow_version_id, variant, params,
                 dataset, status, gate_status, summary, gates, git, trigger, error,
-                started_at, ended_at, duration_ms
+                started_at, ended_at, duration_ms, manifest (json, 0003)
                 unique (project_id, number); index (project_id, started_at), (workflow_id, started_at)
 traces          id, project_id, run_id → runs (cascade), case_id, name, status, start/end,
                 duration_ms, input, output, metadata, error, token and cost rollups,
                 span_count, llm_call_count, eval_status, search_text
-                index (project_id, start_time), (run_id), (project_id, name, start_time),
+                index (project_id, start_time, status, total_tokens, cost_usd,
+                llm_call_count) (covering, 0004), (run_id), (project_id, name, start_time),
                 (project_id, status, start_time)
 spans           (trace_id, id) primary key, trace_id → traces (cascade), parent_id, name, kind,
                 status, timing, input, output, attributes, events, provider, model, tokens,
-                cost_usd; index (project_id, model, start_time)
+                cost_usd; index (project_id, model, start_time); covering index of model calls
+                (project_id, start_time, provider, model, …) where kind = 'llm' (0004)
 evaluations     id, project_id, trace_id → traces (cascade), run_id, span_id, evaluator, type,
                 kind, status, score, threshold, reason, metadata, duration_ms, created_at
-                index (run_id, evaluator), (project_id, evaluator, created_at), (trace_id)
+                index (run_id, evaluator), (project_id, evaluator, created_at), (trace_id),
+                (project_id, created_at, status, evaluator, kind, type, score) (covering,
+                0004), (project_id, status, created_at)
 run_comparisons run_id → runs (cascade, primary key), project_id, baseline (json),
                 comparison (json: metric deltas, counts, up to 500 changed cases), created_at
 ```
@@ -452,8 +471,16 @@ trace and span times so spans that start within the same millisecond keep their 
 parses it. Every tenant-owned row carries `project_id`, which every query filters on; ingestion
 attaches spans and evaluations to their bundle's trace and refuses trace ids owned by another
 project. Aggregations (overview, models, evaluator health) are computed in SQL over denormalized
-columns, never by loading rows into memory. List endpoints use keyset pagination on
-`(start_time, id)`.
+columns, never by loading rows into memory, reading covering indexes in time order. List
+endpoints use keyset pagination on `(start_time, id)`. Spans and evaluations are selected by
+trace or run id alone: a `project_id` condition next to them can make SQLite walk a project index
+instead; `query-plans.test.ts` explains every hot query and fails on such plans.
+
+Trace reads take an optional content budget: spans' structure always, inputs and outputs only
+within the budget (sizes are read first, content only for spans that fit); `getSpan` returns one
+span in full. Retention (`planPrune`, `prune`) deletes runs and application traces in batches
+through indexed cascades; `vacuum` and `backupSqlite` serve `scope prune --vacuum` and
+`scope db backup`.
 
 ## 10. HTTP API (`@scope-ai/server`, `@scope-ai/protocol`)
 
@@ -598,7 +625,9 @@ scope baseline save [run]         Write a baseline file for CI
 scope ui [--port] [--open]        Start the local dashboard (127.0.0.1, no authentication)
 scope server [--host] [--port]    Start a server for shared deployments (API keys required)
 scope keys create|list|revoke     Manage project API keys for `scope server`
-scope doctor                      Diagnose configuration, storage and providers
+scope prune                       Delete old runs and application traces, or one run or trace (--yes)
+scope db status|migrate|backup    The database: schema and size, migrations, SQLite backups
+scope doctor                      Diagnose configuration, storage, providers and prices
 scope version
 ```
 
@@ -644,7 +673,13 @@ quality shows the baseline diff for review. See
 - Every HTTP request gets an `x-request-id` (accepted if valid, otherwise generated) that
   appears in logs and error responses.
 - `/metrics` exposes Prometheus counters and histograms: HTTP requests by route and status,
-  ingested traces/spans, ingestion rejections, database query errors.
+  ingested traces/spans, ingestion rejections, dropped spans, retention deletions, unexpected
+  errors.
+- Request logs name the project and API key id behind each request (never the key); passing
+  health checks are not logged. Queries slower than `SCOPE_SLOW_QUERY_MS` are logged with their
+  SQL, never their values (`Store.open({ onQuery })`).
+- `scope db status` shows the schema version, pending migrations or a newer SCOPE's, the
+  database size and what each project holds.
 - `scope doctor` checks Node version, configuration validity, storage connectivity and
   migration state, provider credentials (presence, and optionally a live request with
   `--network`), and port availability.
@@ -676,7 +711,10 @@ quality shows the baseline diff for review. See
 | Captured payload size per field | 64 KiB | `privacy.max_payload_bytes` |
 | Spans per trace | 1,000 (excess dropped and counted) | `SCOPE_MAX_SPANS_PER_TRACE` |
 | Ingest request body (SDK and OTLP) | 5 MiB (OTLP gzip: 20 MiB decompressed) | `SCOPE_MAX_INGEST_BYTES` |
-| SDK export queue | 2,048 spans, dropped with a warning when full | exporter option |
+| SDK request size | 4 MiB, 50 traces | `maxBatchBytes`, `maxBatchTraces` |
+| SDK export queue | 2,048 spans, 32 MiB; dropped with a warning when full | `maxQueueSpans`, `maxQueueBytes` |
+| Traces waiting for open spans | 1,000, up to 10 minutes each | `openSpanGraceMs` |
+| Trace content per dashboard read | 2 MiB (rest loaded per span) | `contentBudget` query parameter |
 | API page size | 50 (max 200) | per request |
 | Run concurrency | 4 | `--concurrency` / `defaults.concurrency` |
 
@@ -687,8 +725,13 @@ quality shows the baseline diff for review. See
 | Unit | Vitest | core (stats, gates, comparison, cost, redaction, ids), config (schemas, diagnostics with positions, templates), evaluators, retrieval, providers (recorded HTTP fixtures via a fake `fetch`), sdk |
 | Integration | Vitest | engine end-to-end with `local` models; storage against SQLite and PostgreSQL (`SCOPE_TEST_DATABASE_URL`); server via `app.request()` against a real store |
 | CLI | Vitest + child processes | `init → validate → run → report → compare → baseline` in temporary directories, asserting output, JSON shape and exit codes |
-| E2E | Playwright | Dashboard flows against a server seeded by executing the example workflows (real runs, not fixtures) |
-| Package | CI | `npm pack` the CLI and run it from a clean directory to catch missing dependencies |
+| E2E | Playwright | Dashboard flows against a server seeded by executing the example workflows (real runs, not fixtures), plus a large trace sent over OTLP |
+| Integrations | Vitest | The real OpenAI and Anthropic SDKs (instrumentation, robustness), OpenTelemetry exporters, the Vercel AI SDK, OpenInference and OpenLLMetry instrumentations of OpenAI and LangChain, against running servers |
+| Isolation | Vitest | Every route in the route table, with one project's key against another project's ids |
+| Query plans | Vitest | Every hot query explained on SQLite; no whole-table or whole-project scans |
+| Performance | CI job | `bench:check`: ingestion and reads at 2,000 vs 50,000 traces must not grow with the data |
+| Package | CI | `npm pack` every package and install them into an empty project |
+| Deployment | CI | The Docker image, and `deploy/compose.yaml` brought up and used through API keys |
 
-CI runs lint, typecheck, unit and integration tests (with a PostgreSQL service), build, E2E,
-the package smoke test and dependency audit on every pull request.
+CI runs all of these on every pull request, plus lint, typecheck, build and a dependency
+review.

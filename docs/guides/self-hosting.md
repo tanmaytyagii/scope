@@ -111,7 +111,11 @@ pricing overrides applied on ingestion ([configuration](./configuration.md)).
   spans, unexpected errors.
 - **Logs:** one JSON object per line with a request id; every response carries the same id in
   `x-request-id` and in error bodies. Logs never contain prompt or output content.
-- **Backups:** everything is in the database; back up PostgreSQL as usual.
+- **Backups, upgrades, retention:** see the [operations guide](./operations.md) — everything is
+  in the database; `pg_dump` for PostgreSQL, `scope db backup` for SQLite; back up before
+  upgrading, since migrations are forward-only.
+- **A ready deployment:** [`deploy/compose.yaml`](../../deploy/compose.yaml) runs this server on
+  PostgreSQL with health checks and optional HTTPS.
 
 ## Security
 

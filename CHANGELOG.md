@@ -67,10 +67,30 @@ which are always called out).
   parameter the API returns everything, as before. Spans carry the new `contentOmitted` field
   (always `false` then).
 
+### Changed
+
+- **Migrations `0003_run_manifest` and `0004_window_indexes`.** They run automatically when the
+  server or any `scope` command opens the database (or with `scope db migrate`). A database they
+  have migrated cannot be opened by 0.3; back up first (`scope db backup` for SQLite, `pg_dump`
+  for PostgreSQL — see the [operations guide](docs/guides/operations.md)). Migration 0004 replaces
+  the index `traces_project_start_idx` with a covering one that starts with the same columns.
+- The SDK exports a trace whose function returned with spans still open (a stream handed to a web
+  framework) when those spans end, up to `openSpanGraceMs` later, instead of at once with the
+  spans closed as errors. `scope run` is unchanged.
+- OTLP: OpenInference chains and agents, and OpenLLMetry tasks, that start a trace are its
+  workflow; OpenLLMetry "workflow" spans nested in a trace are steps. OpenInference model calls
+  record the requested model.
+- API additions, all optional to read: `contentOmitted` on spans, `manifest` on runs, `files` and
+  `scope` on configuration diffs, `contentBudget` on the trace endpoint, and the new span
+  endpoint.
+
 ### Security
 
 - The Docker image's base (`node:24-bookworm-slim`) is pinned by digest, and Dependabot proposes
   new digests, so a release is built on exactly the base CI tested.
+- Every API route is tested for project isolation: with one project's key, each route is asked for
+  another project's runs, traces, spans and workflows and must answer 404, and no response may
+  contain the other project's data.
 
 ### Fixed
 

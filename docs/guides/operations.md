@@ -77,7 +77,7 @@ one, and `scope db status` says so. **Back up before upgrading.**
 To upgrade a Compose deployment:
 
 ```bash
-docker compose exec postgres pg_dump -U scope --format=custom scope > scope-before-upgrade.dump
+docker compose exec -T postgres pg_dump -U scope --format=custom scope > scope-before-upgrade.dump
 git pull                           # or set SCOPE_IMAGE to the new version
 docker compose up -d --build       # the new server applies migrations on start
 docker compose exec scope scope db status
@@ -95,6 +95,10 @@ snapshots and point-in-time recovery.
 ```bash
 pg_dump --format=custom --file=scope.dump "$SCOPE_DATABASE_URL"
 pg_restore --clean --if-exists --dbname="$SCOPE_DATABASE_URL" scope.dump
+
+# with deploy/compose.yaml (-T: no terminal, so the binary dump is not altered)
+docker compose exec -T postgres pg_dump -U scope --format=custom scope > scope.dump
+docker compose exec -T postgres pg_restore -U scope --clean --if-exists --dbname=scope < scope.dump
 ```
 
 **SQLite:** `scope db backup <file>` writes a consistent copy while SCOPE keeps running (SQLite's

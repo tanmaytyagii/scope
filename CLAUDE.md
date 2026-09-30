@@ -16,7 +16,8 @@ code. Update both files when architecture or milestone state changes.
 | `docs/roadmap.md` | Milestones M1–M7 and post-v0.1 work. Planned work lives here, never in the UI |
 | `docs/integrations.md` | How traces get in from each stack, and how each path is tested. Claim nothing untested |
 | `docs/extensibility.md` | Extension points (evaluators, steps, providers, exporters, APIs) and their stability |
-| `docs/v0.2-roadmap.md` | The v0.2 audit, scope and outcome of each item; compatibility notes |
+| `docs/v0.4-roadmap.md` | The latest audit, scope and outcome (v0.2 and v0.3 have their own) |
+| `docs/guides/operations.md` | Deployment, monitoring, migrations between versions, backups, retention, keys |
 | `docs/performance.md` | Measured timings and how to reproduce them (`npm run bench`) |
 | `RELEASING.md` | Versioning, the release workflow, what only the maintainer can do |
 
@@ -37,6 +38,7 @@ apps/server          Hono HTTP API, OTLP ingestion (`src/otlp/`), dashboard host
 apps/web             dashboard SPA (React 19, Vite, Tailwind v4, Radix, TanStack Query)
 integrations/        GitHub Action (composite; self-tested in CI)
 examples/            runnable examples; examples/examples.test.ts runs each as its README says
+deploy/              production-style Docker Compose (scope server, PostgreSQL, optional Caddy)
 ```
 
 Dependency direction: `cli → server → storage, protocol → core`; `cli → engine → {evaluators,
@@ -57,6 +59,7 @@ npm run release:verify         # package manifests + tarball contents (after a b
 npm run release:version -- X.Y.Z   # lockstep version bump (see RELEASING.md; never ad hoc)
 npm run test:e2e               # Playwright + axe against CLI-seeded data (build web first)
 npm run bench -- --traces N    # ingestion and API timings on a temporary database (docs/performance.md)
+npm run bench:check            # CI's performance check: timings at 2,000 vs 50,000 traces
 npm run dev:web                # dashboard dev server, proxies /api to a running scope ui
 SCOPE_TEST_DATABASE_URL=postgres://… npm test   # also run storage/server tests on PostgreSQL
 ```
@@ -67,8 +70,9 @@ project (e.g. one made with `scope init`). Screenshot pages with Playwright to r
 Sources run directly on Node (`--conditions=scope-source`, erasable TS only; the condition is not
 `source` because third-party packages publish that one). Tests live next to code as `*.test.ts`
 under `packages/*/src` and `apps/server/src`, plus `examples/` and `integrations/`.
-`npm run bench` measures ingestion (SDK and OTLP) and API timings; record results in
-`docs/performance.md`.
+`npm run bench` measures ingestion (SDK and OTLP) and API timings (`--database postgres://…`
+for PostgreSQL); record results in `docs/performance.md`. `deploy/compose.yaml` is the
+production-style deployment; CI brings it up.
 
 ## Conventions
 
@@ -81,8 +85,9 @@ under `packages/*/src` and `apps/server/src`, plus `examples/` and `integrations
 - Never log prompt/output content — ids, sizes, counts and timings only.
 - Only `storage` knows SQL; only `server` knows HTTP; only `cli` knows terminals.
 - Migrations are append-only (`packages/storage/src/migrations.ts`), tested for upgrades from the
-  previous schema. Large per-run JSON goes in its own table (`run_comparisons`), because run
-  queries `selectAll()` and run lists must stay small.
+  previous schema; update the version table in `docs/guides/operations.md` with each one. Large
+  per-run JSON goes in its own table (`run_comparisons`), because run queries `selectAll()` and
+  run lists must stay small; the run manifest (a few KB) lives on the run.
 - API: `/api/v1`, camelCase JSON, ISO-8601 timestamps in responses, keyset pagination
   (`limit` ≤ 200, opaque `cursor`, `nextCursor`), one error envelope
   `{ error: { code, message, hint?, details?, requestId } }`. DTOs are explicit mappings.
@@ -91,9 +96,14 @@ under `packages/*/src` and `apps/server/src`, plus `examples/` and `integrations
   with epoch-millisecond numbers. `POST /v1/traces` accepts OTLP/HTTP (protobuf or JSON, gzip);
   spans of one trace may arrive over many requests, so storage recomputes touched traces from
   all their stored spans (`ingestSpans`). Both paths redact with the server's policy.
-- Span queries select by `trace_id` (the primary key), without `project_id` conditions next to
-  trace ids: on SQLite those pick the `(project_id, model, start_time)` index and scan the whole
-  project (see `docs/performance.md`).
+- Spans and evaluations are selected by trace id (or run id), without `project_id` conditions next
+  to them: with one, SQLite may pick a project index and walk the whole project. The query-plan
+  test (`packages/storage/src/query-plans.test.ts`) fails on such plans — run it after changing
+  a query or an index. Dashboard time-window aggregates read covering indexes (migration 0004).
+- Runs record a manifest (`runManifest` in the engine): versions, fingerprints of the files the
+  workflow names, evaluator identities, models called. Baselines keep the fingerprints, so
+  comparisons name changed files. Deleting data goes through `store.prune` (batched, indexed
+  cascades); nothing else deletes.
 - Treat model output, provider responses and ingested attributes as untrusted: validate numbers
   (token counts are non-negative integers), bound sizes, and render text in Markdown reports
   with `mdText`/`mdCode` (no mentions, links or images in pull requests).

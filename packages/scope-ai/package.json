@@ -1,6 +1,6 @@
 {
   "name": "scope-ai",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "SCOPE — see what your AI actually does. Tracing, evaluation and regression testing for AI workflows: installs the `scope` command.",
   "keywords": [
     "llm",
@@ -35,6 +35,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@scope-ai/cli": "0.3.0"
+    "@scope-ai/cli": "0.4.0"
   }
 }

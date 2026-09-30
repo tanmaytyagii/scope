@@ -1,6 +1,6 @@
 {
   "name": "@scope-ai/cli",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "The scope command-line tool: run, evaluate, compare and inspect AI workflows.",
   "keywords": [
     "llm",
@@ -45,12 +45,12 @@
     "access": "public"
   },
   "dependencies": {
-    "@scope-ai/core": "0.3.0",
-    "@scope-ai/config": "0.3.0",
-    "@scope-ai/providers": "0.3.0",
-    "@scope-ai/engine": "0.3.0",
-    "@scope-ai/storage": "0.3.0",
+    "@scope-ai/core": "0.4.0",
+    "@scope-ai/config": "0.4.0",
+    "@scope-ai/providers": "0.4.0",
+    "@scope-ai/engine": "0.4.0",
+    "@scope-ai/storage": "0.4.0",
     "commander": "^15.0.0",
-    "@scope-ai/server": "0.3.0"
+    "@scope-ai/server": "0.4.0"
   }
 }

@@ -7,6 +7,8 @@ which are always called out).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-30
+
 ### Added
 
 - Prices say when they may be out of date. A price recorded more than 180 days ago is marked on

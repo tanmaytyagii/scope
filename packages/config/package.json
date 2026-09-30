@@ -1,6 +1,6 @@
 {
   "name": "@scope-ai/config",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Workflow and project configuration for SCOPE: schemas, validation with source locations, templating and datasets.",
   "keywords": [
     "llm",
@@ -40,7 +40,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@scope-ai/core": "0.3.0",
+    "@scope-ai/core": "0.4.0",
     "zod": "^4.6.5",
     "yaml": "^2.9.1"
   }

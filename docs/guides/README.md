@@ -16,6 +16,7 @@ workflow or instrument an application, then put it in CI.
 | --- | --- |
 | [Tracing applications](./tracing.md) | Record model calls with one line around the OpenAI or Anthropic client, trace requests with the SDK, send OpenTelemetry spans, and turn traces into test cases |
 | [Integrations](../integrations.md) | Find the path for your stack (SDKs, LangChain, Vercel AI SDK, OpenTelemetry, local models) and how each is tested |
+| [Trace contract](../instrumentation-contract.md) | What a trace, span, model call, tool call, retrieval and evaluation are, and how each integration maps onto them |
 
 ## Evaluate and compare
 

@@ -47,7 +47,29 @@ beforeAll(async () => {
       body += c;
     });
     req.on('end', () => {
-      const request = JSON.parse(body) as { model: string };
+      const request = JSON.parse(body) as { model: string; stream?: boolean };
+      if (request.model === 'broken') {
+        res.writeHead(400, { 'content-type': 'application/json' }).end(
+          JSON.stringify({
+            error: { message: 'model broken does not exist', type: 'invalid_request_error' },
+          }),
+        );
+        return;
+      }
+      if (request.stream) {
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        const chunk = (delta: object, extra: object = {}) =>
+          res.write(
+            `data: ${JSON.stringify({ id: 'c', object: 'chat.completion.chunk', created: 1, model: `${request.model}-2026-08-07`, choices: [{ index: 0, delta, finish_reason: null }], ...extra })}\n\n`,
+          );
+        chunk({ role: 'assistant', content: 'Five to ' });
+        chunk({ content: 'seven days.' });
+        res.write(
+          `data: ${JSON.stringify({ id: 'c', object: 'chat.completion.chunk', created: 1, model: `${request.model}-2026-08-07`, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 42, completion_tokens: 6, total_tokens: 48 } })}\n\n`,
+        );
+        res.end('data: [DONE]\n\n');
+        return;
+      }
       res.writeHead(200, { 'content-type': 'application/json' }).end(
         JSON.stringify({
           id: 'chatcmpl-1',
@@ -106,6 +128,17 @@ async function traces(): Promise<TraceDetail[]> {
 const llm = (t: TraceDetail | undefined): Span | undefined =>
   t?.spans.find((s) => s.kind === 'llm');
 
+/** Whether `span` sits under the trace's root, following parent ids. */
+function underRoot(trace: TraceDetail | undefined, span: Span | undefined): boolean {
+  const byId = new Map(trace?.spans.map((s) => [s.id, s]));
+  let current = span;
+  for (let hops = 0; current && hops < 50; hops++) {
+    if (current.parentId === null) return current !== span;
+    current = byId.get(current.parentId);
+  }
+  return false;
+}
+
 it('records an OpenAI SDK call as a model span with messages, response and tokens', async () => {
   const client = new OpenAI({ apiKey: 'sk-test', baseURL: modelUrl });
   const reply = await client.chat.completions.create({
@@ -157,6 +190,46 @@ it('records a LangChain chain as a workflow with its model call inside', async (
   expect(root?.kind).toBe('workflow');
   const call = llm(trace);
   expect(call).toMatchObject({ model: 'gpt-5-mini', inputTokens: 42, outputTokens: 6 });
+  // The model call nests inside the chain, not beside it.
+  expect(underRoot(trace, call)).toBe(true);
   expect(JSON.stringify(call?.input)).toContain('Refund time?');
   expect(trace?.trace.output).not.toBeNull();
+});
+
+// The next two tests pin down what this instrumentation sends (openai 7.25, OpenInference as in
+// package.json); if it changes, update docs/integrations.md along with them.
+
+it('records a streamed OpenAI call: its text and model, without token counts', async () => {
+  const client = new OpenAI({ apiKey: 'sk-test', baseURL: modelUrl });
+  const stream = await client.chat.completions.create({
+    model: 'gpt-5-nano',
+    messages: [{ role: 'user', content: 'Refund time (streamed)?' }],
+    stream: true,
+    stream_options: { include_usage: true },
+  });
+  let text = '';
+  for await (const chunk of stream) text += chunk.choices[0]?.delta.content ?? '';
+  expect(text).toBe('Five to seven days.');
+  const trace = (await traces()).find((t) =>
+    JSON.stringify(llm(t)?.input ?? null).includes('(streamed)'),
+  );
+  // The instrumentation sends no token counts for streams, even with include_usage: SCOPE shows
+  // them as unknown rather than zero.
+  expect(llm(trace)).toMatchObject({
+    model: 'gpt-5-nano',
+    output: { text: 'Five to seven days.' },
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
+});
+
+it('passes a failed call’s error to the application; the instrumentation exports no span for it', async () => {
+  const client = new OpenAI({ apiKey: 'sk-test', baseURL: modelUrl, maxRetries: 0 });
+  const error = await client.chat.completions
+    .create({ model: 'broken', messages: [{ role: 'user', content: 'Will this fail?' }] })
+    .catch((e: unknown) => e);
+  expect(error).toBeInstanceOf(OpenAI.BadRequestError);
+  const all = await traces();
+  expect(all.some((t) => t.spans.some((sp) => sp.model === 'broken'))).toBe(false);
 });

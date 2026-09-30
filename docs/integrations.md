@@ -1,7 +1,9 @@
 # Integrations
 
 How traces get into SCOPE from the stack you already have, what each path records, and how well
-it is tested. For the design behind these choices, see [extensibility](./extensibility.md).
+it is tested. Every path produces the same kinds of records, defined in the
+[trace contract](./instrumentation-contract.md) along with where paths differ. For the design
+behind these choices, see [extensibility](./extensibility.md).
 
 ## At a glance
 
@@ -23,6 +25,11 @@ OpenTelemetry exporter to a running SCOPE, and the test reads back what the dash
 "Unit-tested on documented attributes" means the conventions those projects publish are mapped
 and tested with spans built to match them, but their packages are not run in CI. If a version of
 theirs sends something SCOPE misreads, please open an issue with the span attributes.
+
+**Streamed and failed calls through OpenInference or OpenLLMetry** (their OpenAI instrumentations,
+with openai 7.25, checked in CI): streamed calls arrive with their text but no token counts, so
+tokens and cost show as unknown; a call that fails exports no span at all. SCOPE's own
+`instrumentOpenAI` records both.
 
 **LangChain with OpenLLMetry:** its LangChain instrumentation nests LangChain's steps under the
 span that is *active* when the chain runs — OpenLLMetry's `withWorkflow`, or a span of your own.

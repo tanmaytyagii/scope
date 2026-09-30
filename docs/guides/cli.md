@@ -6,7 +6,7 @@
 
 | Option | Effect |
 | --- | --- |
-| `--json` | Print one JSON document on stdout (diagnostics stay on stderr) |
+| `--json` | Print one JSON document on stdout (diagnostics stay on stderr). `scope export` is the exception: without `-o` its stdout is the export itself, in its `--format`; with `-o`, `--json` prints what was written |
 | `-q, --quiet` | Print only results and errors |
 | `--verbose` | Print debug information, including stack traces for unexpected errors |
 | `--no-color` | Disable colors (also `NO_COLOR`) |

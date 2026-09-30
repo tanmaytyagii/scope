@@ -50,9 +50,21 @@ function parseSince(value: string, now = Date.now()): number {
   return cutoff;
 }
 
-function write(ctx: CommandContext, output: string | undefined, content: string, what: string) {
+/**
+ * Writes the export to a file, or to stdout — where the export itself is the output, in its
+ * `--format`, with or without `--json`. With a file, `--json` prints a summary of what was written.
+ */
+function write(
+  ctx: CommandContext,
+  output: string | undefined,
+  content: string,
+  what: string,
+  summary: { format: string; count: number },
+) {
   if (output) {
-    writeFileSync(resolve(ctx.cwd, output), content);
+    const file = resolve(ctx.cwd, output);
+    writeFileSync(file, content);
+    ctx.out.emitJson({ file, ...summary });
     ctx.out.info(`${ctx.out.errStyle.green(ctx.out.sym.pass)} Wrote ${what} to ${output}`);
   } else ctx.out.stdout.write(content);
 }
@@ -132,6 +144,7 @@ export async function exportTracesCommand(
     options.output,
     lines.length ? `${lines.join('\n')}\n` : '',
     `${exported} ${format === 'dataset' ? 'cases' : 'traces'}`,
+    { format, count: exported },
   );
   if (skippedNoInput)
     ctx.out.warn(
@@ -219,7 +232,10 @@ export async function exportRunCommand(
     format === 'csv'
       ? toCsv(cases, run.summary?.evaluators.map((e) => e.name) ?? [])
       : `${cases.map((c) => JSON.stringify(c)).join('\n')}\n`;
-  write(ctx, options.output, content, `${cases.length} cases of run #${run.number}`);
+  write(ctx, options.output, content, `${cases.length} cases of run #${run.number}`, {
+    format,
+    count: cases.length,
+  });
 }
 
 /** Exported for tests. */

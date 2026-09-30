@@ -962,3 +962,68 @@ describe('what produced a run', () => {
     expect(md.stdout).toContain('**Changed since the baseline:** the retrieval corpus');
   });
 });
+
+describe('every command', () => {
+  /** Command names from a help screen's command list (not `help` itself). */
+  const commandsIn = (help: string) =>
+    [...help.matchAll(/^ {2}([a-z]+)(?:\|[a-z]+)?(?= |$)/gm)]
+      .map((m) => m[1] as string)
+      .filter((name) => name !== 'help');
+
+  it('has help that says what it does, down to every subcommand', async () => {
+    const top = await scope(['--help'], root);
+    const names = commandsIn(top.stdout.slice(top.stdout.indexOf('Get started:')));
+    expect(names).toEqual(
+      expect.arrayContaining(['init', 'run', 'runs', 'export', 'prune', 'db', 'doctor']),
+    );
+    const checked: string[] = [];
+    for (const name of names) {
+      const help = await scope([name, '--help'], root);
+      expect(help.code, name).toBe(0);
+      expect(help.stdout, name).toMatch(new RegExp(`^Usage: scope ${name}`, 'm'));
+      checked.push(name);
+      const commands = help.stdout.split(/^Commands:$/m)[1];
+      for (const sub of commands ? commandsIn(commands) : []) {
+        const subHelp = await scope([name, sub, '--help'], root);
+        expect(subHelp.code, `${name} ${sub}`).toBe(0);
+        // A description line follows the usage line.
+        expect(subHelp.stdout.split('\n')[2]?.trim().length, `${name} ${sub}`).toBeGreaterThan(10);
+        checked.push(`${name} ${sub}`);
+      }
+    }
+    expect(checked).toEqual(
+      expect.arrayContaining(['export traces', 'baseline save', 'keys revoke', 'db backup']),
+    );
+  });
+
+  it('prints one JSON document on stdout with --json', async () => {
+    // A project of its own, so the test does not depend on the runs of earlier tests.
+    const own = join(root, 'jsonall');
+    expect((await scope(['init', 'jsonall'], root)).code).toBe(0);
+    for (let i = 0; i < 2; i++) expect((await scope(['run', '-q'], own)).code).toBe(0);
+    const listed = JSON.parse((await scope(['traces', '--json'], own)).stdout);
+    const trace = (listed.traces ?? listed.items)[0].id as string;
+    const file = join(root, 'export.csv');
+    for (const args of [
+      ['validate'],
+      ['runs'],
+      ['runs', '1'],
+      ['traces'],
+      ['traces', trace],
+      ['compare', '1', '2'],
+      ['report', '1'],
+      ['keys', 'list'],
+      ['doctor'],
+      ['version'],
+      ['prune', '--older-than', '30d'],
+      ['db', 'status'],
+      ['export', 'run', '1', '-o', file],
+    ]) {
+      const r = await scope([...args, '--json'], own);
+      expect(() => JSON.parse(r.stdout), args.join(' ')).not.toThrow();
+    }
+    expect(
+      JSON.parse((await scope(['export', 'run', '1', '-o', file, '--json'], own)).stdout),
+    ).toMatchObject({ file, format: 'csv', count: expect.any(Number) });
+  });
+});

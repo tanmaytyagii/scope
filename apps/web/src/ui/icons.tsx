@@ -135,11 +135,6 @@ export const Wrap = (p: IconProps) => (
     <path d="M2.5 4h11M2.5 8h9a2 2 0 010 4H9M2.5 12h3.5M10.5 10.5L9 12l1.5 1.5" />
   </Icon>
 );
-export const Expand = (p: IconProps) => (
-  <Icon {...p}>
-    <path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5L9 7M2.5 13.5L7 9" />
-  </Icon>
-);
 export const Close = Cross;
 export const Menu = (p: IconProps) => (
   <Icon {...p}>

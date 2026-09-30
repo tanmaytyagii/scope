@@ -19,12 +19,6 @@
       "path": "../../packages/providers/tsconfig.build.json"
     },
     {
-      "path": "../../packages/evaluators/tsconfig.build.json"
-    },
-    {
-      "path": "../../packages/sdk/tsconfig.build.json"
-    },
-    {
       "path": "../../packages/engine/tsconfig.build.json"
     },
     {

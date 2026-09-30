@@ -14,10 +14,6 @@ import { EmptyState, ErrorState, Loading } from '../ui/States.tsx';
 import { RunResult } from '../ui/Status.tsx';
 import { MoreRows, Table, TD, TH, THead, TR } from '../ui/Table.tsx';
 
-export function runLabel(run: Pick<Run, 'number' | 'variant'>): string {
-  return `#${run.number}${run.variant ? ` · ${run.variant}` : ''}`;
-}
-
 const MAX_COMPARED = 4;
 
 export function Runs() {

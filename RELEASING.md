@@ -29,13 +29,29 @@ prepare it. Nothing is published from a developer machine.
 ## One-time setup
 
 1. **npm.** Create the `scope-ai` organization on npmjs.com (it owns the `@scope-ai/*` scope)
-   from the account that will own the `scope-ai` package. Create a granular access token with
-   read and write access to packages and scopes, and add it to the repository as the
-   `NPM_TOKEN` secret (Settings → Secrets and variables → Actions).
-2. **After the first release**, switch to npm trusted publishing: for each package, on
-   npmjs.com → package settings → Trusted publishing, add GitHub Actions with repository
-   `tanmaytyagii/scope` and workflow `release.yml`. Then delete the `NPM_TOKEN` secret — the
-   workflow publishes through its OIDC identity instead.
+   from the account that will own the `scope-ai` package. From that account, create a
+   **granular access token** (npmjs.com → Access Tokens → Generate New Token):
+   - *Packages and scopes*: **read and write**, for **all packages** — the first release creates
+     the unscoped `scope-ai` package, which a token limited to selected packages and scopes
+     cannot create;
+   - *Organizations*: the `scope-ai` organization, if the page offers it;
+   - **Bypass two-factor authentication** enabled, when the account or organization requires
+     two-factor authentication for publishing (otherwise npm asks CI for a one-time password and
+     the publish fails with `EOTP` or `E403`);
+   - an expiry that covers the release.
+
+   Add it to the repository as the secret **`NPM_TOKEN`**: GitHub → the repository → Settings →
+   Secrets and variables → Actions → New repository secret. Paste the token only there: never in
+   a file, a commit, an issue or a chat. The release workflow gives it to npm as
+   `NODE_AUTH_TOKEN` and checks it (`npm whoami`) before publishing anything.
+2. **After the first release**, switch to npm trusted publishing (it can only be set up for
+   packages that exist, which is why the first release needs the token): for each of the 12
+   packages, on npmjs.com → the package → Settings → Trusted publishing, add GitHub Actions with
+   repository `tanmaytyagii/scope` and workflow `release.yml`. Then delete the `NPM_TOKEN`
+   secret and revoke the token: without it, the workflow publishes through its OIDC identity
+   (npm 11.5.1 or later, which the Node.js version in `.nvmrc` brings), still with provenance. The
+   workflow refuses to run without a token while a package is not on npm yet, so a package added
+   later needs the token for its first release.
 3. **GHCR** needs no setup: the workflow pushes with its own token. After the first release, open
    the `scope` package on GitHub (Packages) and set its visibility to public.
 
@@ -82,9 +98,10 @@ first) and the image in parallel, and finally creates the GitHub release.
 
 ### Rehearsing
 
-Actions → **Release** → **Run workflow** runs everything as a dry run: the checks, `npm publish
---dry-run` for every package, and the multi-arch image build without pushing. Locally,
-`npm run build && npm run release:publish -- --dry-run` shows what would be published.
+Actions → **Release** → **Run workflow** with *tag* left empty runs everything as a dry run: the
+checks, `npm publish --dry-run` for every package, and the multi-arch image build without
+pushing. Locally, `npm run build && npm run release:publish -- --dry-run` shows what would be
+published.
 
 ## After the release
 
@@ -94,10 +111,36 @@ npx --yes scope-ai@0.2.0 version                     # installs and runs
 docker run --rm ghcr.io/tanmaytyagii/scope:0.2.0 --version
 ```
 
-If publishing failed half-way, fix the cause and re-run the failed jobs: versions already on npm
-are skipped and the GitHub release is updated rather than duplicated. A published version is
-never changed or unpublished — fix forward with a patch release, and mark a broken version with
-`npm deprecate scope-ai@<version> "<reason>"` (likewise for the `@scope-ai/*` packages).
+## When publishing fails
+
+The run's annotations (the run's summary page on GitHub) name the cause: a missing or rejected
+`NPM_TOKEN` is reported by the *npm credentials* step before anything is published, and a failed
+`npm publish` by npm's error code with its usual cause:
+
+| npm error | Usual cause |
+| --- | --- |
+| `ENEEDAUTH` | No token reached npm: the `NPM_TOKEN` secret is missing or empty |
+| `E401` | The token is invalid, expired or revoked |
+| `EOTP`, or `E403` mentioning two-factor authentication | The token does not bypass two-factor authentication |
+| `E403`, `E404` on `PUT` | The token's user may not publish that name: not in the `scope-ai` organization, or the token does not cover it |
+| `E422` | Provenance does not match: `repository.url` in the package's `package.json` |
+
+Fix the cause, then publish the **same tag** again — never a new tag for the same version, and
+never a moved one. Either:
+
+- **Re-run failed jobs** on the tag's run (Actions → the run → Re-run failed jobs). This runs the
+  workflow and scripts as they were in the tagged commit; fine when the fix was outside the
+  repository (the secret, npm settings).
+- **Run the workflow by hand with the tag** (Actions → Release → Run workflow, from `main`, with
+  *tag* `v0.4.0`), to use the current workflow. It checks that the tag exists and matches the
+  package version, runs the checks and builds from the tagged commit, publishes what is not on
+  npm yet, and creates or updates the GitHub release; the Docker image is rebuilt only with
+  *docker* ticked. It never creates or moves a tag.
+
+Either way, versions already on npm are skipped and the GitHub release is updated rather than
+duplicated. A published version is never changed or unpublished — fix forward with a patch
+release, and mark a broken version with `npm deprecate scope-ai@<version> "<reason>"` (likewise
+for the `@scope-ai/*` packages).
 
 ## Supply chain
 

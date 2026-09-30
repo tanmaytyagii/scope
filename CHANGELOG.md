@@ -7,6 +7,17 @@ which are always called out).
 
 ## [Unreleased]
 
+### Fixed
+
+- Release workflow: a manual run with an existing tag (`v0.4.0`) publishes that tag again from its
+  own commit — the npm packages not yet published, the GitHub release, and the Docker image only
+  when asked — without creating or moving a tag. Before publishing, the workflow checks the npm
+  credentials (a missing `NPM_TOKEN` secret, or a token npm rejects, fails with a clear message),
+  and a failed `npm publish` is reported in the run's annotations with npm's error code and its
+  usual cause. A retry no longer fails on a version whose publish reached npm without its answer.
+  [RELEASING.md](RELEASING.md) says what the first release's npm token needs and how to move to
+  trusted publishing afterwards.
+
 ## [0.4.0] - 2026-09-30
 
 ### Added

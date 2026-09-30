@@ -5,7 +5,9 @@
  *   node scripts/publish.mjs --dry-run   # what would be published, without publishing
  *   node scripts/publish.mjs             # publish (the release workflow runs this)
  *
- * Versions already on the registry are skipped, so a release that failed half-way can be re-run.
+ * Versions already on the registry are skipped, so a release that failed half-way can be re-run
+ * (also when a publish reached the registry but its answer did not: npm then refuses to publish
+ * over it, which counts as published).
  * Prereleases (1.2.0-rc.1) are published under the "next" dist-tag, never "latest". On GitHub
  * Actions with an OIDC token, packages are published with provenance.
  */
@@ -47,7 +49,19 @@ for (const w of packages) {
   if (provenance) args.push('--provenance');
   if (dryRun) args.push('--dry-run');
   console.log(`$ npm ${args.join(' ')}`);
-  const r = spawnSync('npm', args, { cwd: ROOT, stdio: 'inherit' });
+  const r = spawnSync('npm', args, {
+    cwd: ROOT,
+    stdio: ['inherit', 'inherit', 'pipe'],
+    encoding: 'utf8',
+  });
+  process.stderr.write(r.stderr ?? '');
+  if (
+    r.status !== 0 &&
+    /EPUBLISHCONFLICT|cannot publish over the previously published/.test(r.stderr)
+  ) {
+    console.log(`${w.name}@${version} is already published — skipped`);
+    continue;
+  }
   if (r.status !== 0) {
     console.error(`\nPublishing ${w.name} failed. Published so far: ${done.join(', ') || 'none'}.`);
     console.error('Fix the cause and re-run: published versions are skipped.');

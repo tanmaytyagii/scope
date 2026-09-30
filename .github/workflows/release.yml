@@ -44,24 +44,36 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
+      # The commit that was verified; the other jobs build exactly this one.
+      commit: ${{ steps.version.outputs.commit }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ env.RELEASE_REF }}
+          fetch-depth: 0 # tags and main's history, to check where the tag points
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
 
-      - name: The tag matches the package version
+      - name: The tag is a release commit on main, and matches the package version
         id: version
         run: |
           version=$(node -p "require('./packages/core/package.json').version")
+          commit=$(git rev-parse HEAD)
           if [ "$DRY_RUN" = false ]; then
             if ! [[ $RELEASE_TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] ||
-              ! git rev-parse -q --verify "refs/tags/$RELEASE_TAG" >/dev/null; then
+              ! tagged=$(git rev-parse -q --verify "refs/tags/$RELEASE_TAG^{commit}"); then
               echo "::error::$RELEASE_TAG is not an existing release tag (vX.Y.Z). Publishing only ever uses a tag that was pushed."
+              exit 1
+            fi
+            if [ "$tagged" != "$commit" ]; then
+              echo "::error::Checked out $commit, but $RELEASE_TAG points to $tagged."
+              exit 1
+            fi
+            if ! git merge-base --is-ancestor "$commit" origin/main; then
+              echo "::error::$RELEASE_TAG ($commit) is not on main. Release only commits that are on main: push main, then run the release again."
               exit 1
             fi
             if [ "$RELEASE_TAG" != "v$version" ]; then
@@ -69,9 +81,12 @@ jobs:
               exit 1
             fi
           fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          if [[ $version == *-* ]]; then echo "prerelease=true"; else echo "prerelease=false"; fi >> "$GITHUB_OUTPUT"
-          echo "Releasing $version (dry run: $DRY_RUN)"
+          {
+            echo "version=$version"
+            echo "commit=$commit"
+            if [[ $version == *-* ]]; then echo "prerelease=true"; else echo "prerelease=false"; fi
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing $version from $commit (dry run: $DRY_RUN)"
 
       - name: Release notes from CHANGELOG.md
         env:
@@ -109,10 +124,21 @@ jobs:
     permissions:
       contents: read
       id-token: write # npm provenance and trusted publishing
+    env:
+      # The packages come from the verified commit (the tag); the release scripts from this
+      # workflow's commit, so publishing an existing tag again uses the current publishing logic.
+      # For a pushed tag both are the same commit.
+      SCOPE_RELEASE_ROOT: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          ref: ${{ env.RELEASE_REF }}
+          ref: ${{ needs.verify.outputs.commit }}
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.sha }}
+          path: .release-tools
+          sparse-checkout: scripts
+          persist-credentials: false
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version-file: .nvmrc
@@ -147,7 +173,7 @@ jobs:
           # set up for packages that already exist: every package's first release needs a token.
           missing=$(node --input-type=module -e "
             import { spawnSync } from 'node:child_process';
-            import { publishOrder } from './scripts/lib/workspaces.mjs';
+            import { publishOrder } from './.release-tools/scripts/lib/workspaces.mjs';
             const missing = publishOrder().filter(
               (w) => spawnSync('npm', ['view', w.name, 'name']).status !== 0,
             );
@@ -166,7 +192,9 @@ jobs:
           set -o pipefail
           args=()
           if [ "$DRY_RUN" = true ]; then args+=(--dry-run); fi
-          if node scripts/publish.mjs "${args[@]}" 2>&1 | tee npm-publish.log; then exit 0; fi
+          if node .release-tools/scripts/publish.mjs "${args[@]}" 2>&1 | tee npm-publish.log; then
+            exit 0
+          fi
           # Name npm's error in the run's annotations, with what usually causes it.
           code=$(grep -o 'npm error code [A-Z0-9]*' npm-publish.log | tail -1 | cut -d' ' -f4 || true)
           case "$code" in
@@ -194,7 +222,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          ref: ${{ env.RELEASE_REF }}
+          ref: ${{ needs.verify.outputs.commit }}
       - name: Image name
         id: image
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
@@ -253,9 +281,9 @@ jobs:
           if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
-              --title "SCOPE $VERSION" --notes-file release-notes.md "${flags[@]}"
+              --title "SCOPE v$VERSION" --notes-file release-notes.md "${flags[@]}"
           else
             # --verify-tag: the release is attached to the existing tag; no tag is ever created.
             gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
-              --title "SCOPE $VERSION" --notes-file release-notes.md "${flags[@]}"
+              --title "SCOPE v$VERSION" --notes-file release-notes.md "${flags[@]}"
           fi

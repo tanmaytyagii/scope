@@ -92,9 +92,11 @@ prepare it. Nothing is published from a developer machine.
    git push origin v0.2.0
    ```
 
-The workflow checks that the tag matches the package version, runs lint, typecheck, tests, the
-package verification and the install smoke test, then publishes the npm packages (dependencies
-first) and the image in parallel, and finally creates the GitHub release.
+The workflow checks that the tag's commit is on `main` and matches the package version, runs
+lint, typecheck, tests, the package verification and the install smoke test, then publishes the
+npm packages (dependencies first) and the image in parallel, and finally creates the GitHub
+release *SCOPE vX.Y.Z*. Push `main` before the tag: a tag on a commit that is not on `main` is
+refused.
 
 ### Rehearsing
 
@@ -131,11 +133,19 @@ never a moved one. Either:
 - **Re-run failed jobs** on the tag's run (Actions → the run → Re-run failed jobs). This runs the
   workflow and scripts as they were in the tagged commit; fine when the fix was outside the
   repository (the secret, npm settings).
-- **Run the workflow by hand with the tag** (Actions → Release → Run workflow, from `main`, with
-  *tag* `v0.4.0`), to use the current workflow. It checks that the tag exists and matches the
-  package version, runs the checks and builds from the tagged commit, publishes what is not on
-  npm yet, and creates or updates the GitHub release; the Docker image is rebuilt only with
-  *docker* ticked. It never creates or moves a tag.
+- **Run the workflow by hand with the tag**, to use the current workflow and release scripts:
+  Actions → Release → Run workflow, with
+
+  | Field | Value |
+  | --- | --- |
+  | Use workflow from | `main` |
+  | tag | the existing tag, e.g. `v0.4.0` |
+  | docker | unticked, unless the image failed to publish |
+
+  It checks that the tag exists, that its commit is on `main` and that the package versions match
+  it; runs the checks and builds that exact commit; publishes with the current release scripts
+  what is not on npm yet; and creates or updates the GitHub release. It never creates or moves a
+  tag.
 
 Either way, versions already on npm are skipped and the GitHub release is updated rather than
 duplicated. A published version is never changed or unpublished — fix forward with a patch

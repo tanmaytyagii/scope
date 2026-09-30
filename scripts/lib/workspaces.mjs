@@ -5,7 +5,13 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-export const ROOT = resolve(import.meta.dirname, '../..');
+/**
+ * The repository the scripts work on: their own, or SCOPE_RELEASE_ROOT. The release workflow
+ * sets it to publish an existing tag's sources with the current release scripts.
+ */
+export const ROOT = process.env.SCOPE_RELEASE_ROOT
+  ? resolve(process.env.SCOPE_RELEASE_ROOT)
+  : resolve(import.meta.dirname, '../..');
 
 /** @returns {Array<{ name: string, dir: string, manifestPath: string, manifest: any }>} */
 export function workspaces() {

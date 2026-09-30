@@ -15,8 +15,10 @@ which are always called out).
   credentials (a missing `NPM_TOKEN` secret, or a token npm rejects, fails with a clear message),
   and a failed `npm publish` is reported in the run's annotations with npm's error code and its
   usual cause. A retry no longer fails on a version whose publish reached npm without its answer.
-  [RELEASING.md](RELEASING.md) says what the first release's npm token needs and how to move to
-  trusted publishing afterwards.
+  A release checks that the tag's commit is on `main`, builds exactly that commit in every job,
+  and publishes an existing tag with the current release scripts; the GitHub release is titled
+  *SCOPE vX.Y.Z*. [RELEASING.md](RELEASING.md) says what the first release's npm token needs
+  and how to move to trusted publishing afterwards.
 
 ## [0.4.0] - 2026-09-30
 

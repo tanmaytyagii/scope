@@ -15,6 +15,7 @@ code. Update both files when architecture or milestone state changes.
 | `docs/decisions/` | ADRs. Do not silently contradict one; write a superseding ADR instead |
 | `docs/roadmap.md` | Milestones M1–M7 and post-v0.1 work. Planned work lives here, never in the UI |
 | `docs/integrations.md` | How traces get in from each stack, and how each path is tested. Claim nothing untested |
+| `docs/instrumentation-contract.md` | What a trace, span and model call are, and where integrations differ |
 | `docs/extensibility.md` | Extension points (evaluators, steps, providers, exporters, APIs) and their stability |
 | `docs/v0.4-roadmap.md` | The latest audit, scope and outcome (v0.2 and v0.3 have their own) |
 | `docs/guides/operations.md` | Deployment, monitoring, migrations between versions, backups, retention, keys |
@@ -99,7 +100,9 @@ production-style deployment; CI brings it up.
 - Spans and evaluations are selected by trace id (or run id), without `project_id` conditions next
   to them: with one, SQLite may pick a project index and walk the whole project. The query-plan
   test (`packages/storage/src/query-plans.test.ts`) fails on such plans — run it after changing
-  a query or an index. Dashboard time-window aggregates read covering indexes (migration 0004).
+  a query or an index, with `SCOPE_TEST_DATABASE_URL` too: PostgreSQL cannot use an index for
+  `a in (…) or b in (…)`, so use a union. Dashboard time-window aggregates read covering indexes
+  (migration 0004); they still grow with the traces in the window (docs/performance.md).
 - Runs record a manifest (`runManifest` in the engine): versions, fingerprints of the files the
   workflow names, evaluator identities, models called. Baselines keep the fingerprints, so
   comparisons name changed files. Deleting data goes through `store.prune` (batched, indexed

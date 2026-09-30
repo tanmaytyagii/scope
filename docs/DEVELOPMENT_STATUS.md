@@ -1,6 +1,6 @@
 # SCOPE Development Status
 
-Last updated: 2026-09-29. Keep this file current: it is how the next session knows where to
+Last updated: 2026-09-30. Keep this file current: it is how the next session knows where to
 start. Milestones are defined in [roadmap.md](./roadmap.md).
 
 ## Product Vision
@@ -62,18 +62,32 @@ source (Apache-2.0).
   comments, untrusted response numbers); guides organized by task;
   [integrations](./integrations.md) and [extensibility](./extensibility.md).
 
+- **v0.4 Production adoption** — see [v0.4-roadmap.md](./v0.4-roadmap.md) for the audit, what
+  each item delivered and how it was verified. In short: the SDK no longer loses whole batches
+  and records streams returned to web frameworks; large traces load with a content budget;
+  retention (`scope prune`, `SCOPE_RETENTION`); `scope db status | migrate | backup`; a
+  production Compose deployment with HTTPS, verified by hand (including an upgrade from 0.3.0)
+  and in CI; run manifests (versions, file fingerprints, models called) and comparisons that name
+  changed files; covering indexes for the dashboard's window queries; query-plan tests on SQLite
+  and PostgreSQL, a size-independence benchmark in CI and an isolation test over every route;
+  benchmarks at up to 1,000,000 traces (SQLite) and 500,000 (PostgreSQL); OpenInference and
+  OpenLLMetry tested with their real packages; the trace contract; price freshness; the CLI's
+  `--json` contract; refusal of databases migrated by a newer SCOPE; operations and security
+  documentation.
+
 ## In Progress
 
 - Nothing half-done.
 
 ## Not Started
 
-- The first published release: publishing needs the maintainer's npm organization and token
-  (one-time setup in [RELEASING.md](../RELEASING.md)), then a tag. The packages are at 0.2.0;
-  v0.3's changes are under "Unreleased" in the CHANGELOG. Publishing 0.2.0 first or cutting 0.3.0
-  directly (`npm run release:version -- 0.3.0`) is the maintainer's call.
-- Roadmap items, in order: Python SDK, server-side baselines, retention (`scope prune`), dataset
-  tooling in the dashboard, more evaluators, accounts, online evaluation, rollups at scale.
+- A release on npm: `v0.3.0` was tagged and its release workflow verified the packages, but
+  publishing to npm failed (most likely the one-time npm setup in
+  [RELEASING.md](../RELEASING.md)), so no GitHub release was created either. The packages are at
+  0.3.0; v0.4's changes are under "Unreleased" in the CHANGELOG. The maintainer fixes the npm
+  setup, then runs `npm run release:version -- 0.4.0` and pushes the tag.
+- Roadmap items, in order: Python SDK, server-side baselines, dataset tooling in the dashboard,
+  more evaluators, accounts, online evaluation, rollups at scale.
 
 ## Current Architecture
 
@@ -82,32 +96,49 @@ See [architecture.md](./architecture.md). All packages and apps are implemented 
 
 ## Current Milestone
 
-v0.3 is complete (see [v0.3-roadmap.md](./v0.3-roadmap.md)). Next: the maintainer sets up npm
-(RELEASING.md), picks the version to publish, and pushes its tag. The first push after v0.3 is
-also the first CI run of the Node.js 24 action versions.
+v0.4 is complete (see [v0.4-roadmap.md](./v0.4-roadmap.md) for each item's outcome, the scale
+measurements and the security review). Validated on 2026-09-30: clean `npm ci` (0
+vulnerabilities), lint, typecheck, 399 tests on SQLite and 422 with PostgreSQL, build, 12
+packages verified, the install smoke test, 35 end-to-end tests with accessibility checks,
+`bench:check`, actionlint, the Docker image and the compose deployment with HTTPS, and the scale
+benchmarks in [performance.md](./performance.md). Next: the maintainer fixes the npm setup
+(RELEASING.md), releases 0.4.0 with `npm run release:version -- 0.4.0` and its tag, and enables
+the repository's dependency graph for the *Dependency audit* check.
 
 ## Working Commands
 
 ```bash
-npm ci && npm run check          # lint, typecheck (incl. dashboard + e2e), 352 tests (366 runs with PostgreSQL)
+npm ci && npm run check          # lint, typecheck (incl. dashboard + e2e), 399 tests (422 with PostgreSQL)
 npm run build                    # packages (tsc -b) + dashboard (vite)
 npm run release:verify           # package manifests and tarball contents (after a build)
 npm run smoke                    # pack all packages, npm install scope-ai from them: init, run, ui
 npx playwright install chromium  # once
-npm run test:e2e                 # dashboard E2E, 34 tests (needs the dashboard built)
-npm run bench -- --traces 100000 # SDK and OTLP ingestion, API timings (docs/performance.md)
+npm run test:e2e                 # dashboard E2E, 35 tests (needs the dashboard built)
+npm run bench -- --traces 100000 # ingestion, API, OTLP, retention, size (docs/performance.md)
+npm run bench:check              # CI's check: timings at 2,000 vs 50,000 traces
 node scripts/screenshots.mjs     # regenerate docs/images from real runs
 npm run scope -- ui              # local dashboard on 127.0.0.1:4700 (from sources)
 npm run dev:web                  # dashboard dev server, proxies /api to scope ui
 docker compose up                # demo: PostgreSQL + seeded runs + dashboard on 127.0.0.1:4700
-SCOPE_TEST_DATABASE_URL=postgres://scope:scope@127.0.0.1:55432/scope_test npm test  # + PostgreSQL suite
+cd deploy && docker compose up -d   # production-style: scope server + PostgreSQL (+ Caddy)
+SCOPE_TEST_DATABASE_URL=postgres://scope:scope@127.0.0.1:55432/scope_test npm test  # + PostgreSQL (422 tests)
 ```
 
 ## Known Issues
 
 - E2E tests run on SQLite only; storage and server API tests also run on PostgreSQL when
   `SCOPE_TEST_DATABASE_URL` is set (CI sets it).
-- A database migrated by 0.2 (migration 0002) cannot be opened by 0.1 with auto-migration.
+- Migrations only go forward. 0.4 refuses a database a newer SCOPE migrated; 0.3 and earlier
+  refuse only when they migrate, so with `SCOPE_AUTO_MIGRATE=false` they would open one
+  (docs/guides/operations.md). Restoring the backup taken before an upgrade is the way back.
+- On SQLite, dashboard aggregates over a window holding around a million traces take 3–4 s when
+  their indexes do not fit in memory; the first `scope prune` on a large database takes seconds
+  ([performance.md](./performance.md)).
+- OpenInference's and OpenLLMetry's OpenAI instrumentations send no token counts for streamed
+  calls and no span for failed calls (openai 7.25); tests pin this down and the trace contract
+  documents it.
+- On GitHub, Dependabot pull requests fail the *Dependency audit* job until the maintainer enables
+  the repository's dependency graph (a repository setting).
 - Overview time buckets are aligned to UTC, so in non-whole-hour time zones (e.g. UTC+5:30)
   bucket boundaries fall at :30 local time. Correct, but slightly odd-looking.
 
@@ -116,8 +147,11 @@ SCOPE_TEST_DATABASE_URL=postgres://scope:scope@127.0.0.1:55432/scope_test npm te
 - API-key authentication does one database lookup per request (no cache).
 - The dashboard initial bundle is ~160 KB gzipped (React, React Router, TanStack Query);
   pages load on demand.
-- Time-window aggregates (overview, evaluators, models) scan their window: ~220 ms at 100,000
-  traces on SQLite ([performance.md](./performance.md)); rollups are on the roadmap.
+- Time-window aggregates (overview, evaluators, models) read every trace in their window from a
+  covering index: 0.3 s at 500,000 traces, seconds at 1,000,000 on SQLite
+  ([performance.md](./performance.md)); rollups are on the roadmap.
+- OTLP ingestion updates each trace's totals with its own statement (100 per 100-trace request),
+  which makes it round-trip bound on PostgreSQL (404–878 traces/s from one sender).
 - OTLP: gzip bodies are decompressed synchronously (bounded at 20 MiB), and a trace arriving in
   many pieces is recomputed from all its stored spans for each piece (a few ms per piece at the
   1,000-span limit).

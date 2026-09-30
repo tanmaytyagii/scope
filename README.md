@@ -220,15 +220,19 @@ tool and retrieval spans. Guides: [tracing](docs/guides/tracing.md) ·
 
 `scope ui` is a local dashboard with no authentication, bound to 127.0.0.1. For a team,
 `scope server` serves every project with project-scoped API keys, JSON logs, health and
-Prometheus endpoints — from the Docker image or directly:
+Prometheus endpoints. [`deploy/compose.yaml`](deploy/compose.yaml) runs it on PostgreSQL, with
+HTTPS through Caddy if you want it:
 
 ```bash
-docker build -t scope .
-docker run -d -p 4700:4700 -e SCOPE_DATABASE_URL=postgres://… scope
-docker exec <container> scope keys create --project support-bot --name dashboard --scope read
+cd deploy && cp .env.example .env        # set POSTGRES_PASSWORD
+docker compose up -d
+docker compose exec scope scope keys create --project support-bot --name dashboard --scope read
 ```
 
-Guide: [self-hosting](docs/guides/self-hosting.md).
+Retention keeps the database in bounds (`SCOPE_RETENTION=30d`, or `scope prune`), and
+`scope db status | migrate | backup` covers upgrades and backups. Guides:
+[self-hosting](docs/guides/self-hosting.md) · [operations](docs/guides/operations.md) ·
+[performance at 1,000,000 traces](docs/performance.md).
 
 ![A run in dark mode: its gates, and what changed against the baseline those gates compared with](docs/images/run-dark.png)
 
@@ -252,9 +256,9 @@ document is generated from the same schemas the server validates against. Detail
   [quickstart](docs/guides/quickstart.md) · [workflows](docs/guides/workflows.md) ·
   [evaluators](docs/guides/evaluators.md) · [custom evaluators](docs/guides/custom-evaluators.md) ·
   [tracing](docs/guides/tracing.md) · [CI](docs/guides/ci.md) ·
-  [self-hosting](docs/guides/self-hosting.md) · [privacy](docs/guides/privacy.md) ·
-  [configuration](docs/guides/configuration.md) · [CLI](docs/guides/cli.md) ·
-  [HTTP API](docs/guides/api.md)
+  [self-hosting](docs/guides/self-hosting.md) · [operations](docs/guides/operations.md) ·
+  [privacy](docs/guides/privacy.md) · [configuration](docs/guides/configuration.md) ·
+  [CLI](docs/guides/cli.md) · [HTTP API](docs/guides/api.md)
 - [Integrations](docs/integrations.md) (how traces get in from each stack) and
   [extensibility](docs/extensibility.md) (every extension point and its stability)
 - Examples, each run in CI: [RAG support assistant](examples/rag) ·
@@ -268,14 +272,14 @@ document is generated from the same schemas the server validates against. Detail
 
 SCOPE is pre-1.0 and under active development. What is described above works and is
 tested in CI: unit, integration and CLI tests on SQLite and PostgreSQL, every example, the
-integrations against the real OpenAI, Anthropic, OpenTelemetry and Vercel AI SDK packages,
-end-to-end dashboard tests with accessibility checks, an install test of the packed packages, a
-Docker image test, and a self-test of the GitHub Action.
+integrations against the real OpenAI, Anthropic, OpenTelemetry, Vercel AI SDK, OpenInference and
+OpenLLMetry packages, project isolation on every API route, query plans and a performance check,
+end-to-end dashboard tests with accessibility checks, an install test of the packed packages, the
+Docker image and the compose deployment, and a self-test of the GitHub Action.
 
 Not there yet, in [roadmap](docs/roadmap.md) order: a Python SDK (Python applications can send
-OpenTelemetry spans today), a first published release — npm packages, the image on GHCR and
-tagged action releases (the pipeline is ready: [RELEASING.md](RELEASING.md)) — retention
-policies, and user accounts.
+OpenTelemetry spans today), a first release on npm (v0.3.0's publishing step failed; the
+pipeline and its one-time setup are in [RELEASING.md](RELEASING.md)), and user accounts.
 
 ## Contributing
 

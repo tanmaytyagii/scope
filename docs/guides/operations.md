@@ -24,7 +24,7 @@ What it sets up:
 | `scope` | `scope server`: API keys required, JSON logs, migrations applied on start. Health-checked on `/readyz` (database reachable and migrated). Published on `127.0.0.1:4700` only |
 | `caddy` (profile `https`) | HTTPS for `SCOPE_DOMAIN` with a certificate Caddy obtains and renews; forwards to `scope` |
 
-Both services restart unless stopped. Applications send traces to `https://<SCOPE_DOMAIN>` with an
+Every service restarts unless stopped. Applications send traces to `https://<SCOPE_DOMAIN>` with an
 `ingest` key (`SCOPE_URL`, `SCOPE_API_KEY`); people open the same address and paste a `read` key.
 
 To serve HTTPS, point `SCOPE_DOMAIN`'s DNS at the machine and run
@@ -35,7 +35,8 @@ to `127.0.0.1:4700` (or put the proxy on the compose network) and keep these in 
 - Allow request bodies of at least `SCOPE_MAX_INGEST_BYTES` (5 MiB) on `/api/v1/ingest` and
   `/v1/traces`.
 - Only forward what SCOPE serves: the dashboard (`/`), `/api/v1`, `/v1/traces` and the health
-  endpoints. `/metrics` is better kept on the internal network.
+  endpoints. `/metrics` has no authentication: keep it on the internal network. The provided
+  Caddyfile answers it with 404; scrape `scope:4700/metrics` from the compose network.
 
 ## Health and monitoring
 
@@ -45,10 +46,11 @@ to `127.0.0.1:4700` (or put the proxy on the compose network) and keep these in 
 | `GET /readyz` | The database is reachable and migrated (readiness); 503 otherwise |
 | `GET /metrics` | Prometheus metrics: requests by route and status, request durations, ingested traces and spans, rejected and dropped data by reason, retention deletions, unexpected errors |
 
-Logs are one JSON object per line on stderr. Every request is logged with its route, status,
-duration, request id, project and the id of the API key that made it — never the key itself, and
-never prompt or output content. Database queries slower than `SCOPE_SLOW_QUERY_MS` (1 s) are
-logged with their SQL and without their values.
+Logs are one JSON object per line on stderr. Every request except a passing health check is
+logged with its route, status, duration, request id, project and the id of the API key that made
+it, also when the key is refused; never the key itself, and never prompt or output content.
+Database queries slower than `SCOPE_SLOW_QUERY_MS` (1 s) are logged with their SQL and without
+their values.
 
 Worth alerting on: `/readyz` failing, a rising `scope_unexpected_errors_total`, a rising
 `scope_ingest_rejected_total` (clients sending what the server refuses), and
@@ -147,5 +149,9 @@ PostgreSQL's autovacuum makes the space reusable, and `VACUUM FULL` returns it t
 
 ## Capacity
 
-See [performance](../performance.md) for measured ingestion rates and query times at 100,000 to
-1,000,000 traces on SQLite and PostgreSQL, and the deployment boundaries they suggest.
+See [performance](../performance.md) for measured ingestion rates and query times at up to
+1,000,000 traces on SQLite and 500,000 on PostgreSQL, and the boundaries they show. In short:
+lists and trace details do not slow down as the database grows; the dashboard's aggregates cost
+what the traces in their window cost, and on SQLite they slow to seconds when a window holds
+around a million traces and its indexes do not fit in memory; a retention period keeps the
+database at the size you choose.

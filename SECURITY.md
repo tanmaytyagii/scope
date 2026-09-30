@@ -62,6 +62,11 @@ the issue is resolved. We will credit you in the release notes unless you prefer
   key can read every prompt and response in its project.
 - The server speaks plain HTTP; put TLS in front of it (see the
   [operations guide](docs/guides/operations.md)).
+- `/metrics` has no authentication (it holds counts and timings, no content). Keep it on the
+  internal network; the provided Caddyfile answers it with 404.
+- There is no rate limiting. Each request's size is bounded, but a holder of an `ingest` key can
+  keep sending traces until the disk is full; set a retention period, watch disk use, and revoke
+  keys that misbehave.
 
 How a deployment should be set up — keys, TLS, network exposure, backups — is in the
 [operations guide](docs/guides/operations.md).

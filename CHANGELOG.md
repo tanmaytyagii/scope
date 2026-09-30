@@ -90,6 +90,9 @@ which are always called out).
 
 ### Security
 
+- The deployment's Caddyfile answers `/metrics` with 404, so the unauthenticated metrics stay on
+  the internal network (CI checks it through the HTTPS profile). SECURITY.md lists the
+  unauthenticated metrics and the absence of rate limiting as known limitations.
 - The Docker image's base (`node:24-bookworm-slim`) is pinned by digest, and Dependabot proposes
   new digests, so a release is built on exactly the base CI tested.
 - Every API route is tested for project isolation: with one project's key, each route is asked for

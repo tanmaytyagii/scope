@@ -1,6 +1,12 @@
-# HTTPS in front of SCOPE. With a public domain Caddy obtains and renews a certificate by itself;
-# with "localhost" it uses its own local certificate authority (for trying this out).
+# HTTPS in front of SCOPE. With a public domain Caddy obtains and renews a certificate by itself
+# (and redirects HTTP to HTTPS); with "localhost" it uses its own local certificate authority, for
+# trying this out.
 {$SCOPE_DOMAIN} {
 	encode zstd gzip
+
+	# Prometheus metrics stay on the internal network: scrape scope:4700/metrics from there.
+	@metrics path /metrics
+	respond @metrics 404
+
 	reverse_proxy scope:4700
 }

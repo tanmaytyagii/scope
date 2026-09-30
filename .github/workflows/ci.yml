@@ -147,7 +147,11 @@ jobs:
           curl -sf http://127.0.0.1:4700/api/v1/traces -H "authorization: Bearer $read" | grep -q 5b8efff798038103d269b633813fc60c
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4700/api/v1/traces -H "authorization: Bearer $ingest")" = 403
           docker compose exec -T scope scope db status
-          docker compose down -v
+          # HTTPS through Caddy (its local certificate authority for localhost); metrics stay internal.
+          docker compose --profile https up -d --no-build --wait --wait-timeout 120
+          curl -skf https://localhost/readyz
+          test "$(curl -sk -o /dev/null -w '%{http_code}' https://localhost/metrics)" = 404
+          docker compose --profile https down -v
 
   security:
     name: Dependency audit

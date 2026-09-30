@@ -69,6 +69,10 @@ which are always called out).
 
 ### Changed
 
+- [The trace contract](docs/instrumentation-contract.md) defines trace, workflow, span, model call,
+  tool call, retrieval and evaluation, maps every integration onto them, and lists where the same
+  behavior produces different traces (measured with the real packages).
+
 - **Migrations `0003_run_manifest` and `0004_window_indexes`.** They run automatically when the
   server or any `scope` command opens the database (or with `scope db migrate`). A database they
   have migrated cannot be opened by 0.3; back up first (`scope db backup` for SQLite, `pg_dump`

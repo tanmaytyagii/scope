@@ -104,6 +104,43 @@ Runs are referenced by number (`12` or `#12`) or id; traces by id or a unique pr
 | `scope doctor --network` | Also ask each provider the workflows use for its model list — a read-only request that costs no tokens — to confirm it is reachable, accepts the credentials and offers the models |
 | `scope version` | Print versions (`--json` for machine-readable) |
 
+## Automation
+
+`--json` output is an interface: scripts and CI can rely on it. The contract:
+
+- **Stable:** exit codes, and the fields below — fields are added over time, never renamed or
+  removed within a major version, and never change meaning. Ignore fields you do not know.
+- **Not stable:** human-readable output (text, tables, colors) and messages on stderr. Parse
+  `--json`, not text.
+- Errors in `--json` mode are one object on stdout: `{ "error": { "code", "message", "hint"? } }`,
+  with the exit code of the failure.
+
+| Command | Top-level fields |
+| --- | --- |
+| `init` | `root`, `project`, `files` |
+| `validate` | `valid`, `errors`, `warnings`, `workflows` |
+| `run`, `report` | the JSON report (`schema: "scope.report/v1"`): `schema`, `run`, `summary`, `gates`, `baseline`, `comparison`, `failures` |
+| `runs` | `runs`, `nextCursor` |
+| `runs <run>` | `run` (including `manifest`), `failingCases` |
+| `traces` | `items`, `nextCursor` |
+| `traces <trace>` | `trace`, `spans`, `evaluations`, … (the trace detail) |
+| `compare <a> <b>` | `base`, `head`, `metrics`, `cases`, `counts`, `config` |
+| `baseline save` | `path`, `baseline` |
+| `evaluate` | `run`, `previousSummary` |
+| `export … -o <file>` | `file`, `format`, `count` (without `-o`, stdout is the export itself) |
+| `keys create` | `id`, `name`, `project`, `scopes`, `prefix`, `secret` |
+| `keys list` | `project`, `keys` |
+| `prune` | `runs`, `runTraces`, `traces`, `spans`, `evaluations`, `oldest`, `newest`, `project`, `deleted` (and `vacuumed`, `bytesBefore`, `bytesAfter` when deleting) |
+| `db status` | `scope`, `storage`, `schema` (`applied`, `pending`, `newer`), `bytes`, `projects` |
+| `db migrate` | `applied`, `schema` |
+| `db backup` | `file`, `bytes`, `durationMs` |
+| `doctor` | `version`, `checks` (`area`, `status`, `message`, `hint`) |
+| `version` | `scope`, `node`, `platform` |
+| `ui` | `url`, `project`, `storage`, `dashboard`, `auth` (printed once the server listens) |
+
+A test runs every command with `--json` and parses its output; the report's full shape is
+`scope.report/v1`, the API's shapes are in `/api/v1/openapi.json`.
+
 ## Environment
 
 | Variable | Used by |

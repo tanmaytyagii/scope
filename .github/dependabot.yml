@@ -17,6 +17,11 @@ updates:
     groups:
       github-action:
         patterns: ['*']
+  # The Dockerfile's base image, pinned by digest.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
   - package-ecosystem: npm
     directory: /
     schedule:

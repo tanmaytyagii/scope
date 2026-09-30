@@ -112,5 +112,13 @@ never changed or unpublished — fix forward with a patch release, and mark a br
 - **npm packages** are published with provenance from the release workflow only, so each version
   links to the commit and workflow run that built it (`npm view scope-ai --json` → `dist.attestations`).
 - **The Docker image** is built by the release workflow with SLSA provenance (`mode=max`) and an
-  SBOM attached.
+  SBOM attached. Its base image is pinned by digest in the `Dockerfile` (Dependabot proposes new
+  digests), so a release is built on exactly the base CI tested.
+- **What is published** is checked before every release: `npm run release:verify` inspects each
+  package's manifest and tarball (every export, type and bin target present; no sources, tests,
+  build caches or environment files), and the install smoke test installs the packed tarballs
+  into an empty project.
+- **Dependency review** runs on every pull request and needs the repository's dependency graph
+  enabled (Settings → Security analysis); until it is, that check fails with "Dependency review is
+  not supported on this repository".
 

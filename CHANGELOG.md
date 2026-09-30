@@ -67,6 +67,11 @@ which are always called out).
   parameter the API returns everything, as before. Spans carry the new `contentOmitted` field
   (always `false` then).
 
+### Security
+
+- The Docker image's base (`node:24-bookworm-slim`) is pinned by digest, and Dependabot proposes
+  new digests, so a release is built on exactly the base CI tested.
+
 ### Fixed
 
 - OTLP mapping, found by testing with the real OpenInference and OpenLLMetry instrumentations

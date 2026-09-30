@@ -7,7 +7,8 @@
 #   docker run -p 4700:4700 -e SCOPE_DATABASE_URL=postgres://… scope            # scope server
 #   docker run --rm -e SCOPE_DATABASE_URL=… scope keys create --project app --scope ingest
 
-FROM node:24-bookworm-slim AS build
+# Pinned by digest (the multi-platform index); Dependabot proposes updates.
+FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS build
 WORKDIR /src
 COPY . .
 RUN npm ci --no-audit --no-fund --loglevel=error \
@@ -18,7 +19,7 @@ RUN npm ci --no-audit --no-fund --loglevel=error \
     done \
  && npm pack -w @scope-ai/server -w @scope-ai/web --pack-destination /packs --silent
 
-FROM node:24-bookworm-slim
+FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
 ENV NODE_ENV=production \
     SCOPE_HOST=0.0.0.0 \
     SCOPE_PORT=4700 \

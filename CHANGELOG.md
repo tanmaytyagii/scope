@@ -98,6 +98,11 @@ which are always called out).
 
 ### Fixed
 
+- A database migrated by a newer SCOPE is refused on open — with or without auto-migration — with
+  a message naming the newer migrations and how to go back, and is never read or written; only
+  `scope db status` opens it, to report. Before, with `SCOPE_AUTO_MIGRATE=false`, an older SCOPE
+  would have used a schema it does not know.
+
 - OTLP mapping, found by testing with the real OpenInference and OpenLLMetry instrumentations
   (now in CI, for OpenAI and LangChain): a chain, agent or task that starts a trace is its
   workflow and nested ones are steps (OpenLLMetry marks every LangChain chain a workflow);

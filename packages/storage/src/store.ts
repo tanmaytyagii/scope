@@ -24,6 +24,7 @@ import {
   type RunStatus,
   type RunSummary,
   type RunTrigger,
+  SCOPE_VERSION,
   ScopeError,
   type SpanRecord,
   silentLogger,
@@ -105,6 +106,22 @@ export interface OpenStoreOptions {
    * for tests that check query plans. Parameters can hold stored content: never log them.
    */
   onQuery?: (query: ExecutedQuery) => void;
+  /**
+   * Open a database that a newer SCOPE has migrated, to report on it (`scope db status`). Anything
+   * else refuses: this version does not know that schema and could damage it.
+   */
+  allowNewerSchema?: boolean;
+}
+
+/** The error for a database migrated by a newer SCOPE than this one. */
+export function newerSchemaError(newer: readonly string[]): ScopeError {
+  return new ScopeError(
+    ErrorCodes.storageMigrationFailed,
+    `This database was migrated by a newer SCOPE (${newer.join(', ')}); this is SCOPE ${SCOPE_VERSION}`,
+    {
+      hint: 'Use that version of SCOPE or a later one. Migrations only go forward: to use this version, restore the backup taken before the upgrade.',
+    },
+  );
 }
 
 export interface MigrationState {
@@ -233,8 +250,32 @@ export class Store {
       await db.destroy().catch(() => {});
       throw error;
     }
+    // Never read or write a schema this version does not know, migrating or not.
+    if (!options.allowNewerSchema) {
+      const newer = await store.#newerMigrations();
+      if (newer.length) {
+        await db.destroy().catch(() => {});
+        throw newerSchemaError(newer);
+      }
+    }
     if (options.autoMigrate ?? true) await store.migrate();
     return store;
+  }
+
+  /** Migrations recorded in the database that this version does not have (a newer SCOPE's). */
+  async #newerMigrations(): Promise<string[]> {
+    const known = new Set(Object.keys(await new ScopeMigrations(this.dialect).getMigrations()));
+    let recorded: string[] = [];
+    try {
+      const table = this.#schema ? `${this.#schema}.scope_migrations` : 'scope_migrations';
+      const rows = await sql<{ name: string }>`select name from ${sql.table(table)}`.execute(
+        this.db,
+      );
+      recorded = rows.rows.map((r) => r.name);
+    } catch {
+      // No migration table yet: a new database.
+    }
+    return recorded.filter((name) => !known.has(name)).sort();
   }
 
   async ping(): Promise<void> {
@@ -290,24 +331,17 @@ export class Store {
   }
 
   async migrationState(): Promise<MigrationState> {
-    const migrations = await this.#migrator().getMigrations();
-    const known = new Set(migrations.map((m) => m.name));
-    // Migrations recorded in the database that this version does not have: a newer SCOPE
-    // migrated it. (No table yet means a new database.)
-    let recorded: string[] = [];
-    try {
-      const table = this.#schema ? `${this.#schema}.scope_migrations` : 'scope_migrations';
-      const rows = await sql<{ name: string }>`select name from ${sql.table(table)}`.execute(
-        this.db,
-      );
-      recorded = rows.rows.map((r) => r.name);
-    } catch {
-      recorded = [];
+    const newer = await this.#newerMigrations();
+    // Kysely cannot list migrations of a database with ones it does not know.
+    if (newer.length) {
+      const known = Object.keys(await new ScopeMigrations(this.dialect).getMigrations());
+      return { applied: known, pending: [], newer };
     }
+    const migrations = await this.#migrator().getMigrations();
     return {
       applied: migrations.filter((m) => m.executedAt).map((m) => m.name),
       pending: migrations.filter((m) => !m.executedAt).map((m) => m.name),
-      newer: recorded.filter((name) => !known.has(name)).sort(),
+      newer,
     };
   }
 

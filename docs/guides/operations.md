@@ -61,18 +61,27 @@ each project holds. Run it inside the container with `docker compose exec scope 
 
 ### Migrations and upgrades
 
-Migrations run when the server starts. With `SCOPE_AUTO_MIGRATE=false` nothing is migrated
-automatically: `/readyz` reports pending migrations until you run `scope db migrate`.
+**Upgrading is automatic.** A newer SCOPE applies every migration the database is missing, in
+order, when the server (or any `scope` command) opens it — from any earlier version, with no
+intermediate versions needed. With `SCOPE_AUTO_MIGRATE=false` nothing is migrated automatically:
+`/readyz` reports pending migrations until you run `scope db migrate`.
 
-Migrations are forward-only: a database migrated by a newer SCOPE cannot be opened by an older
-one, and `scope db status` says so. **Back up before upgrading.**
+**Downgrading is not possible.** Migrations only go forward. SCOPE 0.4 and later refuse to open a
+database that a newer SCOPE has migrated — with or without auto-migration — with the message
+"This database was migrated by a newer SCOPE (…)", and never read or write it; `scope db status`
+names the newer migrations. **SCOPE 0.3 and earlier** refuse only when they try to migrate (the
+default), with "corrupted migrations: previously executed migration … is missing"; with
+`SCOPE_AUTO_MIGRATE=false` they would open the newer database. Do not run an older version
+against an upgraded database: to go back, restore the backup taken before the upgrade.
 
-| SCOPE | Migration | Can an older version open the database afterwards? |
+**Back up before every upgrade** (below) — it is the only way back.
+
+| SCOPE | Adds | Can the previous version open the database afterwards? |
 | --- | --- | --- |
 | 0.1 | `0001_initial` | — |
 | 0.2 | `0002_run_comparisons` | No (0.1 fails to migrate it) |
-| 0.3 | none | Yes: 0.2 opens a 0.3 database |
-| 0.4 | `0003_run_manifest`, `0004_window_indexes` | No (0.3 fails to migrate it) |
+| 0.3 | nothing | Yes: 0.2 opens a 0.3 database |
+| 0.4 | `0003_run_manifest`, `0004_window_indexes` | No: 0.3 refuses it (verified with the 0.3.0 image) |
 
 To upgrade a Compose deployment:
 

@@ -916,6 +916,26 @@ describe('scope db', () => {
     expect(JSON.parse(runs.stdout).runs).toHaveLength(1);
   });
 
+  it('refuses a database migrated by a newer SCOPE, and db status says why', async () => {
+    const copy = join(root, 'dbops-newer.db');
+    expect((await scope(['db', 'backup', copy, '--force'], dir)).code).toBe(0);
+    const { DatabaseSync } = await import('node:sqlite');
+    const db = new DatabaseSync(copy);
+    db.prepare('insert into scope_migrations (name, timestamp) values (?, ?)').run(
+      '9999_future',
+      new Date().toISOString(),
+    );
+    db.close();
+    const env = { SCOPE_DATABASE_URL: `sqlite:${copy}` };
+    const runs = await scope(['runs'], dir, env);
+    expect(runs.code).toBe(3);
+    expect(runs.stderr).toContain('This database was migrated by a newer SCOPE (9999_future)');
+    expect(runs.stderr).toContain('restore the backup taken before the upgrade');
+    const status = await scope(['db', 'status'], dir, env);
+    expect(status.code).toBe(3);
+    expect(status.stdout).toMatch(/schema\s+migrated by a newer SCOPE \(9999_future\)/);
+  });
+
   it('says how to back up PostgreSQL instead', async () => {
     const r = await scope(['db', 'backup', 'x.db'], dir, {
       SCOPE_DATABASE_URL:

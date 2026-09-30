@@ -80,7 +80,11 @@ export class CommandContext {
    * is (`scope db status`, `scope db backup`).
    */
   async store(
-    options: { onQuery?: OpenStoreOptions['onQuery']; migrate?: boolean } = {},
+    options: {
+      onQuery?: OpenStoreOptions['onQuery'];
+      migrate?: boolean;
+      allowNewerSchema?: boolean;
+    } = {},
   ): Promise<Store> {
     if (!this.#store) {
       const project = this.project();
@@ -91,6 +95,7 @@ export class CommandContext {
         logger: this.logger,
         autoMigrate: options.migrate ?? this.env.SCOPE_AUTO_MIGRATE !== 'false',
         ...(options.onQuery ? { onQuery: options.onQuery } : {}),
+        ...(options.allowNewerSchema ? { allowNewerSchema: true } : {}),
       });
     }
     return this.#store;

@@ -18,7 +18,7 @@ import {
   SCOPE_VERSION,
   ScopeError,
 } from '@scope-ai/core';
-import type { Store } from '@scope-ai/storage';
+import { newerSchemaError, type Store } from '@scope-ai/storage';
 import type { CommandContext } from '../context.ts';
 import { renderTable } from '../ui/table.ts';
 
@@ -30,18 +30,8 @@ function describe(ctx: CommandContext, store: Store): string {
   return `${where} ${ctx.out.style.dim(`(from ${ctx.project().storage.source})`)}`;
 }
 
-function newerError(newer: string[]): ScopeError {
-  return new ScopeError(
-    ErrorCodes.storageMigrationFailed,
-    `The database was migrated by a newer SCOPE (${newer.join(', ')}); this is SCOPE ${SCOPE_VERSION}`,
-    {
-      hint: 'Use the newer version, or restore the backup taken before upgrading. Migrations are not reversible.',
-    },
-  );
-}
-
 export async function dbStatusCommand(ctx: CommandContext): Promise<void> {
-  const store = await ctx.store({ migrate: false });
+  const store = await ctx.store({ migrate: false, allowNewerSchema: true });
   const state = await store.migrationState();
   const [bytes, projects] =
     state.newer.length || state.applied.length === 0
@@ -89,13 +79,13 @@ export async function dbStatusCommand(ctx: CommandContext): Promise<void> {
       ),
     );
   }
-  if (state.newer.length) throw newerError(state.newer);
+  if (state.newer.length) throw newerSchemaError(state.newer);
 }
 
 export async function dbMigrateCommand(ctx: CommandContext): Promise<void> {
   const store = await ctx.store({ migrate: false });
   const before = await store.migrationState();
-  if (before.newer.length) throw newerError(before.newer);
+  if (before.newer.length) throw newerSchemaError(before.newer);
   const applied = await store.migrate();
   const state = await store.migrationState();
   ctx.out.emitJson({ applied, schema: state });

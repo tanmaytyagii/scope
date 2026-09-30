@@ -639,6 +639,28 @@ function storeSuite(label: string, url: () => string, reset?: (store: Store) => 
       expect(await store.getTrace(other, (otherOld as TraceBundle).trace.id)).toBeNull();
     });
 
+    it('refuses a database migrated by a newer SCOPE, whether or not it migrates, and leaves it as it is', async () => {
+      const table = store.dialect === 'postgres' ? 'public.scope_migrations' : 'scope_migrations';
+      await sql`insert into ${sql.table(table)} (name, timestamp) values ('9999_future', ${new Date().toISOString()})`.execute(
+        store.db,
+      );
+      try {
+        const before = await store.projectStats(projectId);
+        for (const autoMigrate of [true, false]) {
+          const error = await Store.open(url(), { autoMigrate }).catch((e: unknown) => e);
+          expect(isScopeError(error, 'storage_migration_failed'), String(error)).toBe(true);
+          expect((error as Error).message).toContain('migrated by a newer SCOPE (9999_future)');
+        }
+        // Reporting on it is allowed, and reports it.
+        const reader = await Store.open(url(), { autoMigrate: false, allowNewerSchema: true });
+        expect((await reader.migrationState()).newer).toEqual(['9999_future']);
+        await reader.close();
+        expect(await store.projectStats(projectId)).toEqual(before);
+      } finally {
+        await sql`delete from ${sql.table(table)} where name = '9999_future'`.execute(store.db);
+      }
+    });
+
     it('cascades run deletion to traces, spans, evaluations and comparisons', async () => {
       // Counted in this project: other tests store traces in projects of their own.
       const count = async (table: 'traces' | 'spans' | 'evaluations' | 'run_comparisons') =>

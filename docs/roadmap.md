@@ -6,9 +6,9 @@ shown in the product until it exists.
 
 ## v0.1 — Foundation (current)
 
-Status: M1–M7 are done, and so are the [v0.2](./v0.2-roadmap.md) and [v0.3](./v0.3-roadmap.md)
-upgrades. Next are the post-v0.1 items below that remain open. Details in
-[DEVELOPMENT_STATUS.md](./DEVELOPMENT_STATUS.md).
+Status: M1–M7 are done, and so are the [v0.2](./v0.2-roadmap.md), [v0.3](./v0.3-roadmap.md)
+and [v0.4](./v0.4-roadmap.md) upgrades. Next are the post-v0.1 items below that remain open.
+Details in [DEVELOPMENT_STATUS.md](./DEVELOPMENT_STATUS.md).
 
 | Milestone | Delivers | Exit criteria |
 | --- | --- | --- |
@@ -37,7 +37,8 @@ Ordered by expected value to users. Items move up when users ask for them.
    committed baseline files.
 6. ~~**Pull-request comments** from the GitHub Action, updated in place~~ — done in 0.2
    (`comment: true`).
-7. **Retention** — `scope prune` and server-side retention policies.
+7. ~~**Retention** — `scope prune` and server-side retention policies~~ — done in 0.4
+   (`scope prune`, `scope server --retention`).
 8. **Dataset tooling** — promote traces to dataset cases from the dashboard; CSV datasets. (0.3
    added the command-line half: `scope export traces --format dataset`.)
 9. **More evaluators** — tool-call correctness, citation verification, NLI-based
@@ -45,8 +46,11 @@ Ordered by expected value to users. Items move up when users ask for them.
 10. **Accounts** — users, organizations, SSO and role-based access for shared servers.
 11. **Online evaluation** — sampled evaluation of production traffic with alerting.
 12. **Rollups at scale** — pre-aggregated time buckets for the dashboard's overview, evaluator
-    and model views, once deployments outgrow window scans (today ~220 ms at 100,000 traces on
-    SQLite; see [performance](./performance.md)).
+    and model views, once deployments outgrow window scans. 0.4's covering indexes made these
+    scans index-only, but they still read every trace in the window: 0.3 s for 500,000 traces,
+    3–4 s for 1,000,000 on SQLite when the indexes do not fit in memory
+    ([performance](./performance.md)). Also batching the per-trace updates of OTLP ingestion,
+    which make it round-trip bound on PostgreSQL.
 
 ## How to influence the roadmap
 

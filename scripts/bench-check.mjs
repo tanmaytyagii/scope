@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
  * A performance regression check that is stable on shared CI runners: it measures the same
- * operations at two database sizes (25 times apart) on the same machine and compares them with each other, never
- * with absolute numbers. Ingestion and reads that do not depend on the database's size must stay
- * roughly as fast when it is ten times larger; a query that walks a whole table or project gets
- * about ten times slower and fails the check.
+ * operations at two database sizes, 25 times apart, on the same machine and compares them with
+ * each other, never with absolute numbers. Ingestion and reads that do not depend on the
+ * database's size must stay roughly as fast when it is 25 times larger; a query that walks a whole
+ * table or project gets many times slower and fails the check.
  *
  *   node --conditions=scope-source scripts/bench-check.mjs [--small 2000] [--large 50000]
  *
@@ -168,8 +168,8 @@ const large = await measure();
  */
 const INFORMATIONAL = new Set(['traces, search', 'SDK ingest, 100 traces']);
 
-// Ratio large/small allowed per operation. 10x the data, so work that grows with the data is
-// about 10x slower; B-tree depth and noise account for up to ~2x.
+// Ratio large/small allowed per operation. 25x the data, so work that grows with the data is
+// about 25x slower; B-tree depth and noise account for up to ~2x.
 const LIMIT = 4;
 const LIMITS = {};
 let failed = 0;

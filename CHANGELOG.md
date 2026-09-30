@@ -15,7 +15,6 @@ which are always called out).
   separates reported token counts from estimated costs.
 - The built-in OpenAI prices were checked against OpenAI's pricing page on 2026-09-30 (unchanged
   since they were recorded on 2025-08-07) and now carry that date and page.
-
 - Runs record what produced them (a *manifest*, stored by migration `0003_run_manifest`): the
   SCOPE and Node.js versions and platform; SHA-256 fingerprints of every file the workflow names
   (`function` step modules, custom evaluator modules, retrieval corpora — each matched file's path
@@ -26,7 +25,6 @@ which are always called out).
   the file fingerprints and SCOPE version (new optional `config.files` and `config.scope`), so
   comparisons name changed files — *the retrieval corpus ../docs/\*.md* — and a change of SCOPE
   version; `ConfigDiff` gains `files` and `scope`.
-
 - `scope db status` shows where the database is, whether its schema is current (or was migrated
   by a newer SCOPE), its size and what each project holds; `scope db migrate` applies pending
   migrations (for `SCOPE_AUTO_MIGRATE=false`); `scope db backup <file>` writes a consistent copy
@@ -56,7 +54,6 @@ which are always called out).
   (the shape of the v0.3 OTLP slowdown, which it catches). `npm run bench:check` compares
   ingestion and reads at 2,000 and 50,000 traces on the same machine and fails when one slows
   down with the database's size; a new CI job runs it.
-
 - Large traces open quickly in the dashboard. `GET /api/v1/traces/{trace}` takes
   `contentBudget=<bytes>`: every span's structure is returned, but inputs and outputs only up to
   the budget; the rest are marked `contentOmitted: true` (left out, not empty) and served one at a
@@ -69,10 +66,14 @@ which are always called out).
 
 ### Changed
 
+- [Performance](docs/performance.md) is measured at 100,000, 500,000 and 1,000,000 traces on
+  SQLite and at 100,000 and 500,000 on PostgreSQL, with the environment, what grows with what,
+  and the boundaries: lists and trace details stay under a millisecond on SQLite at a million
+  traces; dashboard aggregates cost what the traces in their window cost, and take seconds on
+  SQLite when a window holds a million traces and its indexes do not fit in memory.
 - [The trace contract](docs/instrumentation-contract.md) defines trace, workflow, span, model call,
   tool call, retrieval and evaluation, maps every integration onto them, and lists where the same
   behavior produces different traces (measured with the real packages).
-
 - **Migrations `0003_run_manifest` and `0004_window_indexes`.** They run automatically when the
   server or any `scope` command opens the database (or with `scope db migrate`). A database they
   have migrated cannot be opened by 0.3; back up first (`scope db backup` for SQLite, `pg_dump`
@@ -112,14 +113,12 @@ which are always called out).
   a message naming the newer migrations and how to go back, and is never read or written; only
   `scope db status` opens it, to report. Before, with `SCOPE_AUTO_MIGRATE=false`, an older SCOPE
   would have used a schema it does not know.
-
 - OTLP mapping, found by testing with the real OpenInference and OpenLLMetry instrumentations
   (now in CI, for OpenAI and LangChain): a chain, agent or task that starts a trace is its
   workflow and nested ones are steps (OpenLLMetry marks every LangChain chain a workflow);
   OpenLLMetry's `traceloop.entity.input` / `output` are the span's content; OpenInference model
   calls record the model requested (from `llm.invocation_parameters`), with the dated model the
   provider reported kept as `gen_ai.response.model`, so one model is one row on the Models page.
-
 - The SDK's HTTP exporter no longer loses whole batches. Requests are bounded by size as well as
   by trace count (`maxBatchBytes`, 4 MiB by default, below the server's 5 MiB limit), a trace too
   large for any request is dropped on its own with a warning, and when the server refuses a batch

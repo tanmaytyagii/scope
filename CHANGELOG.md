@@ -98,6 +98,13 @@ which are always called out).
 
 ### Fixed
 
+- Retention on PostgreSQL read every trace, span and evaluation in the database to say what it
+  would delete, however little that was: its trace selection combined runs' traces and
+  application traces with `or`, which PostgreSQL cannot answer from an index. At 500,000 traces,
+  planning a pass that deletes 1,000 traces took about 0.4 s and one deleting 25,000 took 0.5–3 s;
+  it now takes 5–8 ms and 0.13–0.44 s, and the hourly `SCOPE_RETENTION` pass no longer grows with
+  the database. The query-plan test now also runs on PostgreSQL (with sequential scans switched
+  off, so a statement with no usable index shows), and fails on the old query.
 - A database migrated by a newer SCOPE is refused on open — with or without auto-migration — with
   a message naming the newer migrations and how to go back, and is never read or written; only
   `scope db status` opens it, to report. Before, with `SCOPE_AUTO_MIGRATE=false`, an older SCOPE

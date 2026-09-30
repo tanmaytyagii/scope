@@ -78,16 +78,15 @@ export async function planPrune(
   const runs = runQuery(db, s, now);
   const traces = traceQuery(db, s);
   const runIds = runs.select('id');
+  // A run's traces and application traces are disjoint sets (run_id set, or null), so a union
+  // keeps each side on its own index. `run_id in (…) or id in (…)` made PostgreSQL read every
+  // trace, span and evaluation in the database, however little was selected.
   const traceIds = (tdb: Db) =>
     tdb
       .selectFrom('traces')
       .select('id')
-      .where((eb) =>
-        eb.or([
-          eb('run_id', 'in', runQuery(tdb, s, now).select('id')),
-          eb('id', 'in', traceQuery(tdb, s).select('id')),
-        ]),
-      );
+      .where('run_id', 'in', runQuery(tdb, s, now).select('id'))
+      .unionAll(traceQuery(tdb, s).select('id'));
   const [runCount, runTraces, appTraces, spans, evaluations, runRange, traceRange] =
     await Promise.all([
       count(runs.select((eb) => eb.fn.countAll().as('n'))),

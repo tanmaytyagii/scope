@@ -1,13 +1,14 @@
 /**
- * Query plans of the hot paths, checked on SQLite: no statement may scan a whole table of spans,
- * traces or evaluations, or walk every span or evaluation of a project to find a few. That is
- * the shape of the slowdowns that grow with the database — v0.3 found one by benchmark (OTLP
- * ingestion reading spans through the project's model index). This test catches the next one
- * deterministically, whatever machine runs it.
+ * Query plans of the hot paths: no statement may scan a whole table of spans, traces or
+ * evaluations, or walk every span or evaluation of a project to find a few. That is the shape of
+ * the slowdowns that grow with the database — v0.3 found one by benchmark (OTLP ingestion reading
+ * spans through the project's model index), v0.4 another (retention's plan on PostgreSQL). This
+ * test catches the next one deterministically, whatever machine runs it.
  *
  * The store's own statements are captured (`onQuery`) while it does real work, and each distinct
- * statement is explained with its real parameters. Statements that deliberately look at a whole
- * project are listed in ALLOWED with the reason.
+ * statement is explained with its real parameters: on SQLite always, on PostgreSQL when
+ * SCOPE_TEST_DATABASE_URL is set. Statements that deliberately look at a whole project are
+ * listed in ALLOWED with the reason.
  */
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,13 +16,14 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { TraceBundle } from '@scope-ai/core';
 import { MemoryExporter, Tracer } from '@scope-ai/sdk';
+import { CompiledQuery, sql } from 'kysely';
 import { expect, it } from 'vitest';
 import { type ExecutedQuery, Store } from './store.ts';
 
 /** Project-wide statements that are expected, and why. Matched against the SQL. */
 const ALLOWED: Array<{ sql: RegExp; why: string }> = [
   {
-    sql: /^select count\(\*\) as "n" from "(spans|evaluations)" where "project_id" = \?$/,
+    sql: /^select count\(\*\) as "n" from "(spans|evaluations)" where "project_id" = (\?|\$1)$/,
     why: 'project row counts for GET /project and `scope ui` start-up: a count, by design',
   },
 ];
@@ -74,15 +76,9 @@ async function bundles(count: number, runId: string | null, offset: number) {
   return exporter.bundles;
 }
 
-it('keeps the hot queries off whole-table and whole-project scans', async () => {
-  const file = join(mkdtempSync(join(tmpdir(), 'scope-plans-')), 'scope.db');
-  const captured: ExecutedQuery[] = [];
-  let capturing = false;
-  const store = await Store.open(`sqlite:${file}`, {
-    onQuery: (q) => {
-      if (capturing) captured.push(q);
-    },
-  });
+/** Seeds two projects and a run, then does the store's hot paths between `capture(true)` and
+ * `capture(false)`: ingestion, trace and run reads, the dashboard's aggregates, retention. */
+async function exercise(store: Store, capture: (on: boolean) => void): Promise<void> {
   const project = await store.ensureProject('plans');
   const other = await store.ensureProject('other');
   const { workflowId, versionId } = await store.registerWorkflowVersion(project.id, {
@@ -112,7 +108,7 @@ it('keeps the hot queries off whole-table and whole-project scans', async () => 
   const [sample] = (await bundles(1, null, 5000)) as [TraceBundle];
   const otlpBatch = await bundles(20, null, 6000);
 
-  capturing = true;
+  capture(true);
   // Ingestion: SDK batches, and OpenTelemetry spans arriving over several requests.
   await store.ingest(project.id, await bundles(50, null, 2000));
   await store.ingestSpans(
@@ -162,7 +158,21 @@ it('keeps the hot queries off whole-table and whole-project scans', async () => 
   // Retention.
   await store.planPrune({ projectIds: [project.id], before: Date.now() - 86_400_000 });
   await store.prune({ projectIds: [project.id], traceId: sample.trace.id });
-  capturing = false;
+  capture(false);
+}
+
+it('keeps the hot queries off whole-table and whole-project scans', async () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'scope-plans-')), 'scope.db');
+  const captured: ExecutedQuery[] = [];
+  let capturing = false;
+  const store = await Store.open(`sqlite:${file}`, {
+    onQuery: (q) => {
+      if (capturing) captured.push(q);
+    },
+  });
+  await exercise(store, (on) => {
+    capturing = on;
+  });
   await store.close();
 
   const db = new DatabaseSync(file, { readOnly: true });
@@ -204,4 +214,96 @@ it('keeps the hot queries off whole-table and whole-project scans', async () => 
     expect(q, String(pattern)).toBeDefined();
     expect(plans.get(q?.sql ?? ''), String(pattern)).toContain(index);
   }
+});
+
+const pgUrl = process.env.SCOPE_TEST_DATABASE_URL;
+const PG_SCHEMA = 'scope_plans_test';
+
+interface PgPlan {
+  'Node Type': string;
+  'Relation Name'?: string;
+  'Index Name'?: string;
+  'Index Cond'?: string;
+  Filter?: string;
+  Plans?: PgPlan[];
+}
+
+function* pgNodes(node: PgPlan): Generator<PgPlan> {
+  yield node;
+  for (const child of node.Plans ?? []) yield* pgNodes(child);
+}
+
+/**
+ * A scan that reads a whole table of spans, traces or evaluations — sequentially, or through an
+ * index with no condition — or every span or evaluation of a project.
+ */
+function badPgScan(node: PgPlan): boolean {
+  const table = node['Relation Name'];
+  if (table !== 'spans' && table !== 'traces' && table !== 'evaluations') return false;
+  if (node['Node Type'] === 'Seq Scan') return true;
+  if (node['Node Type'] !== 'Index Scan' && node['Node Type'] !== 'Index Only Scan') return false;
+  const cond = node['Index Cond'];
+  return cond === undefined || (table !== 'traces' && /^\(project_id = \$\d+\)$/.test(cond));
+}
+
+function describePgScan(node: PgPlan): string {
+  const index = node['Index Name'] ? ` using ${node['Index Name']}` : '';
+  const cond = node['Index Cond'] ?? node.Filter ?? '';
+  return `${node['Node Type']} on ${node['Relation Name']}${index} ${cond}`.trim();
+}
+
+/** The connection URL with PostgreSQL session settings (`-c name=value …`). */
+function withOptions(connection: string, options: string): string {
+  const url = new URL(connection);
+  url.searchParams.set('options', options);
+  return url.toString();
+}
+
+// PostgreSQL chooses plans by cost, and on tables this small reading everything is cheapest, so
+// its plans are checked with sequential scans switched off: a statement that can use an index
+// then does, and one that still scans spans, traces or evaluations has no index to use — it reads
+// the whole table at any size, as retention's plan did before (`run_id in (…) or id in (…)`).
+it.runIf(pgUrl)('keeps the hot queries on indexes on PostgreSQL', async () => {
+  // Its own schema: the storage suite resets `public` concurrently.
+  const admin = await Store.open(pgUrl as string, { autoMigrate: false });
+  await sql`drop schema if exists ${sql.id(PG_SCHEMA)} cascade`.execute(admin.db);
+  await sql`create schema ${sql.id(PG_SCHEMA)}`.execute(admin.db);
+  await admin.close();
+
+  const captured: ExecutedQuery[] = [];
+  let capturing = false;
+  const store = await Store.open(withOptions(pgUrl as string, `-c search_path=${PG_SCHEMA}`), {
+    onQuery: (q) => {
+      if (capturing) captured.push(q);
+    },
+  });
+  await exercise(store, (on) => {
+    capturing = on;
+  });
+  await store.close();
+
+  const explain = await Store.open(
+    withOptions(pgUrl as string, `-c search_path=${PG_SCHEMA} -c enable_seqscan=off`),
+    { autoMigrate: false },
+  );
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  let explained = 0;
+  for (const q of captured) {
+    if (seen.has(q.sql) || !/^\s*select|^\s*delete|^\s*update/i.test(q.sql)) continue;
+    seen.add(q.sql);
+    if (ALLOWED.some((a) => a.sql.test(q.sql))) continue;
+    const result = await explain.db.executeQuery<{ 'QUERY PLAN': string }>(
+      CompiledQuery.raw(`explain (format json) ${q.sql}`, [...q.parameters]),
+    );
+    // The store reads JSON columns as text.
+    const [{ Plan: root }] = JSON.parse(result.rows[0]?.['QUERY PLAN'] ?? '') as [{ Plan: PgPlan }];
+    explained++;
+    const bad = [...pgNodes(root)].filter(badPgScan).map(describePgScan);
+    if (bad.length) problems.push(`${q.sql}\n    ${bad.join('\n    ')}`);
+  }
+  await sql`drop schema ${sql.id(PG_SCHEMA)} cascade`.execute(explain.db);
+  await explain.close();
+  expect(explained).toBeGreaterThan(20);
+  expect(problems).toEqual([]);
 });

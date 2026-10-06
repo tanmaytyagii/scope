@@ -8,7 +8,7 @@
 #   docker run --rm -e SCOPE_DATABASE_URL=… scope keys create --project app --scope ingest
 
 # Pinned by digest (the multi-platform index); Dependabot proposes updates.
-FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS build
+FROM node:25-bookworm-slim@sha256:81db02c4b671288a03915da9534dbd54f96d0e7c24d80ccc54f5b36b2e684370 AS build
 WORKDIR /src
 COPY . .
 RUN npm ci --no-audit --no-fund --loglevel=error \
@@ -19,7 +19,7 @@ RUN npm ci --no-audit --no-fund --loglevel=error \
     done \
  && npm pack -w @scope-ai/server -w @scope-ai/web --pack-destination /packs --silent
 
-FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+FROM node:25-bookworm-slim@sha256:81db02c4b671288a03915da9534dbd54f96d0e7c24d80ccc54f5b36b2e684370
 ENV NODE_ENV=production \
     SCOPE_HOST=0.0.0.0 \
     SCOPE_PORT=4700 \

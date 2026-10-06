@@ -45,7 +45,7 @@
     "@scope-ai/core": "0.4.0"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.128.0",
-    "openai": "^7.23.0"
+    "@anthropic-ai/sdk": "^0.131.0",
+    "openai": "^7.27.0"
   }
 }

@@ -45,6 +45,6 @@
     "@scope-ai/providers": "0.4.0",
     "@scope-ai/evaluators": "0.4.0",
     "@scope-ai/sdk": "0.4.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   }
 }

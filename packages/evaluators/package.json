@@ -44,6 +44,6 @@
     "@scope-ai/core": "0.4.0",
     "@scope-ai/providers": "0.4.0",
     "ajv": "^8.20.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   }
 }

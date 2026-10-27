@@ -42,8 +42,8 @@
   },
   "dependencies": {
     "@scope-ai/core": "0.4.0",
-    "kysely": "^0.29.6",
-    "pg": "^8.23.0"
+    "kysely": "^0.29.7",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@scope-ai/sdk": "0.4.0",

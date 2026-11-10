@@ -50,7 +50,7 @@
     "@scope-ai/providers": "0.4.0",
     "@scope-ai/engine": "0.4.0",
     "@scope-ai/storage": "0.4.0",
-    "commander": "^15.0.0",
+    "commander": "^15.1.0",
     "@scope-ai/server": "0.4.0"
   }
 }
